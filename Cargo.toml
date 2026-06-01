@@ -1,0 +1,34 @@
+[package]
+name = "epublift"
+version = "1.0.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+description = "Optimize EPUB structure to 3.3 and convert images to WebP"
+readme = "README.md"
+rust-version = "1.94"
+
+[[bin]]
+name = "epublift"
+path = "src/main.rs"
+
+[[bin]]
+name = "gen-sample"
+path = "src/bin/gen_sample.rs"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+zip = { version = "2", default-features = false, features = ["deflate"] }
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+webp = "0.3"
+quick-xml = "0.37"
+roxmltree = "0.20"
+regex = "1"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+tempfile = "3"
+walkdir = "2"
+anyhow = "1"
+percent-encoding = "2"
+
+[profile.release]
+opt-level = 3
+lto = true

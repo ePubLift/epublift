@@ -1,0 +1,139 @@
+//! Generation of the human-readable optimization audit report.
+
+use crate::images::ImageMetric;
+use anyhow::Result;
+use chrono::Local;
+use std::fs;
+use std::path::Path;
+
+/// Group an integer with comma thousands separators (Python `{:,}`).
+fn comma_i(n: i64) -> String {
+    let neg = n < 0;
+    let digits = n.abs().to_string();
+    let bytes = digits.as_bytes();
+    let len = bytes.len();
+    let mut out = String::new();
+    for (i, b) in bytes.iter().enumerate() {
+        if i > 0 && (len - i) % 3 == 0 {
+            out.push(',');
+        }
+        out.push(*b as char);
+    }
+    if neg {
+        format!("-{}", out)
+    } else {
+        out
+    }
+}
+
+/// Format a float with comma grouping and one decimal place (Python `{:,.1f}`).
+fn comma_f1(x: f64) -> String {
+    let neg = x < 0.0;
+    let v = (x.abs() * 10.0).round() / 10.0;
+    let int_part = v.trunc() as i64;
+    let dec = ((v - int_part as f64) * 10.0).round() as i64;
+    let s = format!("{}.{}", comma_i(int_part), dec);
+    if neg {
+        format!("-{}", s)
+    } else {
+        s
+    }
+}
+
+fn mb(bytes: i64) -> f64 {
+    bytes as f64 / 1024.0 / 1024.0
+}
+
+/// Write the optimization report to `report_path`.
+pub fn write_report(
+    report_path: &Path,
+    input_name: &str,
+    output_name: &str,
+    original_size: u64,
+    final_size: u64,
+    metrics: &[ImageMetric],
+) -> Result<()> {
+    let original = original_size as i64;
+    let final_s = final_size as i64;
+    let saved = original - final_s;
+    let pct = if original > 0 {
+        saved as f64 / original as f64 * 100.0
+    } else {
+        0.0
+    };
+
+    let sep = "=".repeat(60);
+    let dash = "-".repeat(60);
+
+    let mut r: Vec<String> = Vec::new();
+    r.push(sep.clone());
+    r.push("                EPUBLIFT OPTIMIZATION REPORT".to_string());
+    r.push(sep.clone());
+    r.push(format!(
+        "Timestamp: {}",
+        Local::now().format("%Y-%m-%d %H:%M:%S")
+    ));
+    r.push(format!("Original File: {}", input_name));
+    r.push(format!("Optimized File: {}", output_name));
+    r.push(dash.clone());
+    r.push("FILE SIZE COMPARISON".to_string());
+    r.push(dash.clone());
+    r.push(format!(
+        "Original EPUB Size:  {:>14} bytes ({:.2} MB)",
+        comma_i(original),
+        mb(original)
+    ));
+    r.push(format!(
+        "Lifted EPUB Size:    {:>14} bytes ({:.2} MB)",
+        comma_i(final_s),
+        mb(final_s)
+    ));
+    r.push(format!(
+        "Absolute Size Saved:  {:>14} bytes ({:.2} MB)",
+        comma_i(saved),
+        mb(saved)
+    ));
+    r.push(format!("Percentage Saved:     {:>13.1}%", pct));
+    r.push(dash.clone());
+    r.push("EPUB 3.3 COMPLIANCE ACTIONS".to_string());
+    r.push(dash.clone());
+    r.push("[x] Upgraded root <package> element to version='3.0'".to_string());
+    r.push("[x] Added required 'dcterms:modified' UTC timestamp metadata".to_string());
+    r.push(
+        "[x] Parsed legacy toc.ncx and generated EPUB 3 Navigation Document (nav.xhtml)"
+            .to_string(),
+    );
+    r.push("[x] Upgraded all content DOCTYPEs to modern HTML5 standards".to_string());
+    r.push(
+        "[x] Replaced legacy <guide> landmarks references with hidden <nav epub:type='landmarks'>"
+            .to_string(),
+    );
+    r.push(dash.clone());
+    r.push("IMAGE OPTIMIZATION BREAKDOWN (CONVERTED TO WEBP)".to_string());
+    r.push(dash.clone());
+
+    if metrics.is_empty() {
+        r.push("No raster images (JPEG/PNG) were found or converted.".to_string());
+    } else {
+        r.push(format!(
+            "{:<30} | {:<13} | {:<9} | {:<10}",
+            "Image Name", "Original (KB)", "WebP (KB)", "Saved (%)"
+        ));
+        r.push(dash.clone());
+        for m in metrics {
+            let name: String = m.name.chars().take(29).collect();
+            r.push(format!(
+                "{:<30} | {:>13} | {:>9} | {:>9.1}%",
+                name,
+                comma_f1(m.original_size as f64 / 1024.0),
+                comma_f1(m.new_size as f64 / 1024.0),
+                m.percentage
+            ));
+        }
+    }
+
+    r.push(sep);
+
+    fs::write(report_path, r.join("\n"))?;
+    Ok(())
+}

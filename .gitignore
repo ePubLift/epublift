@@ -1,0 +1,25 @@
+# OS Generated
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Rust build artifacts
+/target/
+**/*.rs.bk
+*.pdb
+
+# EPUB files: inputs (e.g. personal/copyrighted books) and generated outputs.
+# Never commit e-books to the repository.
+*.epub
+*_report.txt
+
+# Editor / IDE
+.idea/
+.vscode/
+
+# Claude Code local settings
+.claude/settings.local.json
