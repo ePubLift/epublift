@@ -84,7 +84,7 @@ fn run(args: Args) -> Result<()> {
 
     let output_path = match args.output {
         Some(p) => p,
-        None => parent.join(format!("{}_lifted.epub", stem)),
+        None => parent.join(format!("{}_v3.3.epub", stem)),
     };
     let report_path = match args.report {
         Some(p) => p,

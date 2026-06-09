@@ -80,7 +80,7 @@ cargo install --path .
 ```bash
 epublift -i <path_to_input_epub>
 ```
-*This command modernizes the input file and saves it in the same directory as `<input_name>_lifted.epub`, generating a performance report in `<input_name>_report.txt`.*
+*This command modernizes the input file and saves it in the same directory as `<input_name>_v3.3.epub`, generating a performance report in `<input_name>_report.txt`.*
 
 During development you can also run it directly with Cargo:
 
@@ -99,7 +99,7 @@ epublift -i book.epub -o optimized_book.epub -q 85 -r stats_report.txt
 | Argument | Long Flag | Description | Default |
 | :--- | :--- | :--- | :--- |
 | `-i` | `--input` | **[Required]** Path to the original EPUB file | *None* |
-| `-o` | `--output` | Path to save the modernized EPUB | `<input>_lifted.epub` |
+| `-o` | `--output` | Path to save the modernized EPUB | `<input>_v3.3.epub` |
 | `-q` | `--quality`| WebP compression quality level (1-100) | `80` |
 | `-r` | `--report` | Path to write the conversion audit report | `<input>_report.txt` |
 
@@ -119,7 +119,7 @@ cargo run --release --bin gen-sample
 ```bash
 cargo run --release --bin epublift -- -i sample_epub2.epub
 ```
-*This converts the book, modernizes the structure to EPUB 3.3, and produces `sample_epub2_lifted.epub` along with `sample_epub2_report.txt`.*
+*This converts the book, modernizes the structure to EPUB 3.3, and produces `sample_epub2_v3.3.epub` along with `sample_epub2_report.txt`.*
 
 ### Step 3: Inspect the Output Audit Report
 ```bash
