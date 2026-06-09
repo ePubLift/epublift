@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="ePubLift logo">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#6366F1"/>
+      <stop offset="1" stop-color="#8B5CF6"/>
+    </linearGradient>
+  </defs>
+
+  <!-- rounded-square background -->
+  <rect width="512" height="512" rx="116" fill="url(#bg)"/>
+
+  <!-- upward arrow: the "lift" / upgrade -->
+  <path d="M256 104 L344 204 H300 V300 H212 V204 H168 Z" fill="#FFFFFF"/>
+
+  <!-- book / document base -->
+  <rect x="140" y="300" width="232" height="96" rx="20" fill="#FFFFFF"/>
+
+  <!-- page lines -->
+  <g fill="#8B5CF6">
+    <rect x="170" y="330" width="118" height="12" rx="6"/>
+    <rect x="170" y="358" width="78"  height="12" rx="6"/>
+  </g>
+</svg>
