@@ -15,9 +15,10 @@
   <!-- book / document base -->
   <rect x="140" y="300" width="232" height="96" rx="20" fill="#FFFFFF"/>
 
-  <!-- page lines -->
+  <!-- page lines: three equal-length lines -->
   <g fill="#8B5CF6">
-    <rect x="170" y="330" width="118" height="12" rx="6"/>
-    <rect x="170" y="358" width="78"  height="12" rx="6"/>
+    <rect x="170" y="318" width="172" height="12" rx="6"/>
+    <rect x="170" y="342" width="172" height="12" rx="6"/>
+    <rect x="170" y="366" width="172" height="12" rx="6"/>
   </g>
 </svg>
