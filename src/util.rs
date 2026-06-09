@@ -2,6 +2,7 @@
 //! `urllib.parse.quote`/`unquote`, href manipulation, and XHTML DOCTYPE
 //! standardization.
 
+use any_ascii::any_ascii;
 use anyhow::Result;
 use percent_encoding::{percent_decode_str, utf8_percent_encode, AsciiSet, NON_ALPHANUMERIC};
 use regex::Regex;
@@ -44,6 +45,35 @@ pub fn with_webp_ext(href: &str) -> String {
     match href.rfind('.') {
         Some(dot) if (dot as isize) > slash => format!("{}.webp", &href[..dot]),
         _ => format!("{}.webp", href),
+    }
+}
+
+/// Transliterate a filename stem to an ASCII-safe slug for the `--ascii` option.
+/// Unicode letters are romanized (e.g. Turkish `Işık Doğudan` → `Isik_Dogudan`),
+/// whitespace becomes underscores, and any character outside `[A-Za-z0-9._-]` is
+/// dropped. Runs of underscores are collapsed and leading/trailing ones trimmed.
+/// Falls back to `output` if nothing printable remains.
+pub fn slugify_ascii(stem: &str) -> String {
+    let romanized = any_ascii(stem);
+    let mut out = String::with_capacity(romanized.len());
+    let mut prev_underscore = false;
+    for ch in romanized.chars() {
+        if ch.is_ascii_alphanumeric() || ch == '.' || ch == '-' {
+            out.push(ch);
+            prev_underscore = false;
+        } else if ch.is_whitespace() || ch == '_' {
+            if !prev_underscore {
+                out.push('_');
+                prev_underscore = true;
+            }
+        }
+        // anything else (punctuation, symbols) is dropped
+    }
+    let trimmed = out.trim_matches('_');
+    if trimmed.is_empty() {
+        "output".to_string()
+    } else {
+        trimmed.to_string()
     }
 }
 
@@ -95,4 +125,30 @@ pub fn standardize_xhtml_files(root: &Path) -> Result<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::slugify_ascii;
+
+    #[test]
+    fn slugifies_turkish_title() {
+        assert_eq!(slugify_ascii("Işık Doğudan Yükselir"), "Isik_Dogudan_Yukselir");
+    }
+
+    #[test]
+    fn collapses_and_trims_separators() {
+        assert_eq!(slugify_ascii("  A  --  B!! "), "A_--_B");
+        assert_eq!(slugify_ascii("Çöl: Bir_Öykü"), "Col_Bir_Oyku");
+    }
+
+    #[test]
+    fn keeps_dots_and_dashes() {
+        assert_eq!(slugify_ascii("Vol.2 - Part 3"), "Vol.2_-_Part_3");
+    }
+
+    #[test]
+    fn empty_after_strip_falls_back() {
+        assert_eq!(slugify_ascii("！？"), "output");
+    }
 }

@@ -57,6 +57,11 @@ struct Args {
     /// Path to write the summary size report (optional)
     #[arg(short, long)]
     report: Option<PathBuf>,
+
+    /// Transliterate auto-generated output/report names to ASCII
+    /// (e.g. "Işık Doğudan" -> "Isik_Dogudan"). Ignored when -o/-r are given.
+    #[arg(long)]
+    ascii: bool,
 }
 
 fn main() -> ExitCode {
@@ -76,10 +81,15 @@ fn run(args: Args) -> Result<()> {
         .canonicalize()
         .with_context(|| format!("Input file not found: {}", args.input.display()))?;
 
-    let stem = input_path
+    let raw_stem = input_path
         .file_stem()
         .map(|s| s.to_string_lossy().into_owned())
         .unwrap_or_else(|| "output".to_string());
+    let stem = if args.ascii {
+        util::slugify_ascii(&raw_stem)
+    } else {
+        raw_stem
+    };
     let parent = input_path.parent().unwrap_or_else(|| Path::new("."));
 
     let output_path = match args.output {

@@ -28,6 +28,7 @@ tempfile = "3"
 walkdir = "2"
 anyhow = "1"
 percent-encoding = "2"
+any_ascii = "0.3"
 
 [profile.release]
 opt-level = 3

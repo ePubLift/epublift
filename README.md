@@ -102,6 +102,20 @@ epublift -i book.epub -o optimized_book.epub -q 85 -r stats_report.txt
 | `-o` | `--output` | Path to save the modernized EPUB | `<input>_v3.3.epub` |
 | `-q` | `--quality`| WebP compression quality level (1-100) | `80` |
 | `-r` | `--report` | Path to write the conversion audit report | `<input>_report.txt` |
+| | `--ascii` | Transliterate the auto-generated output/report names to ASCII | *off* |
+
+#### ASCII-safe filenames (`--ascii`)
+
+By default epublift **preserves your original filename**, only appending the `_v3.3` suffix — so `Işık Doğudan Yükselir.epub` becomes `Işık Doğudan Yükselir_v3.3.epub`. Modern e-readers and filesystems handle these Unicode names without issue, and the title/author shown on your device come from the EPUB's own metadata, not the filename.
+
+If you prefer a shell-friendly, ASCII-only name (handy for the command line, FAT32 SD cards, or older sync tools), add `--ascii`:
+
+```bash
+epublift -i "Işık Doğudan Yükselir.epub" --ascii
+# → Isik_Dogudan_Yukselir_v3.3.epub
+```
+
+This romanizes Unicode letters (e.g. Turkish `ş→s`, `ğ→g`, `ı→i`, `ö→o`, `ü→u`), turns whitespace into underscores, and drops other punctuation. Transliteration is lossy and not always locale-perfect, which is why it is **off by default**. The flag only affects auto-generated names — an explicit `-o`/`-r` path is always used verbatim.
 
 ---
 

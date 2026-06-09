@@ -77,6 +77,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "any_ascii"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "90c6333e01ba7235575b6ab53e5af10f1c327927fd97c36462917e289557ea64"
+
+[[package]]
 name = "anyhow"
 version = "1.0.102"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -283,6 +289,7 @@ checksum = "f8e1bd41ecce82c300d0c84fa35b080fa6db50a5398b18f1abf0357bb067549e"
 name = "epublift"
 version = "1.0.0"
 dependencies = [
+ "any_ascii",
  "anyhow",
  "chrono",
  "clap",
