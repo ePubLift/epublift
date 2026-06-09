@@ -1,4 +1,4 @@
-# 🚀 epublift — EPUB 3.3 Upgrader & WebP Optimizer (Rust Edition)
+# 🚀 epublift — EPUB 3.3 Upgrader & WebP Optimizer
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![Rust](https://img.shields.io/badge/rust-1.94+-orange.svg)](https://www.rust-lang.org/)
@@ -6,7 +6,7 @@
 
 A fast, standard-compliant command-line utility written in **Rust** to optimize, modernize, and significantly shrink EPUB files. It seamlessly upgrades legacy EPUB structures (EPUB 2.0) to the modern **EPUB 3.3** specification while replacing heavy raster images (JPEG/PNG) with highly-compressed, modern **WebP** formats.
 
-This is a Rust port of the original Python implementation (`epublift-py`), preserving identical behavior and the same AGPL-3.0 license.
+epublift began as a Rust port of an earlier Python implementation but has since grown into an independent, more capable tool — a fully pure-Rust build with no C dependencies and features beyond the original. Released under the AGPL-3.0 license.
 
 ---
 
