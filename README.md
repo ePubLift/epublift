@@ -1,12 +1,13 @@
-# 🚀 epublift — EPUB 3.3 Upgrader & WebP Optimizer
+# 🚀 ePubLift — EPUB Upgrader & Optimizer
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![Rust](https://img.shields.io/badge/rust-1.94+-orange.svg)](https://www.rust-lang.org/)
+[![Release](https://img.shields.io/github/v/release/ePubLift/epublift)](https://github.com/ePubLift/epublift/releases)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](http://makeapullrequest.com)
 
-A fast, standard-compliant command-line utility written in **Rust** to optimize, modernize, and significantly shrink EPUB files. It seamlessly upgrades legacy EPUB structures (EPUB 2.0) to the modern **EPUB 3.3** specification while replacing heavy raster images (JPEG/PNG) with highly-compressed, modern **WebP** formats.
+A fast, standard-compliant command-line utility written in **Rust** to modernize, optimize, and significantly shrink EPUB files. Today it upgrades legacy **EPUB 2.0** structures to the **EPUB 3.3** specification and re-encodes heavy raster images (JPEG/PNG) into compact **WebP** — with support for newer EPUB versions and next-generation image formats (AVIF / JPEG XL) planned on the [roadmap](ROADMAP.md).
 
-epublift began as a Rust port of an earlier Python implementation but has since grown into an independent, more capable tool — a fully pure-Rust build with no C dependencies and features beyond the original. Released under the AGPL-3.0 license.
+ePubLift began as a Rust port of an earlier Python implementation but has since grown into an independent, more capable tool — a fully pure-Rust build with no C dependencies and features beyond the original. Released under the AGPL-3.0 license.
 
 ---
 
@@ -47,7 +48,7 @@ graph TD
 ```
 
 ### 📱 E-Reader Compatibility
-To ensure broad compatibility, epublift retains legacy `toc.ncx` maps and OPF pointers alongside the newly-generated EPUB 3.3 `nav.xhtml` navigation document. This creates a fully **backward-compatible** hybrid document that runs smoothly on vintage EPUB 2 devices while delivering high-speed modern features and layout compliance on new EPUB 3.3 devices.
+To ensure broad compatibility, ePubLift retains legacy `toc.ncx` maps and OPF pointers alongside the newly-generated EPUB 3.3 `nav.xhtml` navigation document. This creates a fully **backward-compatible** hybrid document that runs smoothly on vintage EPUB 2 devices while delivering high-speed modern features and layout compliance on new EPUB 3.3 devices.
 
 ---
 
@@ -58,6 +59,10 @@ This utility is **pure Rust** — it only requires the **Rust toolchain** (1.94+
 ### Build from source
 
 ```bash
+# Clone the repository
+git clone https://github.com/ePubLift/epublift.git
+cd epublift
+
 # Build an optimized release binary
 cargo build --release
 

@@ -41,4 +41,4 @@ to shrink file size.
   `quick-xml` + `roxmltree` (OPF/NCX), `image` (JPEG/PNG decode), `any_ascii`
   (transliteration).
 
-[1.0.0]: https://github.com/bariskayadelen/epublift-rs/releases/tag/v1.0.0
+[1.0.0]: https://github.com/ePubLift/epublift/releases/tag/v1.0.0

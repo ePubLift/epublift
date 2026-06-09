@@ -3,9 +3,14 @@ name = "epublift"
 version = "1.0.0"
 edition = "2024"
 license = "AGPL-3.0-or-later"
-description = "Optimize EPUB structure to 3.3 and convert images to WebP"
+description = "Modernize and optimize EPUB files — upgrade structure and re-encode images"
 readme = "README.md"
 rust-version = "1.94"
+authors = ["Baris Kayadelen <baris@kayadelen.com>"]
+repository = "https://github.com/ePubLift/epublift"
+homepage = "https://github.com/ePubLift/epublift"
+keywords = ["epub", "webp", "ebook", "epub3", "converter"]
+categories = ["command-line-utilities", "multimedia::images"]
 
 [[bin]]
 name = "epublift"
