@@ -5,6 +5,28 @@ All notable changes to **epublift** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3] - 2026-06-10
+
+Foundation release. The conversion pipeline is now a reusable library; the CLI
+is a thin front-end over it. CLI behavior is unchanged apart from one minor
+output note below.
+
+### Added
+- **Public library API.** The crate now exposes `convert(input, &Options,
+  progress) -> Report`, along with `Options`, `Report`, and an `EpubVersion`
+  enum (with `LATEST` and a version tag that drives the `_v3.3` output name).
+  This is the foundation for the planned desktop GUI and for richer end-to-end
+  tests, and it lets other Rust programs embed ePubLift directly.
+
+### Changed
+- Extracted the pipeline from `main.rs` into `src/lib.rs`; the CLI now just
+  builds `Options`, calls `convert`, and renders the returned `Report`. No
+  change to the conversion result.
+- The core library no longer writes to the console directly — progress and
+  warnings are delivered through a caller-supplied callback. As a result, the
+  few non-fatal warnings that previously went to **stderr** now render on the
+  CLI's **stdout** alongside the rest of the progress output.
+
 ## [1.0.2] - 2026-06-10
 
 Internal / tooling release. **No functional or user-facing changes** — the
@@ -76,6 +98,7 @@ to shrink file size.
   `quick-xml` + `roxmltree` (OPF/NCX), `image` (JPEG/PNG decode), `any_ascii`
   (transliteration).
 
+[1.0.3]: https://github.com/ePubLift/epublift/releases/tag/v1.0.3
 [1.0.2]: https://github.com/ePubLift/epublift/releases/tag/v1.0.2
 [1.0.1]: https://github.com/ePubLift/epublift/releases/tag/v1.0.1
 [1.0.0]: https://github.com/ePubLift/epublift/releases/tag/v1.0.0

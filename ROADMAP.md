@@ -34,14 +34,17 @@ First stable release.
 Goal: make ePubLift easy to *get* and easy to *build on*, without changing
 behavior.
 
-- [ ] **Cross-platform release binaries.** v1.0.0 shipped macOS arm64 only.
-      Add Linux (x86_64), Windows (x86_64), and macOS x86_64.
-- [ ] **CI pipeline** (GitHub Actions): build + `cargo test` + `clippy` + `fmt`
-      on every PR; build release tarballs on tag.
-- [ ] **Extract the core into a library** (`src/lib.rs`): a stable
+- [x] **Cross-platform release binaries.** *(shipped v1.0.1)* v1.0.0 shipped
+      macOS arm64 only; added Linux (x86_64), Windows (x86_64), and macOS x86_64.
+- [x] **CI pipeline** (GitHub Actions): *(shipped v1.0.2)* build + `cargo test` +
+      `clippy` + `fmt` on every PR; build release tarballs on tag.
+- [x] **Extract the core into a library** (`src/lib.rs`): a stable
       `convert(input, options) -> Report` API so the CLI is a thin front-end.
       Prerequisite for the GUI and for richer integration tests. No behavior
-      change.
+      change. Shape the `Options` struct so a future `target_version` field
+      slots in cleanly, and derive the version-stamped output name (`_v3.3`)
+      from that value rather than hardcoding it — so target-version selection
+      (v2.0) lands without an API break.
 - [ ] **Integration test corpus**: a small set of real-world EPUB 2 fixtures
       verified end-to-end against the new library API.
 
@@ -68,9 +71,13 @@ readers.
 - [ ] **AVIF and JPEG XL** image conversion via the imazen codec ecosystem
       (keeping the all-pure-Rust, single-vendor codec strategy started with
       `zenwebp`).
-- [ ] **Target-version selection**: let users choose EPUB 3.3 (WebP, max
-      compatibility) vs. EPUB 3.4 (AVIF/JXL, smaller but newer-reader-only),
-      with output named accordingly (`_v3.3` / `_v3.4`).
+- [ ] **Target-version selection** (`--target-version`, short `-t`): default to
+      the newest supported EPUB version, and let users opt into an older one for
+      maximum reader compatibility — e.g. EPUB 3.3 (WebP) vs. EPUB 3.4 (AVIF/JXL,
+      smaller but newer-reader-only), with output named accordingly
+      (`_v3.3` / `_v3.4`). The selected version governs the per-version
+      feature/codec set. Use `--target-version`, **not** `-v`/`--version`, which
+      conventionally prints the program's own version.
 - [ ] Per-image **codec auto-selection** based on content (photographic vs.
       flat/graphic) for best size at a given quality.
 
