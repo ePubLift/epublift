@@ -156,9 +156,20 @@ fn push_unique(pairs: &mut Vec<(String, String)>, old: String, new: String) {
     }
 }
 
+/// Bounds on a single image decode, to defend against decode-bombs (e.g. a tiny
+/// PNG declaring 100k×100k). Comfortably above any real e-book image.
+const MAX_IMAGE_DIM: u32 = 16_384;
+const MAX_IMAGE_ALLOC: u64 = 512 * 1024 * 1024; // 512 MiB
+
 /// Decode an image from disk and write it back out as WebP at `quality` (1-100).
 fn encode_webp(src: &Path, dst: &Path, quality: u8) -> Result<()> {
-    let dynimg = image::open(src)?;
+    let mut reader = image::ImageReader::open(src)?.with_guessed_format()?;
+    let mut limits = image::Limits::default();
+    limits.max_image_width = Some(MAX_IMAGE_DIM);
+    limits.max_image_height = Some(MAX_IMAGE_DIM);
+    limits.max_alloc = Some(MAX_IMAGE_ALLOC);
+    reader.limits(limits);
+    let dynimg = reader.decode()?;
     let config = LossyConfig::new().with_quality(quality as f32);
 
     let memory = if dynimg.color().has_alpha() {
