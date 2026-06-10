@@ -54,9 +54,29 @@ To ensure broad compatibility, ePubLift retains legacy `toc.ncx` maps and OPF po
 
 ## 📥 Installation
 
-This utility is **pure Rust** — it only requires the **Rust toolchain** (1.94+). No C compiler or system libraries needed; WebP encoding is handled by the pure-Rust [`zenwebp`](https://crates.io/crates/zenwebp) crate.
+### Download a pre-built binary (recommended)
+
+Grab the archive for your platform from the [**latest release**](https://github.com/ePubLift/epublift/releases/latest):
+
+| Platform | Archive |
+| :--- | :--- |
+| Linux (x86_64, static musl) | `epublift-<version>-x86_64-unknown-linux-musl.tar.gz` |
+| Windows (x86_64) | `epublift-<version>-x86_64-pc-windows-msvc.zip` |
+| macOS (Apple Silicon) | `epublift-<version>-aarch64-apple-darwin.tar.gz` |
+| macOS (Intel) | `epublift-<version>-x86_64-apple-darwin.tar.gz` |
+
+Each archive bundles the `epublift` binary plus the README, license, and changelog, and ships with a `.sha256` checksum file. Unpack it and put `epublift` somewhere on your `PATH`:
+
+```bash
+tar -xzf epublift-*-aarch64-apple-darwin.tar.gz
+sudo install epublift-*/epublift /usr/local/bin/
+```
+
+> The Linux build is statically linked against musl, so it runs on any x86_64 distribution with no glibc or system-library requirements.
 
 ### Build from source
+
+This utility is **pure Rust** — it only requires the **Rust toolchain** (1.94+). No C compiler or system libraries needed; WebP encoding is handled by the pure-Rust [`zenwebp`](https://crates.io/crates/zenwebp) crate.
 
 ```bash
 # Clone the repository
