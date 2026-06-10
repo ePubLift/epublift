@@ -54,9 +54,42 @@ To ensure broad compatibility, ePubLift retains legacy `toc.ncx` maps and OPF po
 
 ## 📥 Installation
 
-This utility is **pure Rust** — it only requires the **Rust toolchain** (1.94+). No C compiler or system libraries needed; WebP encoding is handled by the pure-Rust [`zenwebp`](https://crates.io/crates/zenwebp) crate.
+### Download a pre-built binary (recommended)
+
+Grab the archive for your platform from the [**latest release**](https://github.com/ePubLift/epublift/releases/latest):
+
+| Platform | Archive |
+| :--- | :--- |
+| Linux (x86_64, static musl) | `epublift-<version>-x86_64-unknown-linux-musl.tar.gz` |
+| Windows (x86_64) | `epublift-<version>-x86_64-pc-windows-msvc.zip` |
+| macOS (Apple Silicon) | `epublift-<version>-aarch64-apple-darwin.tar.gz` |
+| macOS (Intel) | `epublift-<version>-x86_64-apple-darwin.tar.gz` |
+
+Each archive bundles the `epublift` binary plus the README, license, and changelog, and ships with a `.sha256` checksum file. Unpack it and put `epublift` somewhere on your `PATH`:
+
+```bash
+tar -xzf epublift-*-aarch64-apple-darwin.tar.gz
+sudo install epublift-*/epublift /usr/local/bin/
+```
+
+> The Linux build is statically linked against musl, so it runs on any x86_64 distribution with no glibc or system-library requirements.
+
+#### First run on macOS and Windows
+
+The pre-built macOS and Windows binaries are **not yet code-signed**, so the OS shows a one-time warning the first time you run a freshly downloaded copy. This is expected; the Linux binary is unaffected.
+
+- **macOS** — Gatekeeper reports the developer "cannot be verified." Clear the download quarantine flag once:
+  ```bash
+  xattr -d com.apple.quarantine ./epublift
+  ```
+  (or open **System Settings → Privacy & Security** and click *Allow Anyway*).
+- **Windows** — Microsoft Defender SmartScreen shows *"Windows protected your PC."* Click **More info → Run anyway**.
+
+Each release archive ships with a `.sha256` file so you can verify the download integrity before running it.
 
 ### Build from source
+
+This utility is **pure Rust** — it only requires the **Rust toolchain** (1.94+). No C compiler or system libraries needed; WebP encoding is handled by the pure-Rust [`zenwebp`](https://crates.io/crates/zenwebp) crate.
 
 ```bash
 # Clone the repository
