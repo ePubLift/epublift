@@ -5,6 +5,22 @@ All notable changes to **epublift** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2] - 2026-06-10
+
+Internal / tooling release. **No functional or user-facing changes** — the
+binaries are functionally identical to 1.0.1.
+
+### Added
+- **Continuous integration.** A GitHub Actions CI workflow now runs
+  `cargo fmt --check`, `cargo clippy -D warnings`, and the test suite on every
+  pull request and push to `main`, complementing the tag-triggered release
+  workflow.
+
+### Changed
+- Applied `rustfmt` and resolved all `clippy` lints across the codebase
+  (collapsible let-chains, `is_multiple_of`, single-line `if`/`else`). Purely
+  cosmetic; no behavior change, and the existing unit tests still pass.
+
 ## [1.0.1] - 2026-06-10
 
 Distribution and documentation release. **No functional code changes** — the
@@ -60,5 +76,6 @@ to shrink file size.
   `quick-xml` + `roxmltree` (OPF/NCX), `image` (JPEG/PNG decode), `any_ascii`
   (transliteration).
 
+[1.0.2]: https://github.com/ePubLift/epublift/releases/tag/v1.0.2
 [1.0.1]: https://github.com/ePubLift/epublift/releases/tag/v1.0.1
 [1.0.0]: https://github.com/ePubLift/epublift/releases/tag/v1.0.0
