@@ -14,16 +14,12 @@ fn comma_i(n: i64) -> String {
     let len = bytes.len();
     let mut out = String::new();
     for (i, b) in bytes.iter().enumerate() {
-        if i > 0 && (len - i) % 3 == 0 {
+        if i > 0 && (len - i).is_multiple_of(3) {
             out.push(',');
         }
         out.push(*b as char);
     }
-    if neg {
-        format!("-{}", out)
-    } else {
-        out
-    }
+    if neg { format!("-{}", out) } else { out }
 }
 
 /// Format a float with comma grouping and one decimal place (Python `{:,.1f}`).
@@ -33,11 +29,7 @@ fn comma_f1(x: f64) -> String {
     let int_part = v.trunc() as i64;
     let dec = ((v - int_part as f64) * 10.0).round() as i64;
     let s = format!("{}.{}", comma_i(int_part), dec);
-    if neg {
-        format!("-{}", s)
-    } else {
-        s
-    }
+    if neg { format!("-{}", s) } else { s }
 }
 
 fn mb(bytes: i64) -> f64 {

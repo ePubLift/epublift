@@ -239,10 +239,10 @@ pub fn rewrite_opf(xml: &str, params: &RewriteParams) -> Result<String> {
 
         // Drop an existing <meta property="dcterms:modified"> element entirely.
         if skip_until_end_meta {
-            if let Event::End(e) = &ev {
-                if local(e.name()) == "meta" {
-                    skip_until_end_meta = false;
-                }
+            if let Event::End(e) = &ev
+                && local(e.name()) == "meta"
+            {
+                skip_until_end_meta = false;
             }
             continue;
         }
@@ -269,11 +269,7 @@ pub fn rewrite_opf(xml: &str, params: &RewriteParams) -> Result<String> {
                 let ln = local(e.name());
                 match ln.as_str() {
                     "package" => {
-                        let new = transform_start(
-                            &e,
-                            &[("version".into(), "3.0".into())],
-                            &[],
-                        );
+                        let new = transform_start(&e, &[("version".into(), "3.0".into())], &[]);
                         writer.write_event(Event::Start(new))?;
                     }
                     "metadata" => {

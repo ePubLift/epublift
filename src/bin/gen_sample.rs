@@ -194,7 +194,10 @@ fn package_epub(output: &str) -> Result<(), Box<dyn std::error::Error>> {
     zip.start_file("mimetype", stored)?;
     zip.write_all(b"application/epub+zip")?;
 
-    for entry in walkdir::WalkDir::new(SRC).into_iter().filter_map(|e| e.ok()) {
+    for entry in walkdir::WalkDir::new(SRC)
+        .into_iter()
+        .filter_map(|e| e.ok())
+    {
         if !entry.file_type().is_file() {
             continue;
         }

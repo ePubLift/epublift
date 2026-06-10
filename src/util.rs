@@ -4,7 +4,7 @@
 
 use any_ascii::any_ascii;
 use anyhow::Result;
-use percent_encoding::{percent_decode_str, utf8_percent_encode, AsciiSet, NON_ALPHANUMERIC};
+use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, percent_decode_str, utf8_percent_encode};
 use regex::Regex;
 use std::fs;
 use std::path::Path;
@@ -61,11 +61,9 @@ pub fn slugify_ascii(stem: &str) -> String {
         if ch.is_ascii_alphanumeric() || ch == '.' || ch == '-' {
             out.push(ch);
             prev_underscore = false;
-        } else if ch.is_whitespace() || ch == '_' {
-            if !prev_underscore {
-                out.push('_');
-                prev_underscore = true;
-            }
+        } else if (ch.is_whitespace() || ch == '_') && !prev_underscore {
+            out.push('_');
+            prev_underscore = true;
         }
         // anything else (punctuation, symbols) is dropped
     }
@@ -110,7 +108,9 @@ pub fn standardize_xhtml_files(root: &Path) -> Result<()> {
         };
         let mut content = String::from_utf8_lossy(&raw).into_owned();
 
-        content = doctype_re.replace_all(&content, "<!DOCTYPE html>").into_owned();
+        content = doctype_re
+            .replace_all(&content, "<!DOCTYPE html>")
+            .into_owned();
 
         if !content.contains("xmlns=\"http://www.w3.org/1999/xhtml\"") {
             content = content.replace("<html", "<html xmlns=\"http://www.w3.org/1999/xhtml\"");
@@ -133,7 +133,10 @@ mod tests {
 
     #[test]
     fn slugifies_turkish_title() {
-        assert_eq!(slugify_ascii("Işık Doğudan Yükselir"), "Isik_Dogudan_Yukselir");
+        assert_eq!(
+            slugify_ascii("Işık Doğudan Yükselir"),
+            "Isik_Dogudan_Yukselir"
+        );
     }
 
     #[test]
