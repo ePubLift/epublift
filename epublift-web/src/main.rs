@@ -4,19 +4,19 @@
 // The conversion itself is performed by the `epublift` library `convert()` API.
 // This crate is only a thin, hardened HTTP/multipart wrapper around it.
 
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::path::Path;
-use std::sync::Arc;
-use std::time::Duration;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use axum::{
     Json, Router,
-    extract::{DefaultBodyLimit, Multipart, State},
+    extract::{DefaultBodyLimit, Multipart, Path as UrlPath, State},
     http::{StatusCode, header},
-    response::{Html, IntoResponse},
+    response::{Html, IntoResponse, Response},
     routing::{get, post},
 };
-use base64::Engine;
 use epublift::{EpubVersion, Options};
 use serde::Serialize;
 use tokio::sync::Semaphore;
@@ -27,11 +27,23 @@ use tower_http::timeout::TimeoutLayer;
 /// real defense — not obscurity.
 const MAX_UPLOAD_BYTES: usize = 50 * 1024 * 1024; // 50 MiB
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+/// How long a converted file waits in memory for its one download before it is
+/// evicted. Files live only in RAM and are never written to disk or logged.
+const DOWNLOAD_TTL: Duration = Duration::from_secs(120);
+
+/// A converted EPUB held in memory awaiting download.
+struct Pending {
+    name: String,
+    bytes: Vec<u8>,
+    born: Instant,
+}
 
 /// Shared service state.
 struct AppState {
     /// Caps simultaneous (CPU-heavy) conversions so latency stays predictable.
     convert_slots: Semaphore,
+    /// Converted files awaiting download, keyed by an unguessable token.
+    pending: Mutex<HashMap<String, Pending>>,
 }
 
 #[tokio::main]
@@ -50,12 +62,30 @@ async fn main() {
         .max(2);
     let state = Arc::new(AppState {
         convert_slots: Semaphore::new(slots),
+        pending: Mutex::new(HashMap::new()),
     });
+
+    // Sweep expired downloads so memory can't grow unbounded.
+    {
+        let state = state.clone();
+        tokio::spawn(async move {
+            let mut tick = tokio::time::interval(Duration::from_secs(30));
+            loop {
+                tick.tick().await;
+                state
+                    .pending
+                    .lock()
+                    .unwrap()
+                    .retain(|_, p| p.born.elapsed() < DOWNLOAD_TTL);
+            }
+        });
+    }
 
     let app = Router::new()
         .route("/", get(index))
         .route("/healthz", get(|| async { "ok" }))
         .route("/convert", post(convert))
+        .route("/download/{token}", get(download))
         .layer(DefaultBodyLimit::max(MAX_UPLOAD_BYTES))
         .layer(TimeoutLayer::with_status_code(
             StatusCode::REQUEST_TIMEOUT,
@@ -100,16 +130,15 @@ struct ConvertResponse {
     images: Vec<ImageRow>,
     /// The CLI-identical text audit report (for the "Download report" link).
     report_text: String,
-    /// The converted EPUB, base64-encoded. The client rebuilds it as a Blob and
-    /// offers it for download; nothing is ever stored server-side.
-    file_base64: String,
+    /// One-time token to fetch the converted EPUB from `/download/{token}`.
+    download_token: String,
 }
 
 /// A user-facing error with an HTTP status.
 struct ApiError(StatusCode, String);
 
 impl IntoResponse for ApiError {
-    fn into_response(self) -> axum::response::Response {
+    fn into_response(self) -> Response {
         (self.0, Json(serde_json::json!({ "error": self.1 }))).into_response()
     }
 }
@@ -118,7 +147,7 @@ fn bad_request(msg: impl Into<String>) -> ApiError {
     ApiError(StatusCode::BAD_REQUEST, msg.into())
 }
 
-/// Convert an uploaded EPUB and return the result + report as JSON.
+/// Convert an uploaded EPUB; return the report as JSON plus a download token.
 async fn convert(
     State(state): State<Arc<AppState>>,
     mut multipart: Multipart,
@@ -173,60 +202,128 @@ async fn convert(
 
     // Everything below happens in a throwaway temp dir that is deleted when this
     // task ends — on success or error. No upload is ever persisted or logged.
-    let result = tokio::task::spawn_blocking(move || -> anyhow::Result<ConvertResponse> {
-        let tmp = tempfile::Builder::new().prefix("epublift_web_").tempdir()?;
-        let input_path = tmp.path().join(&file_name);
-        std::fs::write(&input_path, &file_bytes)?;
+    let result =
+        tokio::task::spawn_blocking(move || -> anyhow::Result<(ConvertResponse, Vec<u8>)> {
+            let tmp = tempfile::Builder::new().prefix("epublift_web_").tempdir()?;
+            let input_path = tmp.path().join(&file_name);
+            std::fs::write(&input_path, &file_bytes)?;
 
-        let opts = Options {
-            quality,
-            ascii,
-            target_version: EpubVersion::LATEST,
-            output: None,
-        };
-        let report = epublift::convert(&input_path, &opts, |_| {})?;
+            let opts = Options {
+                quality,
+                ascii,
+                target_version: EpubVersion::LATEST,
+                output: None,
+            };
+            let report = epublift::convert(&input_path, &opts, |_| {})?;
 
-        let out_bytes = std::fs::read(&report.output_path)?;
+            let out_bytes = std::fs::read(&report.output_path)?;
 
-        // Reuse the CLI's exact report formatting.
-        let report_txt_path = tmp.path().join("report.txt");
-        report.write_text_report(&report_txt_path)?;
-        let report_text = std::fs::read_to_string(&report_txt_path)?;
+            // Reuse the CLI's exact report formatting.
+            let report_txt_path = tmp.path().join("report.txt");
+            report.write_text_report(&report_txt_path)?;
+            let report_text = std::fs::read_to_string(&report_txt_path)?;
 
-        let images = report
-            .image_metrics
-            .iter()
-            .map(|m| ImageRow {
-                name: m.name.clone(),
-                before: m.original_size,
-                after: m.new_size,
-                saved_pct: m.percentage,
-            })
-            .collect();
+            let images = report
+                .image_metrics
+                .iter()
+                .map(|m| ImageRow {
+                    name: m.name.clone(),
+                    before: m.original_size,
+                    after: m.new_size,
+                    saved_pct: m.percentage,
+                })
+                .collect();
 
-        let resp = ConvertResponse {
-            output_name: report.output_name.clone(),
-            original_size: report.original_size,
-            final_size: report.final_size,
-            saved_pct: report.percent_saved(),
-            images,
-            report_text,
-            file_base64: base64::engine::general_purpose::STANDARD.encode(&out_bytes),
-        };
-        // `tmp` drops here -> temp dir removed.
-        Ok(resp)
-    })
-    .await
-    .map_err(|_| {
-        ApiError(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "conversion crashed".into(),
-        )
-    })?;
+            let resp = ConvertResponse {
+                output_name: report.output_name.clone(),
+                original_size: report.original_size,
+                final_size: report.final_size,
+                saved_pct: report.percent_saved(),
+                images,
+                report_text,
+                download_token: String::new(), // filled in below
+            };
+            // `tmp` drops here -> temp dir removed.
+            Ok((resp, out_bytes))
+        })
+        .await
+        .map_err(|_| {
+            ApiError(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "conversion crashed".into(),
+            )
+        })?;
 
-    match result {
-        Ok(resp) => Ok(Json(resp)),
+    let (mut resp, out_bytes) = result
         // Most failures here are invalid/corrupt EPUBs -> client error.
-        Err(e) => Err(bad_request(format!("could not convert this EPUB: {e}"))),
+        .map_err(|e| bad_request(format!("could not convert this EPUB: {e}")))?;
+
+    // Stash the result in memory for a single short-lived download.
+    let token = uuid::Uuid::new_v4().to_string();
+    state.pending.lock().unwrap().insert(
+        token.clone(),
+        Pending {
+            name: resp.output_name.clone(),
+            bytes: out_bytes,
+            born: Instant::now(),
+        },
+    );
+    resp.download_token = token;
+
+    Ok(Json(resp))
+}
+
+/// Stream a converted EPUB by token, then drop it from memory (one-shot).
+async fn download(State(state): State<Arc<AppState>>, UrlPath(token): UrlPath<String>) -> Response {
+    let pending = {
+        let mut map = state.pending.lock().unwrap();
+        match map.remove(&token) {
+            Some(p) if p.born.elapsed() < DOWNLOAD_TTL => Some(p),
+            _ => None,
+        }
+    };
+
+    match pending {
+        Some(p) => {
+            let safe = sanitize_filename(&p.name);
+            (
+                [
+                    (header::CONTENT_TYPE, "application/epub+zip".to_string()),
+                    (
+                        header::CONTENT_DISPOSITION,
+                        format!("attachment; filename=\"{safe}\""),
+                    ),
+                ],
+                p.bytes,
+            )
+                .into_response()
+        }
+        None => (
+            StatusCode::NOT_FOUND,
+            "This download link has expired or was already used.",
+        )
+            .into_response(),
+    }
+}
+
+/// ASCII-safe filename for the `Content-Disposition` header (no header
+/// injection, no path separators). The browser uses the page's `download`
+/// attribute for the actual saved name, so this is only a fallback.
+fn sanitize_filename(name: &str) -> String {
+    let cleaned: String = name
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || matches!(c, ' ' | '.' | '-' | '_' | '(' | ')') {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    let trimmed = cleaned.trim();
+    if trimmed.is_empty() {
+        "epublift-output.epub".to_string()
+    } else {
+        trimmed.to_string()
     }
 }

@@ -466,7 +466,6 @@
 
   function pickFile(f){ selectedFile = f; chipname.textContent = f.name; chip.classList.add('show'); }
   function fmtBytes(n){ if (n >= 1048576) return (n/1048576).toFixed(2)+' MB'; if (n >= 1024) return (n/1024).toFixed(1)+' KB'; return n+' B'; }
-  function b64ToBlob(b64, type){ const bin = atob(b64); const a = new Uint8Array(bin.length); for (let i=0;i<bin.length;i++) a[i]=bin.charCodeAt(i); return new Blob([a],{type}); }
 
   go.addEventListener('click', async () => {
     if (!selectedFile){ drop.classList.add('drag'); setTimeout(()=>drop.classList.remove('drag'),350); return; }
@@ -478,8 +477,12 @@
       fd.append('quality', q.value);
       fd.append('ascii', ascii.checked ? 'true' : 'false');
       const res = await fetch('/convert', { method:'POST', body: fd });
+      if (!res.ok) {
+        let msg = 'Conversion failed (HTTP ' + res.status + ').';
+        try { const e = await res.json(); if (e && e.error) msg = e.error; } catch (_) {}
+        throw new Error(msg);
+      }
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Conversion failed');
       renderResult(data);
     } catch (err) {
       alert(err.message || 'Something went wrong.');
@@ -519,11 +522,12 @@
       }
     }
 
-    // Wire downloads from in-memory blobs (nothing fetched again).
+    // The converted EPUB streams straight from the server by one-time token.
     const dl = document.getElementById('dl');
-    dl.href = URL.createObjectURL(b64ToBlob(data.file_base64, 'application/epub+zip'));
+    dl.href = '/download/' + encodeURIComponent(data.download_token);
     dl.download = data.output_name;
 
+    // The text report is small, so it rides along in the JSON.
     const txt = document.getElementById('txtdl');
     txt.href = URL.createObjectURL(new Blob([data.report_text], { type:'text/plain' }));
     txt.download = data.output_name.replace(/\.epub$/i, '') + '_report.txt';
