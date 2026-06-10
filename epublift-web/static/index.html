@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ePubLift — Modernize &amp; shrink your EPUB</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,400&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --paper:    #F4EEE1;
+    --paper-2:  #EDE4D2;
+    --card:     #FBF7EE;
+    --ink:      #1B1712;
+    --ink-soft: #4C443A;
+    --muted:    #8C8273;
+    --line:     rgba(27,23,18,0.14);
+    --line-2:   rgba(27,23,18,0.07);
+    --accent:   #DC4326;
+    --accent-d: #B8331A;
+    --good:     #2E6B4F;
+    --good-2:   #3F8A66;
+    --shadow:   0 1px 0 rgba(255,255,255,0.6) inset, 0 22px 48px -28px rgba(27,23,18,0.45);
+    --r:        18px;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background:
+      radial-gradient(120% 90% at 82% -10%, rgba(220,67,38,0.10), transparent 55%),
+      radial-gradient(90% 80% at 0% 110%, rgba(46,107,79,0.10), transparent 55%),
+      var(--paper);
+    color: var(--ink);
+    font-family: "Hanken Grotesk", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.55;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* paper grain overlay */
+  .grain {
+    position: fixed; inset: 0; z-index: 9999; pointer-events: none;
+    opacity: 0.045; mix-blend-mode: multiply;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  .wrap { max-width: 1060px; margin: 0 auto; padding: 0 28px; }
+
+  /* ---------- top bar ---------- */
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 26px 0 0;
+  }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .mark {
+    width: 38px; height: 38px; border: 1.5px solid var(--ink);
+    border-radius: 9px; display: grid; place-items: center;
+    background: var(--card); box-shadow: 3px 3px 0 var(--ink);
+  }
+  .mark svg { display: block; }
+  .brand b {
+    font-family: "Fraunces", serif; font-weight: 600; font-size: 22px;
+    letter-spacing: -0.01em;
+  }
+  .brand b i { color: var(--accent); font-style: normal; }
+  nav { display: flex; align-items: center; gap: 22px; font-size: 14.5px; }
+  nav a { color: var(--ink-soft); text-decoration: none; font-weight: 500; }
+  nav a:hover { color: var(--ink); }
+  .stars {
+    display: inline-flex; align-items: center; gap: 7px;
+    border: 1.5px solid var(--ink); border-radius: 999px;
+    padding: 7px 14px; font-family: "JetBrains Mono", monospace;
+    font-size: 13px; font-weight: 500; background: var(--card);
+    box-shadow: 2px 2px 0 var(--ink); transition: transform .15s ease;
+  }
+  .stars:hover { transform: translate(-1px,-1px); box-shadow: 3px 3px 0 var(--ink); }
+
+  /* ---------- hero ---------- */
+  .hero { padding: 66px 0 30px; max-width: 760px; }
+  .kicker {
+    font-family: "JetBrains Mono", monospace; font-size: 12.5px;
+    letter-spacing: 0.22em; text-transform: uppercase; color: var(--accent-d);
+    display: inline-flex; align-items: center; gap: 10px; margin-bottom: 22px;
+  }
+  .kicker::before { content: ""; width: 26px; height: 1.5px; background: var(--accent); }
+  h1 {
+    font-family: "Fraunces", serif; font-weight: 600;
+    font-size: clamp(40px, 6.4vw, 74px); line-height: 1.02;
+    letter-spacing: -0.025em; margin: 0 0 22px;
+  }
+  h1 em { font-style: italic; color: var(--accent); }
+  .lede { font-size: clamp(17px, 2vw, 19.5px); color: var(--ink-soft); max-width: 60ch; margin: 0; }
+  .lede b { color: var(--ink); font-weight: 600; }
+
+  /* staggered load */
+  .reveal { opacity: 0; transform: translateY(14px); animation: rise .8s cubic-bezier(.2,.7,.2,1) forwards; }
+  @keyframes rise { to { opacity: 1; transform: none; } }
+  .d1{animation-delay:.05s}.d2{animation-delay:.14s}.d3{animation-delay:.24s}
+  .d4{animation-delay:.34s}.d5{animation-delay:.46s}
+
+  /* ---------- converter card ---------- */
+  .panel {
+    margin: 36px 0 0; background: var(--card); border: 1.5px solid var(--ink);
+    border-radius: var(--r); box-shadow: var(--shadow); overflow: hidden;
+  }
+  .panel-grid { display: grid; grid-template-columns: 1.15fr 1fr; }
+  @media (max-width: 820px){ .panel-grid{ grid-template-columns: 1fr; } }
+
+  /* dropzone */
+  .drop {
+    position: relative; margin: 18px; border: 2px dashed var(--line);
+    border-radius: 14px; background:
+      repeating-linear-gradient(135deg, transparent 0 11px, rgba(27,23,18,0.018) 11px 12px);
+    min-height: 300px; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; text-align: center;
+    padding: 30px; cursor: pointer; transition: border-color .2s, background .2s, transform .2s;
+  }
+  .drop:hover { border-color: var(--ink-soft); }
+  .drop.drag { border-color: var(--accent); background: rgba(220,67,38,0.05); transform: scale(1.008); }
+  .doc {
+    width: 66px; height: 80px; position: relative; margin-bottom: 22px;
+    transition: transform .35s cubic-bezier(.2,.8,.2,1);
+  }
+  .drop:hover .doc, .drop.drag .doc { transform: translateY(-6px) rotate(-3deg); }
+  .doc .sheet {
+    position: absolute; inset: 0; background: var(--paper); border: 1.5px solid var(--ink);
+    border-radius: 6px; box-shadow: 4px 5px 0 rgba(27,23,18,0.16);
+  }
+  .doc .sheet::before { /* dog-ear */
+    content:""; position:absolute; top:0; right:0; width:18px; height:18px;
+    background: var(--paper-2); border-left:1.5px solid var(--ink); border-bottom:1.5px solid var(--ink);
+    border-bottom-left-radius:5px;
+  }
+  .doc .ln { position:absolute; left:12px; height:3px; background: var(--accent); border-radius:2px; }
+  .doc .ln:nth-child(2){ top:34px; width:42px; }
+  .doc .ln:nth-child(3){ top:44px; width:42px; }
+  .doc .ln:nth-child(4){ top:54px; width:42px; }
+  .drop h3 { font-family:"Fraunces",serif; font-weight:600; font-size:22px; margin:0 0 6px; letter-spacing:-0.01em; }
+  .drop p { margin:0; color: var(--muted); font-size:14.5px; }
+  .drop .browse { color: var(--accent-d); font-weight:600; text-decoration: underline; text-underline-offset: 3px; }
+  .filechip {
+    display:none; align-items:center; gap:10px; margin-top:18px;
+    font-family:"JetBrains Mono",monospace; font-size:13px;
+    background: var(--paper); border:1.5px solid var(--ink); border-radius:999px; padding:8px 14px;
+  }
+  .filechip.show { display:inline-flex; }
+  .filechip .dot { width:8px; height:8px; border-radius:50%; background: var(--good-2); }
+
+  /* options */
+  .opts { padding: 26px 28px; border-left: 1.5px solid var(--line); display:flex; flex-direction:column; gap: 24px; }
+  @media (max-width: 820px){ .opts{ border-left:none; border-top:1.5px solid var(--line);} }
+  .opt-h {
+    font-family:"JetBrains Mono",monospace; font-size:11.5px; letter-spacing:.18em;
+    text-transform:uppercase; color: var(--muted); margin: 0 0 14px;
+  }
+  .field-label { display:flex; align-items:baseline; justify-content:space-between; margin-bottom:10px; }
+  .field-label span:first-child { font-weight:600; font-size:15px; }
+  .qval { font-family:"JetBrains Mono",monospace; font-weight:700; font-size:15px; color: var(--accent-d); }
+
+  /* slider */
+  input[type=range]{ -webkit-appearance:none; appearance:none; width:100%; height:8px; border-radius:999px;
+    background: linear-gradient(90deg, var(--accent) var(--p,80%), rgba(27,23,18,0.12) var(--p,80%));
+    border:1.5px solid var(--ink); cursor:pointer; }
+  input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; width:22px; height:22px; border-radius:50%;
+    background: var(--card); border:1.5px solid var(--ink); box-shadow: 2px 2px 0 var(--ink); margin-top:-1px; }
+  input[type=range]::-moz-range-thumb{ width:20px; height:20px; border-radius:50%; background: var(--card);
+    border:1.5px solid var(--ink); box-shadow: 2px 2px 0 var(--ink); }
+  .scale { display:flex; justify-content:space-between; margin-top:9px; font-size:12px; color: var(--muted); }
+
+  /* toggle */
+  .toggle-row { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+  .toggle-row .txt small { display:block; color:var(--muted); font-size:12.5px; margin-top:2px; max-width:30ch; }
+  .switch { position:relative; width:52px; height:30px; flex:0 0 auto; }
+  .switch input { opacity:0; width:0; height:0; }
+  .slot { position:absolute; inset:0; background: var(--paper-2); border:1.5px solid var(--ink);
+    border-radius:999px; transition:.2s; }
+  .slot::before { content:""; position:absolute; left:3px; top:2px; width:22px; height:22px; border-radius:50%;
+    background: var(--card); border:1.5px solid var(--ink); transition:.2s; }
+  .switch input:checked + .slot { background: var(--accent); }
+  .switch input:checked + .slot::before { transform: translateX(21px); }
+
+  /* version pills */
+  .pills { display:flex; gap:10px; }
+  .pill { flex:1; text-align:center; padding:11px 8px; border:1.5px solid var(--ink); border-radius:11px;
+    font-weight:600; font-size:14px; background: var(--paper); cursor:pointer; transition:.15s; }
+  .pill.on { background: var(--ink); color: var(--paper); box-shadow: 3px 3px 0 var(--accent); }
+  .pill.off { opacity:.45; cursor:not-allowed; }
+  .pill small { display:block; font-family:"JetBrains Mono",monospace; font-size:10px; letter-spacing:.1em;
+    text-transform:uppercase; font-weight:500; margin-top:3px; }
+
+  /* CTA */
+  .cta-row { padding: 0 28px 28px; }
+  .cta {
+    width:100%; border:1.5px solid var(--ink); background: var(--accent); color:#fff;
+    font-family:"Hanken Grotesk",sans-serif; font-weight:700; font-size:17px;
+    padding:16px; border-radius:13px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:10px;
+    box-shadow: 4px 4px 0 var(--ink); transition: transform .14s, box-shadow .14s, background .14s;
+  }
+  .cta:hover { transform: translate(-2px,-2px); box-shadow: 6px 6px 0 var(--ink); background: var(--accent-d); }
+  .cta:active { transform: translate(0,0); box-shadow: 2px 2px 0 var(--ink); }
+  .cta svg { transition: transform .2s; }
+  .cta:hover svg { transform: translateY(-2px); }
+
+  /* ---------- result ---------- */
+  .result { margin: 22px 0 0; background: var(--ink); color: var(--paper); border-radius: var(--r);
+    border:1.5px solid var(--ink); overflow:hidden; display:none; }
+  .result.show { display:block; animation: rise .6s cubic-bezier(.2,.7,.2,1) forwards; }
+  .result-top { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:22px 28px;
+    border-bottom:1px solid rgba(244,238,225,0.16); flex-wrap:wrap; }
+  .result-top .ok { display:flex; align-items:center; gap:11px; }
+  .result-top .badge { width:34px; height:34px; border-radius:50%; background: var(--good-2); display:grid; place-items:center; }
+  .fname { font-family:"JetBrains Mono",monospace; font-size:13.5px; color: rgba(244,238,225,0.7); }
+  .fname b { color: var(--paper); }
+  .dl { display:inline-flex; align-items:center; gap:9px; background: var(--paper); color: var(--ink);
+    border:none; border-radius:11px; padding:12px 20px; font-weight:700; font-size:14.5px; cursor:pointer;
+    box-shadow: 3px 3px 0 var(--accent); transition: transform .14s; text-decoration:none; }
+  .dl:hover { transform: translate(-1px,-1px); }
+  .result-body { display:grid; grid-template-columns: 1fr 1fr 1.3fr; gap:0; }
+  @media (max-width:720px){ .result-body{ grid-template-columns:1fr; } }
+  .stat { padding:24px 28px; border-right:1px solid rgba(244,238,225,0.14); }
+  .stat:last-child{ border-right:none; }
+  .stat .lab { font-family:"JetBrains Mono",monospace; font-size:11px; letter-spacing:.16em; text-transform:uppercase;
+    color: rgba(244,238,225,0.55); margin-bottom:8px; }
+  .stat .big { font-family:"Fraunces",serif; font-size:30px; font-weight:600; letter-spacing:-0.02em; }
+  .stat .big.save { color: var(--good-2); }
+  .bar { height:10px; border-radius:999px; background: rgba(244,238,225,0.14); margin-top:14px; overflow:hidden; }
+  .bar i { display:block; height:100%; width:38%; background: linear-gradient(90deg,var(--good-2),var(--good));
+    border-radius:999px; animation: grow 1s cubic-bezier(.2,.8,.2,1) .15s both; }
+  @keyframes grow { from{ width:100%; } }
+
+  /* expandable report */
+  .rtoggle { display:flex; align-items:center; justify-content:center; gap:9px; width:100%;
+    background:none; border:none; border-top:1px solid rgba(244,238,225,0.14); color: rgba(244,238,225,0.78);
+    font-family:"JetBrains Mono",monospace; font-size:12px; letter-spacing:.12em; text-transform:uppercase;
+    padding:15px; cursor:pointer; }
+  .rtoggle:hover { color: var(--paper); }
+  .rtoggle .chev { transition: transform .25s; }
+  .rtoggle.open .chev { transform: rotate(180deg); }
+  .report { max-height:0; overflow:hidden; transition: max-height .4s ease; }
+  .report.open { max-height:640px; }
+  .report-cols { display:grid; grid-template-columns: 1fr 1.25fr; gap:0;
+    border-top:1px solid rgba(244,238,225,0.14); }
+  @media (max-width:720px){ .report-cols{ grid-template-columns:1fr; } }
+  .rcol { padding:22px 28px; }
+  .rcol + .rcol { border-left:1px solid rgba(244,238,225,0.14); }
+  @media (max-width:720px){ .rcol + .rcol{ border-left:none; border-top:1px solid rgba(244,238,225,0.14);} }
+  .rlab { font-family:"JetBrains Mono",monospace; font-size:11px; letter-spacing:.16em; text-transform:uppercase;
+    color: rgba(244,238,225,0.55); margin-bottom:15px; }
+  .checks { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:11px; }
+  .checks li { display:flex; align-items:flex-start; gap:10px; font-size:13.5px; color: rgba(244,238,225,0.9); }
+  .checks li::before { content:""; flex:0 0 auto; width:17px; height:17px; margin-top:1px; border-radius:5px;
+    background: var(--good-2);
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3 8.5l3.2 3.2L13 5' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/12px no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3 8.5l3.2 3.2L13 5' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/12px no-repeat; }
+  .itable { width:100%; border-collapse:collapse; font-family:"JetBrains Mono",monospace; font-size:12px;
+    display:block; max-height:188px; overflow-y:auto; }
+  .itable th, .itable td { text-align:right; padding:7px 6px; white-space:nowrap; }
+  .itable th:first-child, .itable td:first-child { text-align:left; width:100%; }
+  .itable thead th { position:sticky; top:0; background: var(--ink); color: rgba(244,238,225,0.5);
+    font-weight:500; letter-spacing:.08em; text-transform:uppercase; font-size:10.5px; }
+  .itable tbody tr { border-top:1px solid rgba(244,238,225,0.09); }
+  .itable td.pct { color: var(--good-2); font-weight:700; }
+  .itable .name { color: var(--paper); }
+  .txtdl { display:inline-flex; align-items:center; gap:8px; margin-top:16px; color: rgba(244,238,225,0.85);
+    font-size:13px; font-weight:600; text-decoration:none; border-bottom:1px solid rgba(244,238,225,0.3); padding-bottom:2px; }
+  .txtdl:hover { color: var(--paper); border-color: var(--paper); }
+
+  /* ---------- footer strip ---------- */
+  .strip { margin: 28px 0 60px; display:grid; grid-template-columns: repeat(3,1fr); gap:14px; }
+  @media (max-width:720px){ .strip{ grid-template-columns:1fr; } }
+  .tile { background: var(--card); border:1.5px solid var(--line); border-radius:14px; padding:20px 22px; }
+  .tile h4 { margin:0 0 7px; font-family:"Fraunces",serif; font-weight:600; font-size:16px; display:flex; align-items:center; gap:8px; }
+  .tile p { margin:0; font-size:13.5px; color: var(--ink-soft); }
+  .tile code { font-family:"JetBrains Mono",monospace; font-size:12px; background: var(--paper-2);
+    border:1px solid var(--line); border-radius:6px; padding:2px 7px; }
+  .tile a { color: var(--accent-d); font-weight:600; text-decoration:none; }
+  .tile a:hover { text-decoration:underline; }
+
+  footer.legal { padding: 0 0 50px; color: var(--muted); font-size:13px; display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+  footer.legal b { color: var(--ink-soft); }
+</style>
+</head>
+<body>
+<div class="grain"></div>
+<div class="wrap">
+
+  <header class="reveal d1">
+    <div class="brand">
+      <span class="mark" aria-hidden="true">
+        <svg width="18" height="20" viewBox="0 0 18 20" fill="none">
+          <rect x="1" y="1" width="16" height="18" rx="2.5" fill="#F4EEE1" stroke="#1B1712" stroke-width="1.4"/>
+          <line x1="5" y1="7"  x2="13" y2="7"  stroke="#DC4326" stroke-width="1.8" stroke-linecap="round"/>
+          <line x1="5" y1="10" x2="13" y2="10" stroke="#DC4326" stroke-width="1.8" stroke-linecap="round"/>
+          <line x1="5" y1="13" x2="13" y2="13" stroke="#DC4326" stroke-width="1.8" stroke-linecap="round"/>
+        </svg>
+      </span>
+      <b>ePub<i>Lift</i></b>
+    </div>
+    <nav>
+      <a href="#how">How it works</a>
+      <a href="https://github.com/ePubLift/epublift#-installation">Self-host</a>
+      <a href="https://github.com/ePubLift/epublift" class="stars" aria-label="ePubLift on GitHub">★ <span>GitHub</span></a>
+    </nav>
+  </header>
+
+  <section class="hero">
+    <span class="kicker reveal d2">EPUB&nbsp;2 → EPUB&nbsp;3.3 · WebP optimizer</span>
+    <h1 class="reveal d2">Give your old<br>e-books a <em>lift.</em></h1>
+    <p class="lede reveal d3">Drop in a tired <b>EPUB&nbsp;2</b> file and get back a modern, standards-compliant <b>EPUB&nbsp;3.3</b> — images re-encoded to <b>WebP</b>, structure upgraded, file size trimmed. No install, no account. <b>Right here in your browser.</b></p>
+  </section>
+
+  <!-- converter -->
+  <div class="panel reveal d4">
+    <div class="panel-grid">
+      <!-- dropzone -->
+      <label class="drop" id="drop" for="file">
+        <div class="doc" aria-hidden="true">
+          <div class="sheet"></div>
+          <span class="ln"></span><span class="ln"></span><span class="ln"></span>
+        </div>
+        <h3>Drop your <span style="color:var(--accent)">.epub</span> here</h3>
+        <p>or <span class="browse">browse your files</span></p>
+        <span class="filechip" id="chip"><span class="dot"></span><span id="chipname">book.epub</span></span>
+        <input type="file" id="file" accept=".epub" hidden />
+      </label>
+
+      <!-- options -->
+      <div class="opts">
+        <p class="opt-h">Conversion options</p>
+
+        <div>
+          <div class="field-label">
+            <span>Image quality</span>
+            <span class="qval" id="qval">80</span>
+          </div>
+          <input type="range" id="quality" min="1" max="100" value="80" />
+          <div class="scale"><span>Smaller file</span><span>Sharper images</span></div>
+        </div>
+
+        <div class="toggle-row">
+          <div class="txt">
+            <span style="font-weight:600;font-size:15px;">ASCII filenames</span>
+            <small>Transliterate the output name (Işık → Isik) for older devices.</small>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="ascii" />
+            <span class="slot"></span>
+          </label>
+        </div>
+
+        <div>
+          <p class="opt-h" style="margin-bottom:10px">Target version</p>
+          <div class="pills">
+            <div class="pill on">EPUB 3.3<small>Recommended</small></div>
+            <div class="pill off">EPUB 3.4<small>Soon</small></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="cta-row">
+      <button class="cta" id="go">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M9 15V3M9 3L4 8M9 3l5 5" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Lift my EPUB
+      </button>
+    </div>
+  </div>
+
+  <!-- result (demo state) -->
+  <div class="result" id="result">
+    <div class="result-top">
+      <div class="ok">
+        <span class="badge"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3.2 3.2L13 5" stroke="#1B1712" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <div>
+          <div style="font-family:'Fraunces',serif;font-weight:600;font-size:18px;">Lifted &amp; ready</div>
+          <div class="fname"><b id="outname">my-book_v3.3.epub</b></div>
+        </div>
+      </div>
+      <a class="dl" id="dl" href="#" download><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M8 2v8m0 0L5 7m3 3l3-3M3 13h10" stroke="#1B1712" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Download</a>
+    </div>
+    <div class="result-body">
+      <div class="stat"><div class="lab">Before</div><div class="big" id="sBefore" style="font-family:'JetBrains Mono',monospace;font-size:24px;">—</div></div>
+      <div class="stat"><div class="lab">After</div><div class="big" id="sAfter" style="font-family:'JetBrains Mono',monospace;font-size:24px;">—</div></div>
+      <div class="stat"><div class="lab">You saved</div><div class="big save" id="sSaved">—</div><div class="bar"><i id="sBar"></i></div></div>
+    </div>
+
+    <button class="rtoggle" id="rtoggle">
+      <span id="rtoggle-txt">View full report</span>
+      <svg class="chev" width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <div class="report" id="report">
+      <div class="report-cols">
+        <div class="rcol">
+          <div class="rlab">Modernized for EPUB 3.3</div>
+          <ul class="checks">
+            <li>Upgraded package to <code style="font-family:inherit">version="3.0"</code></li>
+            <li>Added <code style="font-family:inherit">dcterms:modified</code> timestamp</li>
+            <li>Generated <code style="font-family:inherit">nav.xhtml</code> from toc.ncx</li>
+            <li>Modernized DOCTYPEs to HTML5</li>
+            <li>Converted &lt;guide&gt; to landmarks nav</li>
+            <li>Kept legacy toc.ncx (opens on old readers too)</li>
+          </ul>
+        </div>
+        <div class="rcol">
+          <div class="rlab"><span id="imgCount">0</span> image(s) re-encoded to WebP</div>
+          <table class="itable">
+            <thead><tr><th>Image</th><th>Before</th><th>After</th><th>Saved</th></tr></thead>
+            <tbody id="itbody"></tbody>
+          </table>
+          <a class="txtdl" id="txtdl" href="#" download><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 2v8m0 0L5 7m3 3l3-3M3 13h10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>Download report (.txt)</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- trust strip -->
+  <div class="strip reveal d5">
+    <div class="tile">
+      <h4>🔒 Nothing is kept</h4>
+      <p>Your file is converted in memory and <b>deleted immediately</b>. We never store, log, or read your books.</p>
+    </div>
+    <div class="tile">
+      <h4>🐳 Run it yourself</h4>
+      <p>Prefer to self-host? <code>docker compose up</code> and you have your own private instance.</p>
+    </div>
+    <div class="tile">
+      <h4>✦ Fully open source</h4>
+      <p>Built in pure Rust, licensed <a href="https://www.gnu.org/licenses/agpl-3.0">AGPL-3.0</a>. <a href="https://github.com/ePubLift/epublift">Read the source →</a></p>
+    </div>
+  </div>
+
+  <footer class="legal">
+    <span>© 2026 <b>ePubLift</b> · A pure-Rust EPUB modernizer</span>
+    <span>Converts on <b>epublift.itpax.net</b> · no files stored</span>
+  </footer>
+
+</div>
+
+<script>
+  const q = document.getElementById('quality');
+  const qval = document.getElementById('qval');
+  const setFill = () => {
+    qval.textContent = q.value;
+    q.style.setProperty('--p', ((q.value - 1) / 99 * 100) + '%');
+  };
+  q.addEventListener('input', setFill); setFill();
+
+  const drop = document.getElementById('drop');
+  const file = document.getElementById('file');
+  const chip = document.getElementById('chip');
+  const chipname = document.getElementById('chipname');
+  const result = document.getElementById('result');
+  const outname = document.getElementById('outname');
+  const ascii = document.getElementById('ascii');
+  const go = document.getElementById('go');
+  let selectedFile = null;
+
+  ['dragenter','dragover'].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.add('drag'); }));
+  ['dragleave','drop'].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.remove('drag'); }));
+  drop.addEventListener('drop', ev => { const f = ev.dataTransfer.files[0]; if (f) pickFile(f); });
+  file.addEventListener('change', () => { if (file.files[0]) pickFile(file.files[0]); });
+
+  function pickFile(f){ selectedFile = f; chipname.textContent = f.name; chip.classList.add('show'); }
+  function fmtBytes(n){ if (n >= 1048576) return (n/1048576).toFixed(2)+' MB'; if (n >= 1024) return (n/1024).toFixed(1)+' KB'; return n+' B'; }
+
+  go.addEventListener('click', async () => {
+    if (!selectedFile){ drop.classList.add('drag'); setTimeout(()=>drop.classList.remove('drag'),350); return; }
+    const label = go.innerHTML;
+    go.disabled = true; go.style.opacity = .7; go.innerHTML = 'Lifting…';
+    try {
+      const fd = new FormData();
+      fd.append('file', selectedFile);
+      fd.append('quality', q.value);
+      fd.append('ascii', ascii.checked ? 'true' : 'false');
+      const res = await fetch('/convert', { method:'POST', body: fd });
+      if (!res.ok) {
+        let msg = 'Conversion failed (HTTP ' + res.status + ').';
+        try { const e = await res.json(); if (e && e.error) msg = e.error; } catch (_) {}
+        throw new Error(msg);
+      }
+      const data = await res.json();
+      renderResult(data);
+    } catch (err) {
+      alert(err.message || 'Something went wrong.');
+    } finally {
+      go.disabled = false; go.style.opacity = 1; go.innerHTML = label;
+    }
+  });
+
+  function renderResult(data){
+    outname.textContent = data.output_name;
+    document.getElementById('sBefore').textContent = fmtBytes(data.original_size);
+    document.getElementById('sAfter').textContent  = fmtBytes(data.final_size);
+    const pct = Math.round(data.saved_pct);
+    document.getElementById('sSaved').textContent = pct + '%';
+    const frac = data.original_size > 0 ? Math.max(4, Math.min(100, data.final_size / data.original_size * 100)) : 100;
+    document.getElementById('sBar').style.width = frac + '%';
+
+    document.getElementById('imgCount').textContent = data.images.length;
+    const tb = document.getElementById('itbody');
+    tb.replaceChildren();
+    const rows = data.images.slice().sort((a,b) => b.saved_pct - a.saved_pct);
+    if (rows.length === 0){
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.colSpan = 4; td.style.color = 'rgba(244,238,225,0.6)';
+      td.textContent = 'No raster images needed conversion.';
+      tr.appendChild(td); tb.appendChild(tr);
+    } else {
+      for (const im of rows){
+        const tr = document.createElement('tr');
+        const c = (t, cls) => { const td = document.createElement('td'); td.textContent = t; if (cls) td.className = cls; return td; };
+        tr.appendChild(c(im.name, 'name'));        // textContent => safe from HTML injection
+        tr.appendChild(c(fmtBytes(im.before)));
+        tr.appendChild(c(fmtBytes(im.after)));
+        tr.appendChild(c(Math.round(im.saved_pct) + '%', 'pct'));
+        tb.appendChild(tr);
+      }
+    }
+
+    // The converted EPUB streams straight from the server by one-time token.
+    const dl = document.getElementById('dl');
+    dl.href = '/download/' + encodeURIComponent(data.download_token);
+    dl.download = data.output_name;
+
+    // The text report is small, so it rides along in the JSON.
+    const txt = document.getElementById('txtdl');
+    txt.href = URL.createObjectURL(new Blob([data.report_text], { type:'text/plain' }));
+    txt.download = data.output_name.replace(/\.epub$/i, '') + '_report.txt';
+
+    result.classList.remove('show'); void result.offsetWidth; result.classList.add('show');
+    result.scrollIntoView({ behavior:'smooth', block:'center' });
+  }
+
+  const rtoggle = document.getElementById('rtoggle');
+  const report = document.getElementById('report');
+  const rtxt = document.getElementById('rtoggle-txt');
+  rtoggle.addEventListener('click', () => {
+    const open = report.classList.toggle('open');
+    rtoggle.classList.toggle('open', open);
+    rtxt.textContent = open ? 'Hide full report' : 'View full report';
+  });
+</script>
+</body>
+</html>

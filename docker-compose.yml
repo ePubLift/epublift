@@ -1,0 +1,29 @@
+# Self-host epublift-web. By default this pulls the published image; to build
+# from source instead, comment out `image:` and uncomment `build: .`.
+#
+# Put a reverse proxy (e.g. Nginx Proxy Manager) in front for TLS. The service
+# speaks plain HTTP on 8080 and is bound to localhost so only the proxy reaches
+# it.
+services:
+  epublift-web:
+    image: ghcr.io/epublift/epublift-web:latest
+    # build: .
+    container_name: epublift-web
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+
+    # --- hardening ---
+    read_only: true            # immutable root filesystem
+    tmpfs:
+      - /tmp                    # the only writable path; uploads live here briefly
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 1g
+    pids_limit: 256
+
+    # The converter never makes outbound connections. To also block egress,
+    # run it on an internal network fronted by your proxy, or add a firewall
+    # rule — left to the operator to fit their setup.

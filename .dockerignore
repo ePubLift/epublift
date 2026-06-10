@@ -1,0 +1,11 @@
+# Keep the build context small and the image clean.
+target/
+.git/
+.github/
+design/
+tests/
+*.epub
+*_report.txt
+.DS_Store
+**/*.md
+!README.md

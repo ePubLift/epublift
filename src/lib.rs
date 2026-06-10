@@ -29,7 +29,7 @@ use anyhow::{Context, Result, bail};
 use chrono::Utc;
 use std::collections::HashMap;
 use std::fs::{self, File};
-use std::io;
+use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 use zip::write::SimpleFileOptions;
@@ -280,11 +280,26 @@ pub fn convert(input: &Path, options: &Options, progress: impl Fn(&str)) -> Resu
     })
 }
 
-/// Extract every entry of the EPUB zip into `dest`.
+/// Upper bounds on extraction, to defend against zip-bombs when processing
+/// untrusted input (e.g. the web service). Legitimate EPUBs are far below these.
+const MAX_ARCHIVE_ENTRIES: usize = 50_000;
+const MAX_TOTAL_UNCOMPRESSED: u64 = 1024 * 1024 * 1024; // 1 GiB
+
+/// Extract every entry of the EPUB zip into `dest`. Enforces an entry-count cap
+/// and a total-uncompressed-size budget (header sizes are attacker-controlled,
+/// so the budget is enforced against bytes actually written).
 fn extract_epub(input: &Path, dest: &Path) -> Result<()> {
     let file = File::open(input)?;
     let mut zip = ZipArchive::new(file)?;
 
+    if zip.len() > MAX_ARCHIVE_ENTRIES {
+        bail!(
+            "EPUB has too many entries ({}); refusing to extract.",
+            zip.len()
+        );
+    }
+
+    let mut budget: u64 = MAX_TOTAL_UNCOMPRESSED;
     for i in 0..zip.len() {
         let mut entry = zip.by_index(i)?;
         let out_path = match entry.enclosed_name() {
@@ -299,7 +314,12 @@ fn extract_epub(input: &Path, dest: &Path) -> Result<()> {
                 fs::create_dir_all(parent)?;
             }
             let mut out = File::create(&out_path)?;
-            io::copy(&mut entry, &mut out)?;
+            // Copy at most `budget + 1` bytes; overshooting means a bomb.
+            let written = io::copy(&mut entry.by_ref().take(budget + 1), &mut out)?;
+            if written > budget {
+                bail!("EPUB is too large when decompressed (possible zip bomb).");
+            }
+            budget -= written;
         }
     }
     Ok(())
