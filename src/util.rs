@@ -78,7 +78,7 @@ pub fn slugify_ascii(stem: &str) -> String {
 /// Standardize HTML/XHTML files to EPUB 3 best practices:
 /// - Replace legacy DOCTYPE declarations with the HTML5 `<!DOCTYPE html>`.
 /// - Ensure the XHTML namespace is declared on the `<html>` element.
-pub fn standardize_xhtml_files(root: &Path) -> Result<()> {
+pub fn standardize_xhtml_files(root: &Path, progress: &dyn Fn(&str)) -> Result<()> {
     let doctype_re = Regex::new(r"(?i)<!DOCTYPE\s+html[^>]*>").unwrap();
 
     for entry in WalkDir::new(root).into_iter().filter_map(|e| e.ok()) {
@@ -98,11 +98,11 @@ pub fn standardize_xhtml_files(root: &Path) -> Result<()> {
         let raw = match fs::read(path) {
             Ok(b) => b,
             Err(e) => {
-                eprintln!(
+                progress(&format!(
                     "  [!] Warning: Could not modernize HTML tag in {}: {}",
                     path.file_name().unwrap_or_default().to_string_lossy(),
                     e
-                );
+                ));
                 continue;
             }
         };
@@ -117,11 +117,11 @@ pub fn standardize_xhtml_files(root: &Path) -> Result<()> {
         }
 
         if let Err(e) = fs::write(path, content) {
-            eprintln!(
+            progress(&format!(
                 "  [!] Warning: Could not modernize HTML tag in {}: {}",
                 path.file_name().unwrap_or_default().to_string_lossy(),
                 e
-            );
+            ));
         }
     }
     Ok(())

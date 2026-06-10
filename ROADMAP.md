@@ -34,11 +34,11 @@ First stable release.
 Goal: make ePubLift easy to *get* and easy to *build on*, without changing
 behavior.
 
-- [ ] **Cross-platform release binaries.** v1.0.0 shipped macOS arm64 only.
-      Add Linux (x86_64), Windows (x86_64), and macOS x86_64.
-- [ ] **CI pipeline** (GitHub Actions): build + `cargo test` + `clippy` + `fmt`
-      on every PR; build release tarballs on tag.
-- [ ] **Extract the core into a library** (`src/lib.rs`): a stable
+- [x] **Cross-platform release binaries.** *(shipped v1.0.1)* v1.0.0 shipped
+      macOS arm64 only; added Linux (x86_64), Windows (x86_64), and macOS x86_64.
+- [x] **CI pipeline** (GitHub Actions): *(shipped v1.0.2)* build + `cargo test` +
+      `clippy` + `fmt` on every PR; build release tarballs on tag.
+- [x] **Extract the core into a library** (`src/lib.rs`): a stable
       `convert(input, options) -> Report` API so the CLI is a thin front-end.
       Prerequisite for the GUI and for richer integration tests. No behavior
       change. Shape the `Options` struct so a future `target_version` field

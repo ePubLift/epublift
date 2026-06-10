@@ -40,6 +40,7 @@ pub fn optimize_images(
     items: &[ManifestItem],
     cover_id: Option<&str>,
     quality: u8,
+    progress: &dyn Fn(&str),
 ) -> Result<OptimizeResult> {
     let mut result = OptimizeResult {
         metrics: Vec::new(),
@@ -57,10 +58,10 @@ pub fn optimize_images(
         let img_path = package_dir.join(&decoded_href);
 
         if !img_path.exists() {
-            println!(
+            progress(&format!(
                 "  [!] Warning: Image file not found: {}",
                 basename(&decoded_href)
-            );
+            ));
             continue;
         }
 
@@ -70,11 +71,11 @@ pub fn optimize_images(
         let orig_size = match fs::metadata(&img_path) {
             Ok(m) => m.len(),
             Err(e) => {
-                println!(
+                progress(&format!(
                     "  [!] Failed to convert image {}: {}",
                     basename(&decoded_href),
                     e
-                );
+                ));
                 continue;
             }
         };
@@ -83,11 +84,11 @@ pub fn optimize_images(
         match encode_webp(&img_path, &new_img_path, quality) {
             Ok(()) => {}
             Err(e) => {
-                println!(
+                progress(&format!(
                     "  [!] Failed to convert image {}: {}",
                     basename(&decoded_href),
                     e
-                );
+                ));
                 continue;
             }
         }
@@ -113,14 +114,14 @@ pub fn optimize_images(
         // Remove the original raster image.
         let _ = fs::remove_file(&img_path);
 
-        println!(
+        progress(&format!(
             "  [+] Converted: {} -> {} ({:.1}KB -> {:.1}KB, {:.1}% saved)",
             old_name,
             new_name,
             orig_size as f64 / 1024.0,
             new_size as f64 / 1024.0,
             pct
-        );
+        ));
 
         // Determine whether this is the cover image.
         let id_lower = item.id.to_lowercase();
@@ -175,7 +176,11 @@ fn encode_webp(src: &Path, dst: &Path, quality: u8) -> Result<()> {
 }
 
 /// Scan XHTML/HTML/CSS/SVG/NCX files and update references to converted images.
-pub fn update_document_references(root: &Path, ref_pairs: &[(String, String)]) {
+pub fn update_document_references(
+    root: &Path,
+    ref_pairs: &[(String, String)],
+    progress: &dyn Fn(&str),
+) {
     if ref_pairs.is_empty() {
         return;
     }
@@ -202,11 +207,11 @@ pub fn update_document_references(root: &Path, ref_pairs: &[(String, String)]) {
         let raw = match fs::read(path) {
             Ok(b) => b,
             Err(e) => {
-                eprintln!(
+                progress(&format!(
                     "  [!] Warning: Failed to update references in {}: {}",
                     path.file_name().unwrap_or_default().to_string_lossy(),
                     e
-                );
+                ));
                 continue;
             }
         };
@@ -234,11 +239,11 @@ pub fn update_document_references(root: &Path, ref_pairs: &[(String, String)]) {
         }
 
         if updated && let Err(e) = fs::write(path, content) {
-            eprintln!(
+            progress(&format!(
                 "  [!] Warning: Failed to update references in {}: {}",
                 path.file_name().unwrap_or_default().to_string_lossy(),
                 e
-            );
+            ));
         }
     }
 }

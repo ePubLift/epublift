@@ -202,9 +202,14 @@ pub fn convert(input: &Path, options: &Options, progress: impl Fn(&str)) -> Resu
 
     // Step 3: Optimize images.
     progress("[*] Converting and compressing images to WebP...");
-    let opt =
-        images::optimize_images(&package_dir, &info.items, info.cover_id.as_deref(), quality)?;
-    images::update_document_references(temp_path, &opt.ref_pairs);
+    let opt = images::optimize_images(
+        &package_dir,
+        &info.items,
+        info.cover_id.as_deref(),
+        quality,
+        &progress,
+    )?;
+    images::update_document_references(temp_path, &opt.ref_pairs, &progress);
 
     // Step 4: Upgrade structure to EPUB 3.3.
     progress("[*] Upgrading structure to EPUB 3.3 compliance...");
@@ -241,7 +246,7 @@ pub fn convert(input: &Path, options: &Options, progress: impl Fn(&str)) -> Resu
     }
 
     // Standardize content DOCTYPEs and namespaces.
-    util::standardize_xhtml_files(temp_path)?;
+    util::standardize_xhtml_files(temp_path, &progress)?;
 
     // Rewrite the OPF with all upgrades and write it back.
     let params = RewriteParams {
