@@ -5,6 +5,25 @@ All notable changes to **epublift** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-06-10
+
+Completes the **Distribution & foundation** milestone. No change to conversion
+behavior since 1.0.3.
+
+### Added
+- **Integration test corpus** (`tests/convert.rs`): end-to-end tests that build
+  legacy EPUB 2 fixtures and run them through the `convert()` API, asserting on
+  the returned `Report` and the produced EPUB (image conversion, reference
+  rewrites, `nav.xhtml` generation, OPF upgrade, DOCTYPE modernization, hybrid
+  `toc.ncx` retention, and output naming).
+
+### Notes
+- This minor release rolls up the foundation work shipped across 1.0.1–1.0.3:
+  cross-platform release binaries, the CI pipeline, and the extraction of the
+  conversion pipeline into a public library. The library API added in 1.0.3
+  (`convert`, `Options`, `Report`, `EpubVersion`) is the stable base for the
+  planned desktop GUI.
+
 ## [1.0.3] - 2026-06-10
 
 Foundation release. The conversion pipeline is now a reusable library; the CLI
@@ -98,6 +117,7 @@ to shrink file size.
   `quick-xml` + `roxmltree` (OPF/NCX), `image` (JPEG/PNG decode), `any_ascii`
   (transliteration).
 
+[1.1.0]: https://github.com/ePubLift/epublift/releases/tag/v1.1.0
 [1.0.3]: https://github.com/ePubLift/epublift/releases/tag/v1.0.3
 [1.0.2]: https://github.com/ePubLift/epublift/releases/tag/v1.0.2
 [1.0.1]: https://github.com/ePubLift/epublift/releases/tag/v1.0.1
