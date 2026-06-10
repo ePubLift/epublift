@@ -1,0 +1,23 @@
+[package]
+name = "epublift-web"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+description = "Web service front-end for epublift: convert EPUBs in the browser"
+repository = "https://github.com/ePubLift/epublift"
+rust-version = "1.94"
+publish = false
+
+[dependencies]
+epublift = { path = ".." }
+axum = { version = "0.8", features = ["multipart"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["timeout", "cors", "set-header"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+tempfile = "3"
+base64 = "0.22"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

@@ -50,9 +50,51 @@ behavior.
 
 ---
 
-## 🖥️ Mid term — v1.2: Desktop app (ePubLift GUI)
+## 🌐 Near term — v1.2: Hosted web service (`epublift-web`)
 
-Goal: reach non-technical readers who will never open a terminal.
+Goal: serve the non-technical users asking "how do I use the CLI?" *now*, with
+zero install — a browser page that converts EPUBs — while the desktop GUI is
+built. A new `epublift-web` workspace member wraps the v1.1 library; the public
+instance runs at **epublift.itpax.net** (behind Nginx Proxy Manager, which
+terminates TLS).
+
+- [ ] **Axum web service** over the `convert()` library API: upload an EPUB →
+      convert in memory → return the file plus a result report. Pure-Rust
+      (axum/tokio/tower/rustls-free since NPM does TLS); the conversion runs on
+      `spawn_blocking` behind a concurrency semaphore.
+- [ ] **Front-end** (static, served by Axum): the editorial drag-and-drop design
+      in `design/web-preview.html` — quality **slider** + **ASCII** toggle +
+      target-version pills mirroring the CLI options.
+- [ ] **Result report in the UI**: before/after size and savings up front, with
+      an expandable EPUB 3.3 compliance checklist + per-image WebP breakdown
+      (data straight from `Report`), plus a "Download report (.txt)" using
+      `Report::write_text_report()`.
+- [ ] **No retention**: each request is processed in a temp dir and deleted
+      immediately on success *or* error; no storage, no content logging.
+- [ ] **Abuse / attack hardening** (the source is public — no security by
+      obscurity):
+      - HTTP layer: request body-size limit (matched in NPM *and* Axum), request
+        timeout, per-IP rate limiting (real IP via `X-Forwarded-For`, trusted
+        only from NPM), CORS locked to the page origin, sanitized
+        `Content-Disposition` filename, security headers/CSP.
+      - Input layer (library hardening, benefits the CLI too): cap zip
+        extraction (total uncompressed size, entry count, ratio) against
+        zip-bombs; set `image` decode limits (max dimensions/allocation) against
+        decode-bombs. Zip-slip is already guarded via `enclosed_name`.
+      - Container: non-root, read-only root FS, `tmpfs` for temp, **no network
+        egress**, plus `mem_limit` / `pids_limit` / CPU caps.
+- [ ] **Docker distribution**: a `Dockerfile` (static musl binary on a minimal
+      base) + `docker-compose.yml` in the repo; CI builds and pushes a multi-arch
+      image to **GHCR** (`ghcr.io/epublift/epublift-web`, `:latest` + `:vX.Y.Z`)
+      on tag, so anyone can self-host with one command. AGPL-3.0: a visible
+      "Source" link on the page satisfies the §13 network-use obligation.
+
+---
+
+## 🖥️ Mid term — v1.3: Desktop app (ePubLift GUI)
+
+Goal: reach non-technical readers who will never open a terminal (the native,
+offline counterpart to the v1.2 web service).
 
 - [ ] **`epublift-gui`** — a native, drag-and-drop desktop app built on `egui`,
       consuming the core library directly (stays pure-Rust, single small binary,

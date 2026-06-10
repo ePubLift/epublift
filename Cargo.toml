@@ -1,3 +1,7 @@
+[workspace]
+members = [".", "epublift-web"]
+resolver = "2"
+
 [package]
 name = "epublift"
 version = "1.1.0"
