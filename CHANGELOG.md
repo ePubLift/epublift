@@ -5,6 +5,25 @@ All notable changes to **epublift** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] - 2026-06-10
+
+Distribution and documentation release. **No functional code changes** — the
+binary is built from the same source as 1.0.0.
+
+### Added
+- **Cross-platform pre-built binaries.** A GitHub Actions release workflow now
+  builds and publishes binaries on tag push for Linux (x86_64, static musl),
+  Windows (x86_64), and macOS (Apple Silicon + Intel), each as an archive with a
+  SHA256 checksum. Previously only a locally built macOS arm64 binary existed.
+- **README install instructions** for downloading a pre-built binary, plus a
+  first-run note covering the macOS Gatekeeper and Windows SmartScreen prompts
+  that appear for the unsigned binaries.
+
+### Notes
+- The macOS and Windows binaries are **not yet code-signed or notarized**; see the
+  README for the one-time steps to allow them. The Linux binary runs without any
+  such prompt.
+
 ## [1.0.0] - 2026-06-09
 
 First stable release. epublift upgrades EPUB files to **EPUB 3.3** while staying
@@ -41,4 +60,5 @@ to shrink file size.
   `quick-xml` + `roxmltree` (OPF/NCX), `image` (JPEG/PNG decode), `any_ascii`
   (transliteration).
 
+[1.0.1]: https://github.com/ePubLift/epublift/releases/tag/v1.0.1
 [1.0.0]: https://github.com/ePubLift/epublift/releases/tag/v1.0.0

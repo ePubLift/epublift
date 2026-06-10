@@ -74,6 +74,19 @@ sudo install epublift-*/epublift /usr/local/bin/
 
 > The Linux build is statically linked against musl, so it runs on any x86_64 distribution with no glibc or system-library requirements.
 
+#### First run on macOS and Windows
+
+The pre-built macOS and Windows binaries are **not yet code-signed**, so the OS shows a one-time warning the first time you run a freshly downloaded copy. This is expected; the Linux binary is unaffected.
+
+- **macOS** — Gatekeeper reports the developer "cannot be verified." Clear the download quarantine flag once:
+  ```bash
+  xattr -d com.apple.quarantine ./epublift
+  ```
+  (or open **System Settings → Privacy & Security** and click *Allow Anyway*).
+- **Windows** — Microsoft Defender SmartScreen shows *"Windows protected your PC."* Click **More info → Run anyway**.
+
+Each release archive ships with a `.sha256` file so you can verify the download integrity before running it.
+
 ### Build from source
 
 This utility is **pure Rust** — it only requires the **Rust toolchain** (1.94+). No C compiler or system libraries needed; WebP encoding is handled by the pure-Rust [`zenwebp`](https://crates.io/crates/zenwebp) crate.
