@@ -139,7 +139,11 @@ pub fn optimize_images(
 
         // Both the raw and decoded hrefs should be remapped to the new href.
         push_unique(&mut result.ref_pairs, item.href.clone(), new_href.clone());
-        push_unique(&mut result.ref_pairs, decoded_href.clone(), new_href.clone());
+        push_unique(
+            &mut result.ref_pairs,
+            decoded_href.clone(),
+            new_href.clone(),
+        );
     }
 
     Ok(result)
@@ -229,14 +233,12 @@ pub fn update_document_references(root: &Path, ref_pairs: &[(String, String)]) {
             }
         }
 
-        if updated {
-            if let Err(e) = fs::write(path, content) {
-                eprintln!(
-                    "  [!] Warning: Failed to update references in {}: {}",
-                    path.file_name().unwrap_or_default().to_string_lossy(),
-                    e
-                );
-            }
+        if updated && let Err(e) = fs::write(path, content) {
+            eprintln!(
+                "  [!] Warning: Failed to update references in {}: {}",
+                path.file_name().unwrap_or_default().to_string_lossy(),
+                e
+            );
         }
     }
 }

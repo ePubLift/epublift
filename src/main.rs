@@ -20,7 +20,7 @@ mod opf;
 mod report;
 mod util;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use chrono::Utc;
 use clap::Parser;
 use std::collections::HashMap;
@@ -137,7 +137,8 @@ fn run(args: Args) -> Result<()> {
 
     // Step 3: Optimize images.
     println!("[*] Converting and compressing images to WebP...");
-    let opt = images::optimize_images(&package_dir, &info.items, info.cover_id.as_deref(), quality)?;
+    let opt =
+        images::optimize_images(&package_dir, &info.items, info.cover_id.as_deref(), quality)?;
     images::update_document_references(temp_path, &opt.ref_pairs);
 
     // Step 4: Upgrade structure to EPUB 3.3.
@@ -145,21 +146,24 @@ fn run(args: Args) -> Result<()> {
 
     // Decide whether we must generate a navigation document from toc.ncx.
     let mut add_nav = false;
-    if !info.nav_exists {
-        if let Some(ncx_href) = &info.ncx_href {
-            let ncx_path = package_dir.join(util::unquote(ncx_href));
-            if ncx_path.exists() {
-                println!("[+] Creating mandatory EPUB 3 Navigation Document from toc.ncx...");
-                match nav::generate_nav_xhtml(&ncx_path, &package_dir.join("nav.xhtml"), &info.guide_refs)
-                {
-                    Ok(()) => {
-                        add_nav = true;
-                        println!(
-                            "  [+] Registered nav.xhtml with properties='nav' in package document."
-                        );
-                    }
-                    Err(e) => println!("  [!] Failed to generate Navigation Document: {}", e),
+    if !info.nav_exists
+        && let Some(ncx_href) = &info.ncx_href
+    {
+        let ncx_path = package_dir.join(util::unquote(ncx_href));
+        if ncx_path.exists() {
+            println!("[+] Creating mandatory EPUB 3 Navigation Document from toc.ncx...");
+            match nav::generate_nav_xhtml(
+                &ncx_path,
+                &package_dir.join("nav.xhtml"),
+                &info.guide_refs,
+            ) {
+                Ok(()) => {
+                    add_nav = true;
+                    println!(
+                        "  [+] Registered nav.xhtml with properties='nav' in package document."
+                    );
                 }
+                Err(e) => println!("  [!] Failed to generate Navigation Document: {}", e),
             }
         }
     }
@@ -174,10 +178,7 @@ fn run(args: Args) -> Result<()> {
     // Rewrite the OPF with all upgrades and write it back.
     let params = RewriteParams {
         modified_ts: Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string(),
-        manifest_changes: opt
-            .manifest_changes
-            .into_iter()
-            .collect::<HashMap<_, _>>(),
+        manifest_changes: opt.manifest_changes.into_iter().collect::<HashMap<_, _>>(),
         add_nav,
         remove_guide: info.has_guide,
     };
