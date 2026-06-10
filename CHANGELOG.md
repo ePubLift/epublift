@@ -5,6 +5,26 @@ All notable changes to **epublift** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-06-10
+
+### Added
+- **Hosted web service (`epublift-web`).** A new pure-Rust Axum service — a Cargo
+  workspace member over the `convert()` library — that converts EPUBs in the
+  browser: drag-and-drop upload, quality slider, ASCII toggle, an in-page result
+  report, and a downloadable `.txt` audit report. Uploads are processed in memory
+  and deleted immediately; nothing is stored or logged. Ships as a hardened,
+  multi-arch Docker image on GHCR (`ghcr.io/epublift/epublift-web`) with a
+  `docker-compose.yml` for one-command self-hosting. Hardened with per-IP rate
+  limiting, body-size/time limits, a concurrency cap, locked-down CORS, and
+  security headers.
+
+### Changed
+- **Input hardening (CLI + library).** Extraction now rejects zip-bombs (caps on
+  entry count and total uncompressed size, enforced against bytes actually
+  written), and image decoding enforces dimension/allocation limits against
+  decode-bombs. These bounds sit far above any real e-book, so normal
+  conversions are unaffected.
+
 ## [1.1.0] - 2026-06-10
 
 Completes the **Distribution & foundation** milestone. No change to conversion
@@ -117,6 +137,7 @@ to shrink file size.
   `quick-xml` + `roxmltree` (OPF/NCX), `image` (JPEG/PNG decode), `any_ascii`
   (transliteration).
 
+[1.2.0]: https://github.com/ePubLift/epublift/releases/tag/v1.2.0
 [1.1.0]: https://github.com/ePubLift/epublift/releases/tag/v1.1.0
 [1.0.3]: https://github.com/ePubLift/epublift/releases/tag/v1.0.3
 [1.0.2]: https://github.com/ePubLift/epublift/releases/tag/v1.0.2
