@@ -26,7 +26,7 @@ use tower_http::timeout::TimeoutLayer;
 /// Hard limits for the public endpoint. The source is open, so these are the
 /// real defense — not obscurity.
 const MAX_UPLOAD_BYTES: usize = 50 * 1024 * 1024; // 50 MiB
-const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(120);
 /// How long a converted file waits in memory for its one download before it is
 /// evicted. Files live only in RAM and are never written to disk or logged.
 const DOWNLOAD_TTL: Duration = Duration::from_secs(120);
