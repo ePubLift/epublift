@@ -5,21 +5,22 @@
 // This crate is only a thin, hardened HTTP/multipart wrapper around it.
 
 use std::collections::HashMap;
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use axum::{
     Json, Router,
-    extract::{DefaultBodyLimit, Multipart, Path as UrlPath, State},
-    http::{StatusCode, header},
+    extract::{ConnectInfo, DefaultBodyLimit, Multipart, Path as UrlPath, State},
+    http::{HeaderMap, StatusCode, header},
     response::{Html, IntoResponse, Response},
     routing::{get, post},
 };
 use epublift::{EpubVersion, Options};
 use serde::Serialize;
 use tokio::sync::Semaphore;
+use tower_http::cors::CorsLayer;
 use tower_http::set_header::SetResponseHeaderLayer;
 use tower_http::timeout::TimeoutLayer;
 
@@ -31,11 +32,69 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(120);
 /// evicted. Files live only in RAM and are never written to disk or logged.
 const DOWNLOAD_TTL: Duration = Duration::from_secs(120);
 
+/// Token-bucket rate limit per client IP: a burst of `RL_BURST` conversions,
+/// refilling at `RL_REFILL_PER_SEC`.
+const RL_BURST: f64 = 6.0;
+const RL_REFILL_PER_SEC: f64 = 0.2; // ~1 conversion every 5s, sustained
+
 /// A converted EPUB held in memory awaiting download.
 struct Pending {
     name: String,
     bytes: Vec<u8>,
     born: Instant,
+}
+
+struct Bucket {
+    tokens: f64,
+    last: Instant,
+}
+
+/// Simple per-IP token-bucket limiter.
+#[derive(Default)]
+struct RateLimiter {
+    buckets: Mutex<HashMap<IpAddr, Bucket>>,
+}
+
+impl RateLimiter {
+    /// Consume a token for `ip`; returns false when the bucket is empty.
+    fn allow(&self, ip: IpAddr) -> bool {
+        let now = Instant::now();
+        let mut map = self.buckets.lock().unwrap();
+        let b = map.entry(ip).or_insert(Bucket {
+            tokens: RL_BURST,
+            last: now,
+        });
+        let elapsed = now.duration_since(b.last).as_secs_f64();
+        b.tokens = (b.tokens + elapsed * RL_REFILL_PER_SEC).min(RL_BURST);
+        b.last = now;
+        if b.tokens >= 1.0 {
+            b.tokens -= 1.0;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Drop buckets that have been idle for a while.
+    fn prune(&self) {
+        let now = Instant::now();
+        self.buckets
+            .lock()
+            .unwrap()
+            .retain(|_, b| now.duration_since(b.last) < Duration::from_secs(600));
+    }
+}
+
+/// Best-effort client IP: the first `X-Forwarded-For` entry (set by the trusted
+/// reverse proxy) if present, else the direct peer address.
+fn client_ip(headers: &HeaderMap, peer: SocketAddr) -> IpAddr {
+    if let Some(xff) = headers.get("x-forwarded-for").and_then(|v| v.to_str().ok())
+        && let Some(first) = xff.split(',').next()
+        && let Ok(ip) = first.trim().parse::<IpAddr>()
+    {
+        return ip;
+    }
+    peer.ip()
 }
 
 /// Shared service state.
@@ -44,6 +103,8 @@ struct AppState {
     convert_slots: Semaphore,
     /// Converted files awaiting download, keyed by an unguessable token.
     pending: Mutex<HashMap<String, Pending>>,
+    /// Per-IP request rate limiter.
+    limiter: RateLimiter,
 }
 
 #[tokio::main]
@@ -63,9 +124,10 @@ async fn main() {
     let state = Arc::new(AppState {
         convert_slots: Semaphore::new(slots),
         pending: Mutex::new(HashMap::new()),
+        limiter: RateLimiter::default(),
     });
 
-    // Sweep expired downloads so memory can't grow unbounded.
+    // Sweep expired downloads and idle rate-limit buckets.
     {
         let state = state.clone();
         tokio::spawn(async move {
@@ -77,6 +139,7 @@ async fn main() {
                     .lock()
                     .unwrap()
                     .retain(|_, p| p.born.elapsed() < DOWNLOAD_TTL);
+                state.limiter.prune();
             }
         });
     }
@@ -100,12 +163,20 @@ async fn main() {
             header::HeaderName::from_static("x-frame-options"),
             header::HeaderValue::from_static("DENY"),
         ))
+        // No cross-origin allow-list -> only the page's own origin may read
+        // responses, so the endpoint can't be embedded by other sites.
+        .layer(CorsLayer::new())
         .with_state(state);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
     tracing::info!("epublift-web listening on http://{addr}  ({slots} convert slots)");
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-    axum::serve(listener, app).await.unwrap();
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await
+    .unwrap();
 }
 
 /// Serve the single-page front-end.
@@ -150,8 +221,18 @@ fn bad_request(msg: impl Into<String>) -> ApiError {
 /// Convert an uploaded EPUB; return the report as JSON plus a download token.
 async fn convert(
     State(state): State<Arc<AppState>>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
     mut multipart: Multipart,
 ) -> Result<Json<ConvertResponse>, ApiError> {
+    // Rate-limit before reading the (potentially large) upload body.
+    if !state.limiter.allow(client_ip(&headers, peer)) {
+        return Err(ApiError(
+            StatusCode::TOO_MANY_REQUESTS,
+            "Too many requests — please wait a moment and try again.".into(),
+        ));
+    }
+
     let mut file_bytes: Option<Vec<u8>> = None;
     let mut file_name = String::from("book.epub");
     let mut quality: u8 = 80;
