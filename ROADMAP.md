@@ -58,32 +58,33 @@ built. A new `epublift-web` workspace member wraps the v1.1 library; the public
 instance runs at **epublift.itpax.net** (behind Nginx Proxy Manager, which
 terminates TLS).
 
-- [ ] **Axum web service** over the `convert()` library API: upload an EPUB →
+- [x] **Axum web service** over the `convert()` library API: upload an EPUB →
       convert in memory → return the file plus a result report. Pure-Rust
       (axum/tokio/tower/rustls-free since NPM does TLS); the conversion runs on
-      `spawn_blocking` behind a concurrency semaphore.
-- [ ] **Front-end** (static, served by Axum): the editorial drag-and-drop design
-      in `design/web-preview.html` — quality **slider** + **ASCII** toggle +
-      target-version pills mirroring the CLI options.
-- [ ] **Result report in the UI**: before/after size and savings up front, with
+      `spawn_blocking` behind a concurrency semaphore. The converted file is held
+      in RAM under a one-time token and streamed from `/download/{token}`.
+- [x] **Front-end** (static, served by Axum): the editorial drag-and-drop design
+      in `epublift-web/static/index.html` — quality **slider** + **ASCII** toggle
+      + target-version pills mirroring the CLI options.
+- [x] **Result report in the UI**: before/after size and savings up front, with
       an expandable EPUB 3.3 compliance checklist + per-image WebP breakdown
       (data straight from `Report`), plus a "Download report (.txt)" using
       `Report::write_text_report()`.
-- [ ] **No retention**: each request is processed in a temp dir and deleted
+- [x] **No retention**: each request is processed in a temp dir and deleted
       immediately on success *or* error; no storage, no content logging.
-- [ ] **Abuse / attack hardening** (the source is public — no security by
+- [x] **Abuse / attack hardening** (the source is public — no security by
       obscurity):
       - HTTP layer: request body-size limit (matched in NPM *and* Axum), request
         timeout, per-IP rate limiting (real IP via `X-Forwarded-For`, trusted
         only from NPM), CORS locked to the page origin, sanitized
-        `Content-Disposition` filename, security headers/CSP.
-      - Input layer (library hardening, benefits the CLI too): cap zip
-        extraction (total uncompressed size, entry count, ratio) against
-        zip-bombs; set `image` decode limits (max dimensions/allocation) against
+        `Content-Disposition` filename, security headers. *(CSP header still TODO.)*
+      - Input layer (library hardening, benefits the CLI too): caps zip
+        extraction (total uncompressed size + entry count) against zip-bombs;
+        sets `image` decode limits (max dimensions/allocation) against
         decode-bombs. Zip-slip is already guarded via `enclosed_name`.
-      - Container: non-root, read-only root FS, `tmpfs` for temp, **no network
-        egress**, plus `mem_limit` / `pids_limit` / CPU caps.
-- [ ] **Docker distribution**: a `Dockerfile` (static musl binary on a minimal
+      - Container: non-root, read-only root FS, `tmpfs` for temp, plus
+        `mem_limit` / `pids_limit`. *(Egress-blocking left to the operator.)*
+- [x] **Docker distribution**: a `Dockerfile` (static musl binary on a minimal
       base) + `docker-compose.yml` in the repo; CI builds and pushes a multi-arch
       image to **GHCR** (`ghcr.io/epublift/epublift-web`, `:latest` + `:vX.Y.Z`)
       on tag, so anyone can self-host with one command. AGPL-3.0: a visible
