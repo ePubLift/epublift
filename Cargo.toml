@@ -1,6 +1,6 @@
 [package]
 name = "epublift"
-version = "1.0.1"
+version = "1.0.2"
 edition = "2024"
 license = "AGPL-3.0-or-later"
 description = "Modernize and optimize EPUB files — upgrade structure and re-encode images"
