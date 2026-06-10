@@ -1,6 +1,6 @@
 [package]
 name = "epublift"
-version = "1.0.3"
+version = "1.1.0"
 edition = "2024"
 license = "AGPL-3.0-or-later"
 description = "Modernize and optimize EPUB files — upgrade structure and re-encode images"
@@ -34,6 +34,12 @@ walkdir = "2"
 anyhow = "1"
 percent-encoding = "2"
 any_ascii = "0.3"
+
+[dev-dependencies]
+# Used by the integration tests to assemble EPUB fixtures and inspect output.
+zip = { version = "8", default-features = false, features = ["deflate"] }
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+tempfile = "3"
 
 [profile.release]
 opt-level = 3

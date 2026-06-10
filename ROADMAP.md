@@ -45,8 +45,8 @@ behavior.
       slots in cleanly, and derive the version-stamped output name (`_v3.3`)
       from that value rather than hardcoding it — so target-version selection
       (v2.0) lands without an API break.
-- [ ] **Integration test corpus**: a small set of real-world EPUB 2 fixtures
-      verified end-to-end against the new library API.
+- [x] **Integration test corpus**: a small set of EPUB 2 fixtures verified
+      end-to-end against the new library API (`tests/convert.rs`).
 
 ---
 
