@@ -5,6 +5,29 @@ All notable changes to **epublift** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **Images no longer grow during conversion.** Re-encoding an already-compressed
+  image to WebP could produce a *larger* file (common for low-quality charts and
+  diagrams), inflating the whole book. Three changes fix this:
+  1. **Keep the smaller file** — if the WebP isn't actually smaller than the
+     source, the original image is kept untouched (no rewrite, no manifest or
+     reference change). The output can never grow.
+  2. **Never exceed the source quality** — for JPEG sources the WebP quality is
+     capped at the JPEG's estimated quality, so a q43 chart is no longer
+     re-encoded at q80 (which only added bytes, not detail).
+  3. **Grayscale stays grayscale** — grayscale images are encoded as WebP `L8`
+     instead of being expanded to RGB, dropping empty colour channels.
+
+  Example: a chart-heavy book that previously grew 4.23 MB → 5.01 MB now shrinks
+  to 3.67 MB with no visible quality change.
+
+### Changed
+- The text report's image table now reports per-image results as **converted**
+  or **kept**, with a summary count, and the section is retitled *Image
+  Optimization Breakdown*.
+
 ## [1.2.1] - 2026-06-15
 
 ### Added
