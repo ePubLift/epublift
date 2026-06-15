@@ -5,7 +5,9 @@
 [![Release](https://img.shields.io/github/v/release/ePubLift/epublift)](https://github.com/ePubLift/epublift/releases)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](http://makeapullrequest.com)
 
-A fast, standard-compliant command-line utility written in **Rust** to modernize, optimize, and significantly shrink EPUB files. Today it upgrades legacy **EPUB 2.0** structures to the **EPUB 3.3** specification and re-encodes heavy raster images (JPEG/PNG) into compact **WebP** — with support for newer EPUB versions and next-generation image formats (AVIF / JPEG XL) planned on the [roadmap](ROADMAP.md).
+A fast, standard-compliant tool written in **Rust** to modernize, optimize, and significantly shrink EPUB files. Today it upgrades legacy **EPUB 2.0** structures to the **EPUB 3.3** specification and re-encodes heavy raster images (JPEG/PNG) into compact **WebP** — with support for newer EPUB versions and next-generation image formats (AVIF / JPEG XL) planned on the [roadmap](ROADMAP.md).
+
+Use it as a **command-line tool**, as a **library**, or as a self-hostable **web service** — try the hosted instance at **<https://epublift.itpax.net>** or [run your own with Docker](#-hosted-web-service-epublift-web).
 
 ePubLift began as a Rust port of an earlier Python implementation but has since grown into an independent, more capable tool — a fully pure-Rust build with no C dependencies and features beyond the original. Released under the AGPL-3.0 license.
 
@@ -26,6 +28,7 @@ ePubLift began as a Rust port of an earlier Python implementation but has since 
     *   Converts outdated `<guide>` landmark reference lists into HTML5 `<nav epub:type="landmarks">` maps.
     *   Standardizes legacy XHTML DOCTYPEs (like XHTML 1.1) to modern HTML5 `<!DOCTYPE html>` structure.
 *   **📊 Detailed Audit Reports**: Generates a detailed size comparison table and conversion metrics report in an easy-to-read text file.
+*   **🌐 Browser & Docker Ready**: A hardened [web service](#-hosted-web-service-epublift-web) converts EPUBs in the browser — uploads are processed in memory and deleted immediately. Ships as a multi-arch Docker image for one-command self-hosting.
 
 ---
 
@@ -154,6 +157,56 @@ epublift -i "Işık Doğudan Yükselir.epub" --ascii
 ```
 
 This romanizes Unicode letters (e.g. Turkish `ş→s`, `ğ→g`, `ı→i`, `ö→o`, `ü→u`), turns whitespace into underscores, and drops other punctuation. Transliteration is lossy and not always locale-perfect, which is why it is **off by default**. The flag only affects auto-generated names — an explicit `-o`/`-r` path is always used verbatim.
+
+---
+
+## 🌐 Hosted Web Service (`epublift-web`)
+
+Beyond the CLI, ePubLift ships a small **web service**: drag-and-drop an EPUB in your browser and get back the modernized file plus an in-page audit report. It's powered by the same pure-Rust `convert()` core, and uploads are processed **in memory and deleted immediately** — nothing is ever stored or logged.
+
+> 💡 A hosted instance runs at **<https://epublift.itpax.net>**. Or self-host it in one command (below).
+
+### Run with Docker
+
+A hardened, multi-arch (amd64 + arm64) image is published to the GitHub Container Registry on every release:
+
+```bash
+docker run -d --name epublift-web \
+  -p 127.0.0.1:8080:8080 \
+  ghcr.io/epublift/epublift-web:latest
+```
+
+Then open <http://127.0.0.1:8080>. Pin a specific version with a tag instead of `latest`, e.g. `ghcr.io/epublift/epublift-web:1.2.1`. The image is a static musl binary on Alpine, runs as a non-root user, and is only ~14 MB.
+
+### Run with Docker Compose (recommended)
+
+The repo's [`docker-compose.yml`](docker-compose.yml) adds the full hardening profile — read-only root filesystem, all Linux capabilities dropped, `no-new-privileges`, memory/PID limits, and a `tmpfs` for the only writable path:
+
+```bash
+docker compose up -d
+```
+
+### Put it behind a reverse proxy (TLS)
+
+The service speaks plain HTTP on port `8080` and binds to localhost, so terminate TLS with a reverse proxy (Nginx Proxy Manager, Caddy, Traefik, …) in front of it. One required setting: raise the proxy's max request-body size to match the service's **50 MiB** upload limit — otherwise large uploads are rejected at the proxy with `413`. For Nginx (and Nginx Proxy Manager's *Advanced* tab):
+
+```nginx
+client_max_body_size 50M;
+```
+
+If your proxy **also runs as a container**, it can't reach the host's `127.0.0.1:8080`. Put both on a shared Docker network and point the proxy at the service by name — `http://epublift-web:8080` (the container's internal port `8080`, regardless of how the host port is published).
+
+### Security & privacy
+
+The endpoint is public and the source is open, so these limits are the real defense — not obscurity:
+
+*   **No retention** — each request is converted in a temp dir wiped on success *or* error; no upload is stored or logged.
+*   **Strict Content-Security-Policy** (`default-src 'none'`) plus `X-Frame-Options`, `X-Content-Type-Options`, and locked-down CORS on every response.
+*   **Abuse limits** — a 50 MiB body cap, a request timeout, per-IP rate limiting, and a concurrency cap that keeps latency predictable.
+*   **Input hardening** (shared with the CLI) — zip-bomb (uncompressed-size + entry-count caps) and image decode-bomb (dimension/allocation limits) guards.
+*   **Optional egress-blocking** — the converter never makes outbound connections, so `docker-compose.yml` documents how to run it on an `internal` Docker network with no route to the internet at all.
+
+> **AGPL-3.0 note:** if you run a **modified** copy of this service over a network, §13 requires you to offer your modified source to its users. The page carries a visible **Source** link to satisfy this.
 
 ---
 
