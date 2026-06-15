@@ -5,7 +5,7 @@ All notable changes to **epublift** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.2.1] - 2026-06-15
 
 ### Added
 - **Content-Security-Policy on `epublift-web`.** Every response now carries a
@@ -14,6 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the page into its own `/app.js`, so scripts run under `script-src 'self'` with
   no inline JS; `'unsafe-inline'` is granted to styles only, and fonts are
   limited to Google Fonts.
+- **Documented egress-blocking opt-in in `docker-compose.yml`.** The converter
+  makes no outbound connections, so `docker-compose.yml` now documents (with
+  ready-to-use config) how to put it on an `internal` Docker network to cut its
+  internet access entirely — the reverse proxy joins that network and reaches
+  the service by name. The default still publishes a port so `docker compose up`
+  works out of the box.
 
 ## [1.2.0] - 2026-06-10
 

@@ -324,7 +324,7 @@ checksum = "f8e1bd41ecce82c300d0c84fa35b080fa6db50a5398b18f1abf0357bb067549e"
 
 [[package]]
 name = "epublift"
-version = "1.2.0"
+version = "1.2.1"
 dependencies = [
  "any_ascii",
  "anyhow",
