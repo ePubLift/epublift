@@ -98,10 +98,32 @@ terminates TLS).
 
 ---
 
-## 🖥️ Mid term — v1.3: Desktop app (ePubLift GUI)
+## 📖 Mid term — v1.3: Kobo (`.kepub`) support
 
-Goal: reach non-technical readers who will never open a terminal (the native,
-offline counterpart to the v1.2 web service).
+Goal: produce Kobo-optimised `.kepub.epub` output, so books render faster and
+gain Kobo's reading features (statistics, page turns, dictionary) on Kobo
+devices. This is pure **core** work — it benefits the CLI *and* the already-live
+web app in one change, with **no per-platform burden** — which is why it was
+prioritised ahead of the desktop GUI.
+
+- [ ] **kepub conversion** — inject Kobo's `koboSpan` markup into the content
+      HTML (reusing the existing XHTML processing pipeline) and emit a
+      `.kepub.epub`. Reference: the open-source `kepubify` transformation.
+- [ ] A **target/output selector** — either a `--kepub` flag or a generalised
+      "target format" option on the CLI, with a matching **"Kobo (`.kepub`)"**
+      choice in the web UI's target picker.
+- [ ] Validate output on a **real Kobo device** and against Calibre's KePub
+      output for parity.
+
+---
+
+## 🖥️ Demand-gated — Desktop app (ePubLift GUI)
+
+Deferred from v1.3. The hosted web service already covers the no-install case,
+and a desktop GUI carries a **recurring per-platform cost** (three OSes,
+installers, code signing). Rather than build it speculatively, we'll prioritise
+it on real demand signals — GitHub stars, feature requests/issues, and community
+feedback on the web launch.
 
 - [ ] **`epublift-gui`** — a native, drag-and-drop desktop app built on `egui`,
       consuming the core library directly (stays pure-Rust, single small binary,
