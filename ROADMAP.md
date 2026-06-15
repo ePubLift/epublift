@@ -77,7 +77,10 @@ terminates TLS).
       - HTTP layer: request body-size limit (matched in NPM *and* Axum), request
         timeout, per-IP rate limiting (real IP via `X-Forwarded-For`, trusted
         only from NPM), CORS locked to the page origin, sanitized
-        `Content-Disposition` filename, security headers. *(CSP header still TODO.)*
+        `Content-Disposition` filename, security headers — incl. a strict
+        `Content-Security-Policy` (`default-src 'none'`; the front-end script is
+        served from its own `/app.js` so `script-src 'self'` needs no inline JS;
+        `'unsafe-inline'` granted to styles only; fonts limited to Google Fonts).
       - Input layer (library hardening, benefits the CLI too): caps zip
         extraction (total uncompressed size + entry count) against zip-bombs;
         sets `image` decode limits (max dimensions/allocation) against

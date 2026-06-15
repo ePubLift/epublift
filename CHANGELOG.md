@@ -5,6 +5,16 @@ All notable changes to **epublift** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Content-Security-Policy on `epublift-web`.** Every response now carries a
+  strict CSP (`default-src 'none'`, plus `base-uri`/`form-action`/`object-src`
+  `'none'` and `frame-ancestors 'none'`). The front-end script was moved out of
+  the page into its own `/app.js`, so scripts run under `script-src 'self'` with
+  no inline JS; `'unsafe-inline'` is granted to styles only, and fonts are
+  limited to Google Fonts.
+
 ## [1.2.0] - 2026-06-10
 
 ### Added
