@@ -101,26 +101,43 @@ pub fn write_report(
             .to_string(),
     );
     r.push(dash.clone());
-    r.push("IMAGE OPTIMIZATION BREAKDOWN (CONVERTED TO WEBP)".to_string());
+    r.push("IMAGE OPTIMIZATION BREAKDOWN".to_string());
     r.push(dash.clone());
 
     if metrics.is_empty() {
         r.push("No raster images (JPEG/PNG) were found or converted.".to_string());
     } else {
+        let converted = metrics.iter().filter(|m| !m.kept).count();
+        let kept = metrics.len() - converted;
+        r.push(format!(
+            "{} image(s) re-encoded to WebP, {} kept as-is (WebP was no smaller).",
+            converted, kept
+        ));
+        r.push(dash.clone());
         r.push(format!(
             "{:<30} | {:<13} | {:<9} | {:<10}",
-            "Image Name", "Original (KB)", "WebP (KB)", "Saved (%)"
+            "Image Name", "Original (KB)", "Result (KB)", "Saved (%)"
         ));
         r.push(dash.clone());
         for m in metrics {
             let name: String = m.name.chars().take(29).collect();
-            r.push(format!(
-                "{:<30} | {:>13} | {:>9} | {:>9.1}%",
-                name,
-                comma_f1(m.original_size as f64 / 1024.0),
-                comma_f1(m.new_size as f64 / 1024.0),
-                m.percentage
-            ));
+            if m.kept {
+                r.push(format!(
+                    "{:<30} | {:>13} | {:>9} | {:>10}",
+                    name,
+                    comma_f1(m.original_size as f64 / 1024.0),
+                    "—",
+                    "kept"
+                ));
+            } else {
+                r.push(format!(
+                    "{:<30} | {:>13} | {:>9} | {:>9.1}%",
+                    name,
+                    comma_f1(m.original_size as f64 / 1024.0),
+                    comma_f1(m.new_size as f64 / 1024.0),
+                    m.percentage
+                ));
+            }
         }
     }
 

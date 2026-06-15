@@ -146,6 +146,26 @@ fn legacy_with_images() -> Vec<Entry> {
     ]
 }
 
+/// Same as `legacy_with_images`, but the PNG logo is so tiny that a WebP would
+/// be *larger* than the source — exercises the keep-the-original path.
+fn legacy_with_keepable_png() -> Vec<Entry> {
+    vec![
+        text("META-INF/container.xml", CONTAINER_XML),
+        text("OEBPS/content.opf", OPF_WITH_IMAGES),
+        text("OEBPS/toc.ncx", TOC_NCX),
+        text("OEBPS/chapter1.html", CHAPTER1_WITH_IMAGES),
+        text("OEBPS/styles.css", STYLES_CSS),
+        Entry {
+            path: "OEBPS/images/cover.jpg",
+            data: jpeg(32, 32),
+        },
+        Entry {
+            path: "OEBPS/images/logo.png",
+            data: png(2, 2),
+        },
+    ]
+}
+
 fn legacy_text_only() -> Vec<Entry> {
     vec![
         text("META-INF/container.xml", CONTAINER_XML),
@@ -218,6 +238,14 @@ fn full_legacy_epub_is_modernized() {
     assert_eq!(report.image_metrics.len(), 2);
     for m in &report.image_metrics {
         assert!(m.new_size > 0, "{} produced an empty WebP", m.name);
+        // Core guarantee: an image is never written larger than the source.
+        assert!(
+            m.new_size <= m.original_size,
+            "{} grew: {} -> {}",
+            m.name,
+            m.original_size,
+            m.new_size
+        );
     }
     let names: Vec<&str> = report
         .image_metrics
@@ -288,6 +316,73 @@ fn full_legacy_epub_is_modernized() {
     // CSS references should be rewritten too.
     let css = read_entry(out, "OEBPS/styles.css");
     assert!(css.contains("images/logo.webp") && !css.contains("images/logo.png"));
+}
+
+#[test]
+fn larger_webp_keeps_the_original_image() {
+    let dir = tempfile::tempdir().unwrap();
+    let input = dir.path().join("keep.epub");
+    build_epub(&input, &legacy_with_keepable_png());
+
+    let report = convert(&input, &Options::default(), |_| {}).unwrap();
+
+    // No image is ever written larger than its source.
+    for m in &report.image_metrics {
+        assert!(
+            m.new_size <= m.original_size,
+            "{} grew: {} -> {}",
+            m.name,
+            m.original_size,
+            m.new_size
+        );
+    }
+
+    let cover = report
+        .image_metrics
+        .iter()
+        .find(|m| m.name == "cover.jpg")
+        .expect("cover metric");
+    assert!(
+        !cover.kept && cover.new_size < cover.original_size,
+        "the JPEG cover should still convert to a smaller WebP"
+    );
+
+    let logo = report
+        .image_metrics
+        .iter()
+        .find(|m| m.name == "logo.png")
+        .expect("logo metric");
+    assert!(
+        logo.kept,
+        "the tiny PNG should be kept (WebP would be larger)"
+    );
+    assert_eq!(logo.new_size, logo.original_size);
+
+    // Archive: cover became WebP, the kept PNG is untouched.
+    let out = &report.output_path;
+    let names = entry_names(out);
+    let has = |n: &str| names.iter().any(|e| e == n);
+    assert!(has("OEBPS/images/cover.webp"), "cover converted to WebP");
+    assert!(has("OEBPS/images/logo.png"), "kept PNG retained as-is");
+    assert!(
+        !has("OEBPS/images/logo.webp"),
+        "no WebP written for the kept image"
+    );
+
+    // OPF: cover updated to WebP, the kept PNG entry unchanged.
+    let opf = read_entry(out, "OEBPS/content.opf");
+    assert!(opf.contains("cover.webp"), "manifest cover points at WebP");
+    assert!(
+        opf.contains("images/logo.png") && opf.contains("image/png"),
+        "kept PNG stays in the manifest as image/png"
+    );
+
+    // The reference to the kept PNG must remain intact (not rewritten to .webp).
+    let css = read_entry(out, "OEBPS/styles.css");
+    assert!(
+        css.contains("images/logo.png") && !css.contains("images/logo.webp"),
+        "kept PNG reference left unchanged in CSS"
+    );
 }
 
 #[test]

@@ -21,6 +21,10 @@ ePubLift began as a Rust port of an earlier Python implementation but has since 
     *   Preserves PNG alpha channel transparency.
     *   Allows customizable quality level settings (1–100).
     *   Automatically scans and updates all image references in CSS, XHTML/HTML files, SVG graphics, and the OPF manifest.
+*   **🛡️ Size-Safe by Design** — re-encoding never makes a book bigger:
+    *   **Keeps the smaller file.** If the WebP isn't actually smaller than the source, the original image is kept untouched, so the output can never grow.
+    *   **Never upscales quality.** For a JPEG source the WebP quality is capped at the source's own (estimated) quality — a low-quality chart isn't re-encoded at a higher quality, which would only add bytes, not detail.
+    *   **Keeps grayscale grayscale.** Grayscale images are encoded as single-channel WebP instead of being expanded to RGB.
 *   **⚡ EPUB 3.3 Compliance Upgrade**:
     *   Upgrades package declarations in the OPF metadata to version `3.0`.
     *   Injects required `dcterms:modified` UTC metadata timestamps.
