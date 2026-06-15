@@ -86,7 +86,10 @@ terminates TLS).
         sets `image` decode limits (max dimensions/allocation) against
         decode-bombs. Zip-slip is already guarded via `enclosed_name`.
       - Container: non-root, read-only root FS, `tmpfs` for temp, plus
-        `mem_limit` / `pids_limit`. *(Egress-blocking left to the operator.)*
+        `mem_limit` / `pids_limit`. The converter makes no outbound
+        connections, so `docker-compose.yml` documents a ready-to-use
+        egress-blocking opt-in (an `internal` Docker network the reverse
+        proxy joins); the simple default keeps a published port.
 - [x] **Docker distribution**: a `Dockerfile` (static musl binary on a minimal
       base) + `docker-compose.yml` in the repo; CI builds and pushes a multi-arch
       image to **GHCR** (`ghcr.io/epublift/epublift-web`, `:latest` + `:vX.Y.Z`)

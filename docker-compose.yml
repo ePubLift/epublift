@@ -1,9 +1,9 @@
 # Self-host epublift-web. By default this pulls the published image; to build
 # from source instead, comment out `image:` and uncomment `build: .`.
 #
-# Put a reverse proxy (e.g. Nginx Proxy Manager) in front for TLS. The service
-# speaks plain HTTP on 8080 and is bound to localhost so only the proxy reaches
-# it.
+# Put a reverse proxy (e.g. Nginx Proxy Manager, Caddy, Traefik) in front for
+# TLS. Out of the box the service speaks plain HTTP on 8080, bound to localhost
+# so only a proxy on the same host reaches it. `docker compose up` just works.
 services:
   epublift-web:
     image: ghcr.io/epublift/epublift-web:latest
@@ -24,6 +24,25 @@ services:
     mem_limit: 1g
     pids_limit: 256
 
-    # The converter never makes outbound connections. To also block egress,
-    # run it on an internal network fronted by your proxy, or add a firewall
-    # rule — left to the operator to fit their setup.
+# --- Optional: block egress (defense in depth) -------------------------------
+# The converter never makes outbound connections, so you can cut its internet
+# access entirely. A Docker `internal` network does this — but note it *also*
+# blocks published ports (that is by design: `internal` isolates the network
+# from everything outside it). So you cannot combine `internal:` with the
+# `ports:` above; instead the reverse proxy must join the network and reach the
+# service by name. To enable:
+#
+#   1. Remove the `ports:` block above.
+#   2. Add to the service:
+#        networks:
+#          - epublift-internal
+#   3. Uncomment the `networks:` block below.
+#   4. Attach your reverse proxy container to `epublift-internal` too, and
+#      point it at  http://epublift-web:8080  (container name, not localhost).
+#
+# Result: epublift-web has no route to the internet, while the proxy still
+# reaches it over the internal network.
+#
+# networks:
+#   epublift-internal:
+#     internal: true
