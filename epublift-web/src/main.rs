@@ -146,6 +146,7 @@ async fn main() {
 
     let app = Router::new()
         .route("/", get(index))
+        .route("/app.js", get(app_js))
         .route("/healthz", get(|| async { "ok" }))
         .route("/convert", post(convert))
         .route("/download/{token}", get(download))
@@ -162,6 +163,28 @@ async fn main() {
         .layer(SetResponseHeaderLayer::overriding(
             header::HeaderName::from_static("x-frame-options"),
             header::HeaderValue::from_static("DENY"),
+        ))
+        // Content-Security-Policy: deny everything by default, then allow only
+        // what the single page actually loads. The front-end script lives at
+        // its own `/app.js` so we can use `script-src 'self'` (no inline JS).
+        // `'unsafe-inline'` is only granted to styles (the inline <style> block
+        // and many style="..." attributes); there is no HTML-injection sink, so
+        // this is low-risk. Fonts come from Google Fonts; everything else is
+        // same-origin or `data:`.
+        .layer(SetResponseHeaderLayer::overriding(
+            header::CONTENT_SECURITY_POLICY,
+            header::HeaderValue::from_static(
+                "default-src 'none'; \
+                 script-src 'self'; \
+                 style-src 'unsafe-inline' https://fonts.googleapis.com; \
+                 font-src https://fonts.gstatic.com; \
+                 img-src 'self' data:; \
+                 connect-src 'self'; \
+                 base-uri 'none'; \
+                 form-action 'none'; \
+                 frame-ancestors 'none'; \
+                 object-src 'none'",
+            ),
         ))
         // No cross-origin allow-list -> only the page's own origin may read
         // responses, so the endpoint can't be embedded by other sites.
@@ -182,6 +205,18 @@ async fn main() {
 /// Serve the single-page front-end.
 async fn index() -> Html<&'static str> {
     Html(include_str!("../static/index.html"))
+}
+
+/// Serve the front-end script as a same-origin file (so the CSP can use
+/// `script-src 'self'` instead of allowing inline scripts).
+async fn app_js() -> impl IntoResponse {
+    (
+        [(
+            header::CONTENT_TYPE,
+            header::HeaderValue::from_static("text/javascript; charset=utf-8"),
+        )],
+        include_str!("../static/app.js"),
+    )
 }
 
 #[derive(Serialize)]
