@@ -27,6 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The text report's image table now reports per-image results as **converted**
   or **kept**, with a summary count, and the section is retitled *Image
   Optimization Breakdown*.
+- Refreshed dependencies to their latest compatible versions, and bumped
+  `tower-http` 0.6 → 0.7 (web service). No behaviour change for epublift —
+  `zenwebp` is already at the latest 0.4.4.
 
 ## [1.2.1] - 2026-06-15
 
