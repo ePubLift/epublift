@@ -15,6 +15,7 @@ const chipname = document.getElementById('chipname');
 const result = document.getElementById('result');
 const outname = document.getElementById('outname');
 const ascii = document.getElementById('ascii');
+const kepub = document.getElementById('kepub');
 const go = document.getElementById('go');
 let selectedFile = null;
 
@@ -35,6 +36,7 @@ go.addEventListener('click', async () => {
     fd.append('file', selectedFile);
     fd.append('quality', q.value);
     fd.append('ascii', ascii.checked ? 'true' : 'false');
+    fd.append('kepub', kepub.checked ? 'true' : 'false');
     const res = await fetch('/convert', { method:'POST', body: fd });
     if (!res.ok) {
       let msg = 'Conversion failed (HTTP ' + res.status + ').';

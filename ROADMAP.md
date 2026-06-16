@@ -106,12 +106,14 @@ devices. This is pure **core** work — it benefits the CLI *and* the already-li
 web app in one change, with **no per-platform burden** — which is why it was
 prioritised ahead of the desktop GUI.
 
-- [ ] **kepub conversion** — inject Kobo's `koboSpan` markup into the content
+- [x] **kepub conversion** — inject Kobo's `koboSpan` markup into the content
       HTML (reusing the existing XHTML processing pipeline) and emit a
       `.kepub.epub`. Reference: the open-source `kepubify` transformation.
-- [ ] A **target/output selector** — either a `--kepub` flag or a generalised
-      "target format" option on the CLI, with a matching **"Kobo (`.kepub`)"**
-      choice in the web UI's target picker.
+      *(Implemented in `src/kepub.rs`: sentence-level spans, image paragraphs,
+      `book-columns`/`book-inner` wrapper, `kobostylehacks` style.)*
+- [x] A **target/output selector** — a `--kepub` flag (kept orthogonal to the
+      future `--target-version` so "3.4 + kepub" stays expressible), with a
+      matching **"Kobo (`.kepub`)"** toggle in the web UI.
 - [ ] Validate output on a **real Kobo device** and against Calibre's KePub
       output for parity.
 

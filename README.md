@@ -148,6 +148,18 @@ epublift -i book.epub -o optimized_book.epub -q 85 -r stats_report.txt
 | `-q` | `--quality`| WebP compression quality level (1-100) | `80` |
 | `-r` | `--report` | Path to write the conversion audit report | `<input>_report.txt` |
 | | `--ascii` | Transliterate the auto-generated output/report names to ASCII | *off* |
+| | `--kepub` | Produce a Kobo `.kepub.epub` (inject `koboSpan` markup) | *off* |
+
+#### Kobo `.kepub` output (`--kepub`)
+
+[Kobo](https://www.kobo.com/) e-readers unlock their richer reading features — accurate page turns, reading statistics, and dictionary lookup — when a book carries Kobo's `koboSpan` markup. Add `--kepub` to produce a Kobo-optimized file alongside the normal EPUB 3 upgrades:
+
+```bash
+epublift -i book.epub --kepub
+# → book.kepub.epub
+```
+
+The result is still a valid EPUB 3 (Kobo simply keys on the `.kepub.epub` extension and the spans), so the same file also opens in other readers. The transform follows the approach of the open-source [`kepubify`](https://github.com/pgaskin/kepubify): sentence-level spans, each image in its own paragraph, and Kobo's column scaffolding. Sideload the `.kepub.epub` onto your Kobo (into the `.kobo` folder or via Calibre) to use it.
 
 #### ASCII-safe filenames (`--ascii`)
 

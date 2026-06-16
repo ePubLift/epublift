@@ -20,6 +20,7 @@
 //! build [`Options`], call [`convert`], and inspect the returned [`Report`].
 
 mod images;
+mod kepub;
 mod nav;
 mod opf;
 mod report;
@@ -73,6 +74,10 @@ pub struct Options {
     pub ascii: bool,
     /// Target EPUB version for the output.
     pub target_version: EpubVersion,
+    /// Produce a Kobo `.kepub.epub`: inject `koboSpan` markup into the content
+    /// documents and name the output `<stem>.kepub.epub`. The result is still a
+    /// valid EPUB 3 on top of the normal upgrades.
+    pub kepub: bool,
     /// Explicit output path; when `None`, [`default_output_path`] is used.
     pub output: Option<PathBuf>,
 }
@@ -83,6 +88,7 @@ impl Default for Options {
             quality: 80,
             ascii: false,
             target_version: EpubVersion::LATEST,
+            kepub: false,
             output: None,
         }
     }
@@ -147,12 +153,16 @@ pub fn output_stem(input: &Path, ascii: bool) -> String {
     }
 }
 
-/// The default, version-stamped output path next to `input`
-/// (e.g. `book_v3.3.epub`).
+/// The default output path next to `input`: version-stamped (e.g. `book_v3.3.epub`),
+/// or a Kobo `book.kepub.epub` when [`Options::kepub`] is set.
 pub fn default_output_path(input: &Path, options: &Options) -> PathBuf {
     let stem = output_stem(input, options.ascii);
     let parent = input.parent().unwrap_or_else(|| Path::new("."));
-    parent.join(format!("{}_v{}.epub", stem, options.target_version.tag()))
+    if options.kepub {
+        parent.join(format!("{}.kepub.epub", stem))
+    } else {
+        parent.join(format!("{}_v{}.epub", stem, options.target_version.tag()))
+    }
 }
 
 /// Modernize `input` and write an optimized EPUB.
@@ -257,6 +267,12 @@ pub fn convert(input: &Path, options: &Options, progress: impl Fn(&str)) -> Resu
     };
     let new_opf = opf::rewrite_opf(&opf_xml, &params)?;
     fs::write(&opf_path, new_opf)?;
+
+    // Step 4b: Inject Kobo koboSpan markup when targeting .kepub.
+    if options.kepub {
+        progress("[*] Injecting Kobo koboSpan markup (.kepub)...");
+        kepub::kobo_spanify(temp_path, &progress)?;
+    }
 
     // Step 5: Repackage EPUB.
     progress("[*] Repackaging folder into EPUB file...");

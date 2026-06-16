@@ -454,3 +454,58 @@ fn explicit_output_path_is_respected() {
     assert_eq!(report.output_name, "custom-name.epub");
     assert!(explicit.exists());
 }
+
+#[test]
+fn kepub_injects_kobospans_and_names_output() {
+    let dir = tempfile::tempdir().unwrap();
+    let input = dir.path().join("legacy.epub");
+    build_epub(&input, &legacy_with_images());
+
+    let opts = Options {
+        kepub: true,
+        ..Options::default()
+    };
+    let report = convert(&input, &opts, |_| {}).unwrap();
+
+    // Kobo output gets the .kepub.epub extension, not the _v3.3 stamp.
+    assert_eq!(report.output_name, "legacy.kepub.epub");
+    let out = &report.output_path;
+    // Still a valid EPUB: mimetype stored first.
+    assert!(
+        mimetype_first_and_stored(out),
+        "mimetype must be stored first"
+    );
+
+    // Content document carries Kobo markup on top of the normal upgrades.
+    let chapter = read_entry(out, "OEBPS/chapter1.html");
+    assert!(chapter.contains("class=\"koboSpan\""), "koboSpans injected");
+    assert!(chapter.contains("id=\"kobo."), "koboSpan ids present");
+    assert!(
+        chapter.contains("id=\"book-inner\"") && chapter.contains("id=\"book-columns\""),
+        "body wrapped in Kobo column scaffolding"
+    );
+    assert!(chapter.contains("kobostylehacks"), "Kobo style hack added");
+    // The normal modernization still happened (images rewritten to WebP).
+    assert!(
+        chapter.contains("images/cover.webp"),
+        "image refs still rewritten"
+    );
+    assert!(
+        chapter.contains("<!DOCTYPE html>"),
+        "DOCTYPE still modernized"
+    );
+}
+
+#[test]
+fn default_run_has_no_kobospans() {
+    let dir = tempfile::tempdir().unwrap();
+    let input = dir.path().join("legacy.epub");
+    build_epub(&input, &legacy_text_only());
+
+    let report = convert(&input, &Options::default(), |_| {}).unwrap();
+    let chapter = read_entry(&report.output_path, "OEBPS/chapter1.html");
+    assert!(
+        !chapter.contains("koboSpan"),
+        "koboSpans must only appear with --kepub"
+    );
+}

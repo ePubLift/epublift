@@ -272,6 +272,7 @@ async fn convert(
     let mut file_name = String::from("book.epub");
     let mut quality: u8 = 80;
     let mut ascii = false;
+    let mut kepub = false;
 
     while let Some(field) = multipart
         .next_field()
@@ -299,6 +300,10 @@ async fn convert(
             "ascii" => {
                 let v = field.text().await.unwrap_or_default();
                 ascii = matches!(v.trim(), "true" | "on" | "1");
+            }
+            "kepub" => {
+                let v = field.text().await.unwrap_or_default();
+                kepub = matches!(v.trim(), "true" | "on" | "1");
             }
             _ => { /* ignore unknown fields */ }
         }
@@ -328,6 +333,7 @@ async fn convert(
                 quality,
                 ascii,
                 target_version: EpubVersion::LATEST,
+                kepub,
                 output: None,
             };
             let report = epublift::convert(&input_path, &opts, |_| {})?;

@@ -48,6 +48,12 @@ struct Args {
     /// (e.g. "Işık Doğudan" -> "Isik_Dogudan"). Ignored when -o/-r are given.
     #[arg(long)]
     ascii: bool,
+
+    /// Produce a Kobo .kepub.epub: inject koboSpan markup for Kobo's reading
+    /// features. Composes with the normal upgrades; output is named
+    /// "<name>.kepub.epub" unless -o is given.
+    #[arg(long)]
+    kepub: bool,
 }
 
 fn main() -> ExitCode {
@@ -71,6 +77,7 @@ fn run(args: Args) -> Result<()> {
         quality: args.quality.clamp(1, 100) as u8,
         ascii: args.ascii,
         target_version: EpubVersion::LATEST,
+        kepub: args.kepub,
         output: args.output.clone(),
     };
     // Resolve the output path up front so we can show it before converting.
