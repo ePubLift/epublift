@@ -1,0 +1,42 @@
+name: ✨ Feature request
+description: Suggest an idea or improvement.
+labels: ["type:feature"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the suggestion! Tell us what you'd like and why — concrete
+        use cases help a lot.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part is this for?
+      description: Helps us route the request.
+      options:
+        - CLI (the `epublift` command-line tool)
+        - Web app (the browser converter / hosted site)
+        - Core conversion (image/structure/kepub output — affects both CLI & web)
+        - Documentation / other
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: What are you trying to do? What's painful today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What would you like ePubLift to do?
+    validations:
+      required: false
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other approaches or workarounds you've thought about.
+    validations:
+      required: false

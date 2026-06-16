@@ -1,0 +1,68 @@
+name: 🐞 Bug report
+description: Something isn't working as expected.
+labels: ["type:bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug! Please fill in the fields
+        below so we can reproduce and fix it quickly.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part is affected?
+      description: Helps us route the issue. Pick the closest match.
+      options:
+        - CLI (the `epublift` command-line tool)
+        - Web app (the browser converter / hosted site / Docker image)
+        - Core conversion (image/structure/kepub output — affects both CLI & web)
+        - Documentation / other
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: "CLI: run `epublift --version` or note the release (e.g. cli-v1.3.0). Web: the page footer or image tag (e.g. web 1.3.0 / `:latest`)."
+      placeholder: "e.g. cli-v1.3.0  /  web 1.3.0"
+    validations:
+      required: false
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, and what went wrong? Paste any error output.
+      placeholder: Describe the bug. Attach a screenshot if it helps.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Run `epublift -i book.epub --kepub`
+        2. Open the result on …
+        3. …
+    validations:
+      required: false
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+    validations:
+      required: false
+  - type: input
+    id: reader
+    attributes:
+      label: Reader / device (if relevant)
+      description: Where you opened the output — some readers don't support every format (e.g. Kobo e-ink can't render WebP).
+      placeholder: "e.g. Kobo Sage, Apple Books, Calibre, Google Play Books"
+    validations:
+      required: false
+  - type: input
+    id: os
+    attributes:
+      label: Operating system (for CLI bugs)
+      placeholder: "e.g. macOS 15, Windows 11, Ubuntu 24.04"
+    validations:
+      required: false
