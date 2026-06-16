@@ -16,7 +16,7 @@
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use epublift::{EpubVersion, Options};
+use epublift::{EpubVersion, ImageStrategy, Options};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
@@ -51,9 +51,16 @@ struct Args {
 
     /// Produce a Kobo .kepub.epub: inject koboSpan markup for Kobo's reading
     /// features. Composes with the normal upgrades; output is named
-    /// "<name>.kepub.epub" unless -o is given.
+    /// "<name>.kepub.epub" unless -o is given. Implies --keep-images, since Kobo
+    /// e-ink readers cannot render WebP.
     #[arg(long)]
     kepub: bool,
+
+    /// Keep images in their original format (skip JPEG/PNG -> WebP). Use this for
+    /// readers that don't render WebP — notably Kobo e-ink devices. Structure is
+    /// still upgraded to EPUB 3.3.
+    #[arg(long)]
+    keep_images: bool,
 }
 
 fn main() -> ExitCode {
@@ -77,6 +84,11 @@ fn run(args: Args) -> Result<()> {
         quality: args.quality.clamp(1, 100) as u8,
         ascii: args.ascii,
         target_version: EpubVersion::LATEST,
+        image_strategy: if args.keep_images {
+            ImageStrategy::KeepOriginal
+        } else {
+            ImageStrategy::WebP
+        },
         kepub: args.kepub,
         output: args.output.clone(),
     };

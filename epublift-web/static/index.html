@@ -362,8 +362,19 @@
 
         <div class="toggle-row">
           <div class="txt">
+            <span style="font-weight:600;font-size:15px;">Keep original images</span>
+            <small>Skip JPEG/PNG → WebP. Use for readers that don't render WebP — notably <b>Kobo</b> e-ink devices. Structure is still upgraded to EPUB 3.3.</small>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="keep_images" />
+            <span class="slot"></span>
+          </label>
+        </div>
+
+        <div class="toggle-row">
+          <div class="txt">
             <span style="font-weight:600;font-size:15px;">Kobo (.kepub) output</span>
-            <small>Add Kobo's koboSpan markup for page turns, stats &amp; dictionary on Kobo devices. Output is named <code style="font-family:inherit">.kepub.epub</code>.</small>
+            <small>Add Kobo's koboSpan markup for page turns, stats &amp; dictionary on Kobo devices. Output is named <code style="font-family:inherit">.kepub.epub</code>. Keeps original images automatically (Kobo can't render WebP).</small>
           </div>
           <label class="switch">
             <input type="checkbox" id="kepub" />

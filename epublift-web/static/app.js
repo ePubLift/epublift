@@ -16,6 +16,7 @@ const result = document.getElementById('result');
 const outname = document.getElementById('outname');
 const ascii = document.getElementById('ascii');
 const kepub = document.getElementById('kepub');
+const keepImages = document.getElementById('keep_images');
 const go = document.getElementById('go');
 let selectedFile = null;
 
@@ -37,6 +38,7 @@ go.addEventListener('click', async () => {
     fd.append('quality', q.value);
     fd.append('ascii', ascii.checked ? 'true' : 'false');
     fd.append('kepub', kepub.checked ? 'true' : 'false');
+    fd.append('keep_images', keepImages.checked ? 'true' : 'false');
     const res = await fetch('/convert', { method:'POST', body: fd });
     if (!res.ok) {
       let msg = 'Conversion failed (HTTP ' + res.status + ').';
@@ -96,6 +98,20 @@ function renderResult(data){
   result.classList.remove('show'); void result.offsetWidth; result.classList.add('show');
   result.scrollIntoView({ behavior:'smooth', block:'center' });
 }
+
+// Kobo (.kepub) forces keep-original images (Kobo can't render WebP), so reflect
+// that in the UI: tick and lock the "Keep original images" toggle while kepub is on.
+let keepImagesPrev = keepImages.checked;
+kepub.addEventListener('change', () => {
+  if (kepub.checked) {
+    keepImagesPrev = keepImages.checked;
+    keepImages.checked = true;
+    keepImages.disabled = true;
+  } else {
+    keepImages.disabled = false;
+    keepImages.checked = keepImagesPrev;
+  }
+});
 
 const rtoggle = document.getElementById('rtoggle');
 const report = document.getElementById('report');

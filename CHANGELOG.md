@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Keep original images (`--keep-images`).** Skips the JPEG/PNG → WebP step and
+  leaves images untouched, while still upgrading the structure to EPUB 3.3. This
+  exists because **Kobo e-ink readers do not render WebP** despite advertising
+  EPUB 3.3 support (confirmed on Forma/Sage; the same WebP files render fine in
+  Apple Books) — so a book converted with WebP shows blank images on Kobo.
+  Available on the CLI (`--keep-images`) and as a "Keep original images" toggle
+  in the web UI. **`--kepub` implies `--keep-images`**, since its whole purpose
+  is Kobo.
 - **Kobo `.kepub` output (`--kepub`).** A new opt-in target injects Kobo's
   `koboSpan` markup into the content documents — unlocking accurate page turns,
   reading statistics and dictionary lookup on Kobo devices — and names the

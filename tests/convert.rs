@@ -485,15 +485,72 @@ fn kepub_injects_kobospans_and_names_output() {
         "body wrapped in Kobo column scaffolding"
     );
     assert!(chapter.contains("kobostylehacks"), "Kobo style hack added");
-    // The normal modernization still happened (images rewritten to WebP).
+    // Kobo can't render WebP, so .kepub forces keep-original images: the cover
+    // stays a JPEG and is NOT converted to WebP.
     assert!(
-        chapter.contains("images/cover.webp"),
-        "image refs still rewritten"
+        chapter.contains("images/cover.jpg"),
+        "original image kept (no WebP) for Kobo"
+    );
+    assert!(
+        !chapter.contains(".webp"),
+        "kepub must not produce WebP refs"
+    );
+    assert!(
+        report.image_metrics.is_empty(),
+        "no images converted when keeping originals"
+    );
+    let names = entry_names(out);
+    assert!(
+        names.iter().any(|n| n == "OEBPS/images/cover.jpg"),
+        "original JPEG retained in the archive"
+    );
+    assert!(
+        !names.iter().any(|n| n.ends_with(".webp")),
+        "no WebP files in a kepub"
     );
     assert!(
         chapter.contains("<!DOCTYPE html>"),
         "DOCTYPE still modernized"
     );
+}
+
+#[test]
+fn keep_images_skips_webp_but_upgrades_structure() {
+    let dir = tempfile::tempdir().unwrap();
+    let input = dir.path().join("legacy.epub");
+    build_epub(&input, &legacy_with_images());
+
+    let opts = Options {
+        image_strategy: epublift::ImageStrategy::KeepOriginal,
+        ..Options::default()
+    };
+    let report = convert(&input, &opts, |_| {}).unwrap();
+
+    // No conversion happened...
+    assert!(report.image_metrics.is_empty(), "no images converted");
+    let out = &report.output_path;
+    let names = entry_names(out);
+    assert!(
+        names.iter().any(|n| n == "OEBPS/images/cover.jpg")
+            && names.iter().any(|n| n == "OEBPS/images/logo.png"),
+        "originals kept"
+    );
+    assert!(
+        !names.iter().any(|n| n.ends_with(".webp")),
+        "no WebP produced"
+    );
+
+    // ...but the structure was still modernized.
+    let opf = read_entry(out, "OEBPS/content.opf");
+    assert!(
+        opf.contains("version=\"3.0\""),
+        "package still upgraded to 3.0"
+    );
+    assert!(opf.contains("dcterms:modified"), "modified timestamp added");
+    assert!(!opf.contains("image/webp"), "no WebP media types");
+    let chapter = read_entry(out, "OEBPS/chapter1.html");
+    assert!(chapter.contains("images/cover.jpg"), "image ref unchanged");
+    assert!(chapter.contains("<!DOCTYPE html>"), "DOCTYPE modernized");
 }
 
 #[test]

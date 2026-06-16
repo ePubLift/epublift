@@ -148,7 +148,18 @@ epublift -i book.epub -o optimized_book.epub -q 85 -r stats_report.txt
 | `-q` | `--quality`| WebP compression quality level (1-100) | `80` |
 | `-r` | `--report` | Path to write the conversion audit report | `<input>_report.txt` |
 | | `--ascii` | Transliterate the auto-generated output/report names to ASCII | *off* |
-| | `--kepub` | Produce a Kobo `.kepub.epub` (inject `koboSpan` markup) | *off* |
+| | `--keep-images` | Keep original images (skip JPEG/PNG → WebP) for readers that don't render WebP | *off* |
+| | `--kepub` | Produce a Kobo `.kepub.epub` (inject `koboSpan` markup; implies `--keep-images`) | *off* |
+
+#### Keep original images (`--keep-images`)
+
+By default epublift converts JPEG/PNG to **WebP**, which most readers (Apple Books, Calibre, and other apps) render fine and which gives the biggest size win. But some devices advertise EPUB 3.3 support yet **do not actually render WebP** — notably **Kobo e-ink readers** (Forma, Sage, …), where a WebP-converted book shows blank images. For those, use `--keep-images` to leave images in their original format while still modernizing the structure:
+
+```bash
+epublift -i book.epub --keep-images
+```
+
+`--kepub` turns this on automatically, since its target is Kobo.
 
 #### Kobo `.kepub` output (`--kepub`)
 
