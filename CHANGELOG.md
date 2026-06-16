@@ -16,7 +16,7 @@ are tagged with the component they belong to.
   Italian, Dutch, Polish, Russian, Japanese, Korean, and Chinese (Simplified).
   The interface **auto-detects the browser language** on first visit (falling
   back to English) and remembers your choice; a language selector sits in the
-  top-right corner (globe + current language). Implemented CSP-safely in a
+  top-right corner (a 文A glyph + the current language). Implemented CSP-safely in a
   same-origin `/i18n.js` (no inline scripts); adding a language is one dictionary
   block. Technical tokens (EPUB, WebP, Kobo, code snippets) stay in English.
 

@@ -239,6 +239,8 @@ This romanizes Unicode letters (e.g. Turkish `ş→s`, `ğ→g`, `ı→i`, `ö�
 
 Beyond the CLI, ePubLift ships a small **web service**: drag-and-drop an EPUB in your browser and get back the modernized file plus an in-page audit report. It's powered by the same pure-Rust `convert()` core, and uploads are processed **in memory and deleted immediately** — nothing is ever stored or logged.
 
+The interface is available in **13 languages** (English, Spanish, Turkish, German, French, Portuguese, Italian, Dutch, Polish, Russian, Japanese, Korean, Chinese) — it auto-detects your browser language on first visit and you can switch any time from the selector in the top-right corner.
+
 > 💡 A hosted instance runs at **<https://epublift.itpax.net>**. Or self-host it in one command (below).
 
 ### Run with Docker
