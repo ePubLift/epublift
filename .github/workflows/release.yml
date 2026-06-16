@@ -1,17 +1,19 @@
 name: Release
 
-# Build cross-platform binaries and attach them to a GitHub Release.
-# Fires when a version tag is pushed (e.g. `v1.1.0`). Can also be run
-# manually against an existing tag via the Actions tab.
+# Build cross-platform CLI binaries and attach them to a GitHub Release.
+# Fires when a CLI tag is pushed (e.g. `cli-v1.3.1`). The CLI and the web
+# service (`epublift-web`) are versioned independently: CLI binaries release on
+# `cli-v*` tags, the web Docker image releases on `web-v*` tags (see docker.yml).
+# Can also be run manually against an existing tag via the Actions tab.
 
 on:
   push:
     tags:
-      - "v*"
+      - "cli-v*"
   workflow_dispatch:
     inputs:
       tag:
-        description: "Existing tag to build and release (e.g. v1.0.0)"
+        description: "Existing CLI tag to build and release (e.g. cli-v1.3.0)"
         required: true
         type: string
 
@@ -75,7 +77,7 @@ jobs:
         shell: bash
         run: |
           tag="${{ inputs.tag || github.ref_name }}"
-          version="${tag#v}"
+          version="${tag#cli-v}"
           name="epublift-${version}-${{ matrix.target }}"
           mkdir "$name"
           cp "target/${{ matrix.target }}/release/epublift" "$name/"
@@ -88,7 +90,7 @@ jobs:
         shell: bash
         run: |
           tag="${{ inputs.tag || github.ref_name }}"
-          version="${tag#v}"
+          version="${tag#cli-v}"
           name="epublift-${version}-${{ matrix.target }}"
           mkdir "$name"
           cp "target/${{ matrix.target }}/release/epublift.exe" "$name/"

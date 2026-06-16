@@ -1,7 +1,10 @@
 name: Docker
 
 # Build and publish the epublift-web container image to GHCR.
-# Runs on version tags (alongside the binary release) and on demand.
+# Fires on a web tag (e.g. `web-v1.4.0`). The web service and the CLI are
+# versioned independently: the image releases on `web-v*` tags, CLI binaries on
+# `cli-v*` tags (see release.yml). The image is tagged with the web version
+# (`:1.4.0`) plus `:latest`. Can also be run on demand (pushes a transient `edge`).
 #
 # Each architecture is built on a *native* runner (no QEMU emulation), then a
 # final job stitches the per-arch images into one multi-arch manifest. This is
@@ -10,7 +13,7 @@ name: Docker
 on:
   push:
     tags:
-      - "v*"
+      - "web-v*"
   workflow_dispatch:
 
 permissions:
@@ -110,9 +113,10 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.IMAGE }}
-          # version + latest on tag pushes; `edge` only for manual test runs.
+          # Extract the version from the `web-vX.Y.Z` tag (-> image tag `X.Y.Z`),
+          # plus `latest` on tag pushes; `edge` only for manual test runs.
           tags: |
-            type=semver,pattern={{version}}
+            type=match,pattern=web-v(.*),group=1
             type=raw,value=latest,enable=${{ github.ref_type == 'tag' }}
             type=raw,value=edge,enable=${{ github.ref_type != 'tag' }}
 

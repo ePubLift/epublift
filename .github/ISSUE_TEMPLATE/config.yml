@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 🌐 Just want to convert a file?
+    url: https://epublift.itpax.net
+    about: Use the free hosted converter right in your browser — no install, no account.
+  - name: 📖 How do I use it? (usage guide)
+    url: https://github.com/ePubLift/epublift#-how-to-use
+    about: Examples for the CLI, including --kepub (Kobo) and --keep-images.

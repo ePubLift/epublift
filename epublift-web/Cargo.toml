@@ -1,6 +1,8 @@
 [package]
 name = "epublift-web"
-version = "0.1.0"
+# Versioned independently from the CLI: releases on `web-v*` tags. Baselined to
+# 1.3.0 to continue the shared number line (the GHCR image was at :1.3.0).
+version = "1.3.0"
 edition = "2024"
 license = "AGPL-3.0-or-later"
 description = "Web service front-end for epublift: convert EPUBs in the browser"

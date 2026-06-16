@@ -251,7 +251,7 @@ docker run -d --name epublift-web \
   ghcr.io/epublift/epublift-web:latest
 ```
 
-Then open <http://127.0.0.1:8080>. Pin a specific version with a tag instead of `latest`, e.g. `ghcr.io/epublift/epublift-web:1.2.1`. The image is a static musl binary on Alpine, runs as a non-root user, and is only ~14 MB.
+Then open <http://127.0.0.1:8080>. Pin a specific version with a tag instead of `latest`, e.g. `ghcr.io/epublift/epublift-web:1.3.0`. The image is a static musl binary on Alpine, runs as a non-root user, and is only ~14 MB.
 
 ### Run with Docker Compose (recommended)
 
@@ -305,6 +305,23 @@ cargo run --release --bin epublift -- -i sample_epub2.epub
 ```bash
 cat sample_epub2_report.txt
 ```
+
+---
+
+## 🏷️ Versioning & releases
+
+ePubLift is one repository with two independently-released products that share a
+common Rust core:
+
+| Product | Released via tag | Where to get it |
+| :--- | :--- | :--- |
+| **CLI** (`epublift` binaries) | `cli-vX.Y.Z` | [GitHub Releases](https://github.com/ePubLift/epublift/releases) |
+| **Web service** (`epublift-web` Docker image) | `web-vX.Y.Z` | `ghcr.io/epublift/epublift-web:X.Y.Z` (+ `:latest`) |
+
+They version on their own lines, so the web service can ship fixes (e.g. a
+dependency security update) without forcing a new CLI build, and vice versa.
+Their numbers may differ — that's expected; pick the line for the product you
+use. A change to the shared core is released on **both** lines together.
 
 ---
 
