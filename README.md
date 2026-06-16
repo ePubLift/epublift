@@ -5,7 +5,7 @@
 [![Release](https://img.shields.io/github/v/release/ePubLift/epublift)](https://github.com/ePubLift/epublift/releases)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](http://makeapullrequest.com)
 
-A fast, standard-compliant tool written in **Rust** to modernize, optimize, and significantly shrink EPUB files. Today it upgrades legacy **EPUB 2.0** structures to the **EPUB 3.3** specification and re-encodes heavy raster images (JPEG/PNG) into compact **WebP** — with support for newer EPUB versions and next-generation image formats (AVIF / JPEG XL) planned on the [roadmap](ROADMAP.md).
+A fast, standard-compliant tool written in **Rust** to modernize, optimize, and significantly shrink EPUB files. Today it upgrades legacy **EPUB 2.0** structures to the **EPUB 3.3** specification and re-encodes heavy raster images (JPEG/PNG) into compact **WebP** — with support for newer EPUB versions and next-generation image formats (AVIF / JPEG XL) planned on the [roadmap](ROADMAP.md). It can also produce **Kobo `.kepub`** files for richer reading features on Kobo devices, and a **`--keep-images`** mode for readers that don't render WebP.
 
 Use it as a **command-line tool**, as a **library**, or as a self-hostable **web service** — try the hosted instance at **<https://epublift.itpax.net>** or [run your own with Docker](#-hosted-web-service-epublift-web).
 
@@ -21,6 +21,8 @@ ePubLift began as a Rust port of an earlier Python implementation but has since 
     *   Preserves PNG alpha channel transparency.
     *   Allows customizable quality level settings (1–100).
     *   Automatically scans and updates all image references in CSS, XHTML/HTML files, SVG graphics, and the OPF manifest.
+    *   **`--keep-images` escape hatch:** skip WebP and keep the original JPEG/PNG for readers that don't render WebP (notably **Kobo e-ink**, which shows blank images otherwise) — the structure is still modernized.
+*   **📖 Kobo `.kepub` output (`--kepub`)**: Injects Kobo's `koboSpan` markup (à la [`kepubify`](https://github.com/pgaskin/kepubify)) to unlock faster page turns, reading statistics, and dictionary lookup on Kobo devices, naming the file `<name>.kepub.epub`. Still a valid EPUB 3, and keeps original images automatically (Kobo can't render WebP).
 *   **🛡️ Size-Safe by Design** — re-encoding never makes a book bigger:
     *   **Keeps the smaller file.** If the WebP isn't actually smaller than the source, the original image is kept untouched, so the output can never grow.
     *   **Never upscales quality.** For a JPEG source the WebP quality is capped at the source's own (estimated) quality — a low-quality chart isn't re-encoded at a higher quality, which would only add bytes, not detail.
@@ -133,6 +135,52 @@ During development you can also run it directly with Cargo:
 cargo run --release -- -i book.epub
 ```
 
+### Which option should I use? (quick guide)
+
+Not sure which flags you need? Find your situation below and copy the command. In
+every example, replace `book.epub` with the path to your file (you can also just
+drag the file into the terminal to paste its path).
+
+**📚 I just want a smaller, modernized EPUB (most people):**
+
+```bash
+epublift -i book.epub
+```
+Upgrades the book to EPUB 3 and shrinks images to WebP. The new file appears next
+to the original as `book_v3.3.epub`. Great for Apple Books, Google Play Books,
+Calibre, and most reading apps.
+
+**📖 I read on a Kobo (Forma, Sage, Clara, Libra, …):**
+
+```bash
+epublift -i book.epub --kepub
+```
+Makes `book.kepub.epub`, tuned for Kobo: faster page turns, reading statistics,
+and tap-a-word dictionary. It also keeps your images in their original format,
+because **Kobo can't display WebP** (see the next item). Copy the
+`.kepub.epub` file onto your Kobo over USB (into the `.kobo` folder) or send it
+with Calibre.
+
+**🖼️ My converted book opens but the images are blank:**
+
+```bash
+epublift -i book.epub --keep-images
+```
+Some readers — most notably **Kobo e-ink devices** — claim to support modern
+EPUBs but don't actually draw WebP images, so they show up blank. `--keep-images`
+skips the WebP step and keeps your original JPEG/PNG pictures, while still
+modernizing the book. (If you use `--kepub`, this is already done for you.)
+
+**🔤 My device or computer mangles the Turkish/accented characters in the filename:**
+
+```bash
+epublift -i "Işık Doğudan Yükselir.epub" --ascii
+```
+Renames the output to plain ASCII (`Isik_Dogudan_Yukselir_v3.3.epub`). Handy for
+old devices, SD cards, or sync tools. The book's on-screen title isn't affected.
+
+> 💡 You can combine flags, e.g. `epublift -i book.epub --kepub --ascii`.
+
 ### Advanced Options
 
 ```bash
@@ -148,6 +196,29 @@ epublift -i book.epub -o optimized_book.epub -q 85 -r stats_report.txt
 | `-q` | `--quality`| WebP compression quality level (1-100) | `80` |
 | `-r` | `--report` | Path to write the conversion audit report | `<input>_report.txt` |
 | | `--ascii` | Transliterate the auto-generated output/report names to ASCII | *off* |
+| | `--keep-images` | Keep original images (skip JPEG/PNG → WebP) for readers that don't render WebP | *off* |
+| | `--kepub` | Produce a Kobo `.kepub.epub` (inject `koboSpan` markup; implies `--keep-images`) | *off* |
+
+#### Keep original images (`--keep-images`)
+
+By default epublift converts JPEG/PNG to **WebP**, which most readers (Apple Books, Calibre, and other apps) render fine and which gives the biggest size win. But some devices advertise EPUB 3.3 support yet **do not actually render WebP** — notably **Kobo e-ink readers** (Forma, Sage, …), where a WebP-converted book shows blank images. For those, use `--keep-images` to leave images in their original format while still modernizing the structure:
+
+```bash
+epublift -i book.epub --keep-images
+```
+
+`--kepub` turns this on automatically, since its target is Kobo.
+
+#### Kobo `.kepub` output (`--kepub`)
+
+[Kobo](https://www.kobo.com/) e-readers unlock their richer reading features — accurate page turns, reading statistics, and dictionary lookup — when a book carries Kobo's `koboSpan` markup. Add `--kepub` to produce a Kobo-optimized file alongside the normal EPUB 3 upgrades:
+
+```bash
+epublift -i book.epub --kepub
+# → book.kepub.epub
+```
+
+The result is still a valid EPUB 3 (Kobo simply keys on the `.kepub.epub` extension and the spans), so the same file also opens in other readers. The transform follows the approach of the open-source [`kepubify`](https://github.com/pgaskin/kepubify): sentence-level spans, each image in its own paragraph, and Kobo's column scaffolding. Sideload the `.kepub.epub` onto your Kobo (into the `.kobo` folder or via Calibre) to use it.
 
 #### ASCII-safe filenames (`--ascii`)
 

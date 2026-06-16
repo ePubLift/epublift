@@ -98,7 +98,7 @@ terminates TLS).
 
 ---
 
-## 📖 Mid term — v1.3: Kobo (`.kepub`) support
+## ✅ Shipped — v1.3.0 (2026-06-16): Kobo (`.kepub`) support
 
 Goal: produce Kobo-optimised `.kepub.epub` output, so books render faster and
 gain Kobo's reading features (statistics, page turns, dictionary) on Kobo
@@ -106,14 +106,22 @@ devices. This is pure **core** work — it benefits the CLI *and* the already-li
 web app in one change, with **no per-platform burden** — which is why it was
 prioritised ahead of the desktop GUI.
 
-- [ ] **kepub conversion** — inject Kobo's `koboSpan` markup into the content
+- [x] **kepub conversion** — inject Kobo's `koboSpan` markup into the content
       HTML (reusing the existing XHTML processing pipeline) and emit a
       `.kepub.epub`. Reference: the open-source `kepubify` transformation.
-- [ ] A **target/output selector** — either a `--kepub` flag or a generalised
-      "target format" option on the CLI, with a matching **"Kobo (`.kepub`)"**
-      choice in the web UI's target picker.
-- [ ] Validate output on a **real Kobo device** and against Calibre's KePub
-      output for parity.
+      *(Implemented in `src/kepub.rs`: sentence-level spans, image paragraphs,
+      `book-columns`/`book-inner` wrapper, `kobostylehacks` style.)*
+- [x] A **target/output selector** — a `--kepub` flag (kept orthogonal to the
+      future `--target-version` so "3.4 + kepub" stays expressible), with a
+      matching **"Kobo (`.kepub`)"** toggle in the web UI.
+- [x] Validated on a **real Kobo device** (Forma + Sage): images render, page
+      turns are fast, and the font/size controls work.
+- [x] **`--keep-images`** (unplanned, found during device testing): Kobo e-ink
+      does **not** render WebP despite advertising EPUB 3.3, so a WebP book shows
+      blank images. `--keep-images` keeps the original JPEG/PNG (still upgrading
+      structure); `--kepub` forces it. The same WebP output renders fine in Apple
+      Books, so the files are correct — it's a Kobo decoder gap.
+- [ ] *(Optional, later)* Compare against Calibre's KePub output for parity.
 
 ---
 

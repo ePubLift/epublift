@@ -17,7 +17,7 @@ use axum::{
     response::{Html, IntoResponse, Response},
     routing::{get, post},
 };
-use epublift::{EpubVersion, Options};
+use epublift::{EpubVersion, ImageStrategy, Options};
 use serde::Serialize;
 use tokio::sync::Semaphore;
 use tower_http::cors::CorsLayer;
@@ -272,6 +272,8 @@ async fn convert(
     let mut file_name = String::from("book.epub");
     let mut quality: u8 = 80;
     let mut ascii = false;
+    let mut kepub = false;
+    let mut keep_images = false;
 
     while let Some(field) = multipart
         .next_field()
@@ -299,6 +301,14 @@ async fn convert(
             "ascii" => {
                 let v = field.text().await.unwrap_or_default();
                 ascii = matches!(v.trim(), "true" | "on" | "1");
+            }
+            "kepub" => {
+                let v = field.text().await.unwrap_or_default();
+                kepub = matches!(v.trim(), "true" | "on" | "1");
+            }
+            "keep_images" => {
+                let v = field.text().await.unwrap_or_default();
+                keep_images = matches!(v.trim(), "true" | "on" | "1");
             }
             _ => { /* ignore unknown fields */ }
         }
@@ -328,6 +338,12 @@ async fn convert(
                 quality,
                 ascii,
                 target_version: EpubVersion::LATEST,
+                image_strategy: if keep_images {
+                    ImageStrategy::KeepOriginal
+                } else {
+                    ImageStrategy::WebP
+                },
+                kepub,
                 output: None,
             };
             let report = epublift::convert(&input_path, &opts, |_| {})?;

@@ -20,6 +20,7 @@
 //! build [`Options`], call [`convert`], and inspect the returned [`Report`].
 
 mod images;
+mod kepub;
 mod nav;
 mod opf;
 mod report;
@@ -62,6 +63,22 @@ impl EpubVersion {
     }
 }
 
+/// How raster images are handled during conversion.
+///
+/// `WebP` is the default and yields the smallest files on readers that support
+/// it (Apple Books, Calibre, most apps). `KeepOriginal` leaves JPEG/PNG images
+/// untouched for maximum device compatibility — notably **Kobo e-ink readers do
+/// not render WebP** despite claiming EPUB 3.3 support, so a Kobo target needs
+/// the originals kept. The enum leaves room for AVIF/JXL once EPUB 3.4 lands.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ImageStrategy {
+    /// Convert JPEG/PNG to WebP (size-safe: never grows, never upscales).
+    #[default]
+    WebP,
+    /// Leave images in their original format; only upgrade structure.
+    KeepOriginal,
+}
+
 /// Options controlling a conversion.
 ///
 /// Construct via [`Options::default`] and override fields as needed.
@@ -73,6 +90,14 @@ pub struct Options {
     pub ascii: bool,
     /// Target EPUB version for the output.
     pub target_version: EpubVersion,
+    /// How raster images are handled. Note: [`Options::kepub`] forces
+    /// [`ImageStrategy::KeepOriginal`] regardless of this value, since Kobo
+    /// devices can't render WebP.
+    pub image_strategy: ImageStrategy,
+    /// Produce a Kobo `.kepub.epub`: inject `koboSpan` markup into the content
+    /// documents and name the output `<stem>.kepub.epub`. The result is still a
+    /// valid EPUB 3 on top of the normal upgrades.
+    pub kepub: bool,
     /// Explicit output path; when `None`, [`default_output_path`] is used.
     pub output: Option<PathBuf>,
 }
@@ -83,6 +108,8 @@ impl Default for Options {
             quality: 80,
             ascii: false,
             target_version: EpubVersion::LATEST,
+            image_strategy: ImageStrategy::default(),
+            kepub: false,
             output: None,
         }
     }
@@ -147,12 +174,16 @@ pub fn output_stem(input: &Path, ascii: bool) -> String {
     }
 }
 
-/// The default, version-stamped output path next to `input`
-/// (e.g. `book_v3.3.epub`).
+/// The default output path next to `input`: version-stamped (e.g. `book_v3.3.epub`),
+/// or a Kobo `book.kepub.epub` when [`Options::kepub`] is set.
 pub fn default_output_path(input: &Path, options: &Options) -> PathBuf {
     let stem = output_stem(input, options.ascii);
     let parent = input.parent().unwrap_or_else(|| Path::new("."));
-    parent.join(format!("{}_v{}.epub", stem, options.target_version.tag()))
+    if options.kepub {
+        parent.join(format!("{}.kepub.epub", stem))
+    } else {
+        parent.join(format!("{}_v{}.epub", stem, options.target_version.tag()))
+    }
 }
 
 /// Modernize `input` and write an optimized EPUB.
@@ -200,16 +231,35 @@ pub fn convert(input: &Path, options: &Options, progress: impl Fn(&str)) -> Resu
     let opf_xml = fs::read_to_string(&opf_path).context("Failed to read OPF package document")?;
     let info = opf::parse_opf_info(&opf_xml)?;
 
-    // Step 3: Optimize images.
-    progress("[*] Converting and compressing images to WebP...");
-    let opt = images::optimize_images(
-        &package_dir,
-        &info.items,
-        info.cover_id.as_deref(),
-        quality,
-        &progress,
-    )?;
-    images::update_document_references(temp_path, &opt.ref_pairs, &progress);
+    // Step 3: Optimize images — unless we're keeping originals. Kobo `.kepub`
+    // forces KeepOriginal because Kobo e-ink can't render WebP.
+    let image_strategy = if options.kepub {
+        ImageStrategy::KeepOriginal
+    } else {
+        options.image_strategy
+    };
+    let opt = match image_strategy {
+        ImageStrategy::WebP => {
+            progress("[*] Converting and compressing images to WebP...");
+            let opt = images::optimize_images(
+                &package_dir,
+                &info.items,
+                info.cover_id.as_deref(),
+                quality,
+                &progress,
+            )?;
+            images::update_document_references(temp_path, &opt.ref_pairs, &progress);
+            opt
+        }
+        ImageStrategy::KeepOriginal => {
+            progress("[*] Keeping original images (no WebP conversion)...");
+            images::OptimizeResult {
+                metrics: Vec::new(),
+                manifest_changes: HashMap::new(),
+                ref_pairs: Vec::new(),
+            }
+        }
+    };
 
     // Step 4: Upgrade structure to EPUB 3.3.
     progress("[*] Upgrading structure to EPUB 3.3 compliance...");
@@ -257,6 +307,12 @@ pub fn convert(input: &Path, options: &Options, progress: impl Fn(&str)) -> Resu
     };
     let new_opf = opf::rewrite_opf(&opf_xml, &params)?;
     fs::write(&opf_path, new_opf)?;
+
+    // Step 4b: Inject Kobo koboSpan markup when targeting .kepub.
+    if options.kepub {
+        progress("[*] Injecting Kobo koboSpan markup (.kepub)...");
+        kepub::kobo_spanify(temp_path, &progress)?;
+    }
 
     // Step 5: Repackage EPUB.
     progress("[*] Repackaging folder into EPUB file...");

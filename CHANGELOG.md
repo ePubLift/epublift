@@ -5,6 +5,28 @@ All notable changes to **epublift** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-06-16
+
+### Added
+- **Keep original images (`--keep-images`).** Skips the JPEG/PNG → WebP step and
+  leaves images untouched, while still upgrading the structure to EPUB 3.3. This
+  exists because **Kobo e-ink readers do not render WebP** despite advertising
+  EPUB 3.3 support (confirmed on Forma/Sage; the same WebP files render fine in
+  Apple Books) — so a book converted with WebP shows blank images on Kobo.
+  Available on the CLI (`--keep-images`) and as a "Keep original images" toggle
+  in the web UI. **`--kepub` implies `--keep-images`**, since its whole purpose
+  is Kobo.
+- **Kobo `.kepub` output (`--kepub`).** A new opt-in target injects Kobo's
+  `koboSpan` markup into the content documents — unlocking accurate page turns,
+  reading statistics and dictionary lookup on Kobo devices — and names the
+  output `<name>.kepub.epub`. The transform mirrors the open-source `kepubify`:
+  sentence-level `koboSpan` wrapping (skipping `script`/`style`/`pre`/`audio`/
+  `video`/`svg`/`math`), each image in its own paragraph span, the body wrapped
+  in `div#book-columns > div#book-inner`, and a `kobostylehacks` style on
+  `<head>`. It composes with the normal EPUB 3 upgrades, so a `.kepub.epub` is
+  still a valid EPUB. Available on the CLI (`--kepub`) and as a "Kobo (.kepub)
+  output" toggle in the web UI.
+
 ## [1.2.2] - 2026-06-15
 
 ### Fixed
