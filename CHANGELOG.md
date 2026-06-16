@@ -5,6 +5,21 @@ All notable changes to **epublift** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+The CLI and the web service version independently (`cli-v*` / `web-v*`); entries
+are tagged with the component they belong to.
+
+## [web-v1.4.0] - 2026-06-17
+
+### Added
+- **Multi-language web UI (i18n).** The browser converter is now available in
+  **13 languages** — English, Spanish, Turkish, German, French, Portuguese,
+  Italian, Dutch, Polish, Russian, Japanese, Korean, and Chinese (Simplified).
+  The interface **auto-detects the browser language** on first visit (falling
+  back to English) and remembers your choice; a language selector sits in the
+  top-right corner (globe + current language). Implemented CSP-safely in a
+  same-origin `/i18n.js` (no inline scripts); adding a language is one dictionary
+  block. Technical tokens (EPUB, WebP, Kobo, code snippets) stay in English.
+
 ## [1.3.0] - 2026-06-16
 
 ### Added

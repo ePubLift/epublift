@@ -1,5 +1,8 @@
 // Front-end logic for epublift-web. Served at /app.js as a same-origin script so
 // the Content-Security-Policy can use `script-src 'self'` (no inline scripts).
+// Safe translation lookup — falls back to the key if i18n.js hasn't loaded.
+const T = (key) => (window.i18n && window.i18n.t) ? window.i18n.t(key) : key;
+
 const q = document.getElementById('quality');
 const qval = document.getElementById('qval');
 const setFill = () => {
@@ -31,7 +34,7 @@ function fmtBytes(n){ if (n >= 1048576) return (n/1048576).toFixed(2)+' MB'; if 
 go.addEventListener('click', async () => {
   if (!selectedFile){ drop.classList.add('drag'); setTimeout(()=>drop.classList.remove('drag'),350); return; }
   const label = go.innerHTML;
-  go.disabled = true; go.style.opacity = .7; go.innerHTML = 'Lifting…';
+  go.disabled = true; go.style.opacity = .7; go.innerHTML = T('cta_working');
   try {
     const fd = new FormData();
     fd.append('file', selectedFile);
@@ -41,14 +44,14 @@ go.addEventListener('click', async () => {
     fd.append('keep_images', keepImages.checked ? 'true' : 'false');
     const res = await fetch('/convert', { method:'POST', body: fd });
     if (!res.ok) {
-      let msg = 'Conversion failed (HTTP ' + res.status + ').';
+      let msg = T('err_failed') + ' (HTTP ' + res.status + ').';
       try { const e = await res.json(); if (e && e.error) msg = e.error; } catch (_) {}
       throw new Error(msg);
     }
     const data = await res.json();
     renderResult(data);
   } catch (err) {
-    alert(err.message || 'Something went wrong.');
+    alert(err.message || T('err_generic'));
   } finally {
     go.disabled = false; go.style.opacity = 1; go.innerHTML = label;
   }
@@ -71,7 +74,7 @@ function renderResult(data){
     const tr = document.createElement('tr');
     const td = document.createElement('td');
     td.colSpan = 4; td.style.color = 'rgba(244,238,225,0.6)';
-    td.textContent = 'No raster images needed conversion.';
+    td.textContent = T('tbl_noimages');
     tr.appendChild(td); tb.appendChild(tr);
   } else {
     for (const im of rows){
@@ -119,5 +122,10 @@ const rtxt = document.getElementById('rtoggle-txt');
 rtoggle.addEventListener('click', () => {
   const open = report.classList.toggle('open');
   rtoggle.classList.toggle('open', open);
-  rtxt.textContent = open ? 'Hide full report' : 'View full report';
+  rtxt.textContent = open ? T('report_hide') : T('report_view');
+});
+
+// Keep the report toggle label correct when the language changes mid-view.
+document.addEventListener('i18n:change', () => {
+  rtxt.textContent = report.classList.contains('open') ? T('report_hide') : T('report_view');
 });

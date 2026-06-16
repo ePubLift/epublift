@@ -286,6 +286,36 @@
 
   footer.legal { padding: 0 0 50px; color: var(--muted); font-size:13px; display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap; }
   footer.legal b { color: var(--ink-soft); }
+
+  /* language switcher */
+  .lang { position: relative; }
+  .lang-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    font: inherit; font-size: 13px; font-weight: 600; color: var(--ink-soft);
+    background: var(--card); border: 1.5px solid var(--line);
+    padding: 6px 10px; border-radius: 9px; cursor: pointer; line-height: 1;
+    transition: border-color .15s, color .15s;
+  }
+  .lang-btn:hover { color: var(--ink); border-color: var(--ink); }
+  .lang-btn .globe { opacity: .8; }
+  .lang-btn .caret { opacity: .6; transition: transform .18s; }
+  .lang-btn[aria-expanded="true"] .caret { transform: rotate(180deg); }
+  .lang-menu {
+    position: absolute; top: calc(100% + 8px); right: 0; z-index: 50;
+    margin: 0; padding: 6px; list-style: none;
+    background: var(--card); border: 1.5px solid var(--ink); border-radius: 12px;
+    box-shadow: 4px 4px 0 var(--accent);
+    max-height: 320px; overflow-y: auto; min-width: 168px;
+  }
+  .lang-menu[hidden] { display: none; }
+  .lang-menu li {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 8px 10px; border-radius: 8px; cursor: pointer; font-size: 14px; color: var(--ink-soft);
+  }
+  .lang-menu li:hover { background: var(--paper-2); color: var(--ink); }
+  .lang-menu li[aria-selected="true"] { color: var(--ink); font-weight: 600; }
+  .lang-menu li[aria-selected="true"]::after { content: "✓"; color: var(--accent); }
+  .lang-menu li .code { font-family: "JetBrains Mono", monospace; font-size: 11px; letter-spacing: .05em; color: var(--muted); }
 </style>
 </head>
 <body>
@@ -305,16 +335,27 @@
       <b>ePub<i>Lift</i></b>
     </div>
     <nav>
-      <a href="https://github.com/ePubLift/epublift#-how-to-use">How it works</a>
-      <a href="https://github.com/ePubLift/epublift#-installation">Self-host</a>
+      <a href="https://github.com/ePubLift/epublift#-how-to-use" data-i18n="nav_how">How it works</a>
+      <a href="https://github.com/ePubLift/epublift#-installation" data-i18n="nav_selfhost">Self-host</a>
       <a href="https://github.com/ePubLift/epublift" class="stars" aria-label="ePubLift on GitHub">★ <span>GitHub</span></a>
+      <div class="lang" id="lang">
+        <button class="lang-btn" id="langBtn" type="button" aria-haspopup="listbox" aria-expanded="false" aria-label="Language">
+          <svg class="globe" width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.3"/>
+            <path d="M1.5 8h13M8 1.5c2 2 2 11 0 13M8 1.5c-2 2-2 11 0 13" stroke="currentColor" stroke-width="1.1"/>
+          </svg>
+          <span id="langCur">EN</span>
+          <svg class="caret" width="9" height="9" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <ul class="lang-menu" id="langMenu" role="listbox" hidden></ul>
+      </div>
     </nav>
   </header>
 
   <section class="hero">
-    <span class="kicker reveal d2">EPUB&nbsp;2 → EPUB&nbsp;3.3 · WebP optimizer</span>
-    <h1 class="reveal d2">Give your old<br>e-books a <em>lift.</em></h1>
-    <p class="lede reveal d3">Drop in a tired <b>EPUB&nbsp;2</b> file and get back a modern, standards-compliant <b>EPUB&nbsp;3.3</b> — images re-encoded to <b>WebP</b>, structure upgraded, file size trimmed. No install, no account. <b>Right here in your browser.</b></p>
+    <span class="kicker reveal d2" data-i18n-html="hero_kicker">EPUB&nbsp;2 → EPUB&nbsp;3.3 · WebP optimizer</span>
+    <h1 class="reveal d2" data-i18n-html="hero_title">Give your old<br>e-books a <em>lift.</em></h1>
+    <p class="lede reveal d3" data-i18n-html="hero_lede">Drop in a tired <b>EPUB&nbsp;2</b> file and get back a modern, standards-compliant <b>EPUB&nbsp;3.3</b> — images re-encoded to <b>WebP</b>, structure upgraded, file size trimmed. No install, no account. <b>Right here in your browser.</b></p>
   </section>
 
   <!-- converter -->
@@ -326,33 +367,33 @@
           <div class="sheet"></div>
           <span class="ln"></span><span class="ln"></span><span class="ln"></span>
         </div>
-        <h3>Drop your <span style="color:var(--accent)">.epub</span> here</h3>
-        <p>or <span class="browse">browse your files</span></p>
+        <h3 data-i18n-html="drop_title">Drop your <span style="color:var(--accent)">.epub</span> here</h3>
+        <p data-i18n-html="drop_or">or <span class="browse">browse your files</span></p>
         <span class="filechip" id="chip"><span class="dot"></span><span id="chipname">book.epub</span></span>
         <input type="file" id="file" accept=".epub" hidden />
       </label>
 
       <!-- options -->
       <div class="opts">
-        <p class="opt-h">Conversion options</p>
+        <p class="opt-h" data-i18n="opt_h">Conversion options</p>
 
         <div>
           <div class="field-label">
-            <span>Image quality</span>
+            <span data-i18n="opt_quality">Image quality</span>
             <span class="qval" id="qval">80</span>
           </div>
           <input type="range" id="quality" min="1" max="100" value="80" />
-          <div class="scale"><span>Smaller file</span><span>Sharper images</span></div>
+          <div class="scale"><span data-i18n="scale_smaller">Smaller file</span><span data-i18n="scale_sharper">Sharper images</span></div>
           <p class="opt-note">
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 1.5l5.5 2.4v3.5c0 3.3-2.3 5.6-5.5 6.6-3.2-1-5.5-3.3-5.5-6.6V3.9L8 1.5z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M5.6 8.1l1.7 1.7 3.1-3.4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            <span>Size-safe: an image is re-encoded only when WebP is actually smaller — your book never grows. Low-quality images aren't upscaled.</span>
+            <span data-i18n="note_sizesafe">Size-safe: an image is re-encoded only when WebP is actually smaller — your book never grows. Low-quality images aren't upscaled.</span>
           </p>
         </div>
 
         <div class="toggle-row">
           <div class="txt">
-            <span style="font-weight:600;font-size:15px;">ASCII filenames</span>
-            <small>Transliterate the output name (Işık → Isik) for older devices.</small>
+            <span style="font-weight:600;font-size:15px;" data-i18n="ascii_title">ASCII filenames</span>
+            <small data-i18n="ascii_desc">Transliterate the output name (Işık → Isik) for older devices.</small>
           </div>
           <label class="switch">
             <input type="checkbox" id="ascii" />
@@ -362,8 +403,8 @@
 
         <div class="toggle-row">
           <div class="txt">
-            <span style="font-weight:600;font-size:15px;">Keep original images</span>
-            <small>Skip JPEG/PNG → WebP. Use for readers that don't render WebP — notably <b>Kobo</b> e-ink devices. Structure is still upgraded to EPUB 3.3.</small>
+            <span style="font-weight:600;font-size:15px;" data-i18n="keep_title">Keep original images</span>
+            <small data-i18n-html="keep_desc">Skip JPEG/PNG → WebP. Use for readers that don't render WebP — notably <b>Kobo</b> e-ink devices. Structure is still upgraded to EPUB 3.3.</small>
           </div>
           <label class="switch">
             <input type="checkbox" id="keep_images" />
@@ -373,8 +414,8 @@
 
         <div class="toggle-row">
           <div class="txt">
-            <span style="font-weight:600;font-size:15px;">Kobo (.kepub) output</span>
-            <small>Add Kobo's koboSpan markup for page turns, stats &amp; dictionary on Kobo devices. Output is named <code style="font-family:inherit">.kepub.epub</code>. Keeps original images automatically (Kobo can't render WebP).</small>
+            <span style="font-weight:600;font-size:15px;" data-i18n="kepub_title">Kobo (.kepub) output</span>
+            <small data-i18n-html="kepub_desc">Add Kobo's koboSpan markup for page turns, stats &amp; dictionary on Kobo devices. Output is named <code style="font-family:inherit">.kepub.epub</code>. Keeps original images automatically (Kobo can't render WebP).</small>
           </div>
           <label class="switch">
             <input type="checkbox" id="kepub" />
@@ -383,10 +424,10 @@
         </div>
 
         <div>
-          <p class="opt-h" style="margin-bottom:10px">Target version</p>
+          <p class="opt-h" style="margin-bottom:10px" data-i18n="target_h">Target version</p>
           <div class="pills">
-            <div class="pill on">EPUB 3.3<small>Recommended</small></div>
-            <div class="pill off">EPUB 3.4<small>Soon</small></div>
+            <div class="pill on">EPUB 3.3<small data-i18n="pill_recommended">Recommended</small></div>
+            <div class="pill off">EPUB 3.4<small data-i18n="pill_soon">Soon</small></div>
           </div>
         </div>
       </div>
@@ -395,7 +436,7 @@
     <div class="cta-row">
       <button class="cta" id="go">
         <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M9 15V3M9 3L4 8M9 3l5 5" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        Lift my EPUB
+        <span data-i18n="cta">Lift my EPUB</span>
       </button>
     </div>
   </div>
@@ -406,42 +447,42 @@
       <div class="ok">
         <span class="badge"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3.2 3.2L13 5" stroke="#1B1712" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
         <div>
-          <div style="font-family:'Fraunces',serif;font-weight:600;font-size:18px;">Lifted &amp; ready</div>
+          <div style="font-family:'Fraunces',serif;font-weight:600;font-size:18px;" data-i18n="res_ready">Lifted &amp; ready</div>
           <div class="fname"><b id="outname">my-book_v3.3.epub</b></div>
         </div>
       </div>
-      <a class="dl" id="dl" href="#" download><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M8 2v8m0 0L5 7m3 3l3-3M3 13h10" stroke="#1B1712" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Download</a>
+      <a class="dl" id="dl" href="#" download><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M8 2v8m0 0L5 7m3 3l3-3M3 13h10" stroke="#1B1712" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span data-i18n="res_download">Download</span></a>
     </div>
     <div class="result-body">
-      <div class="stat"><div class="lab">Before</div><div class="big" id="sBefore" style="font-family:'JetBrains Mono',monospace;font-size:24px;">—</div></div>
-      <div class="stat"><div class="lab">After</div><div class="big" id="sAfter" style="font-family:'JetBrains Mono',monospace;font-size:24px;">—</div></div>
-      <div class="stat"><div class="lab">You saved</div><div class="big save" id="sSaved">—</div><div class="bar"><i id="sBar"></i></div></div>
+      <div class="stat"><div class="lab" data-i18n="stat_before">Before</div><div class="big" id="sBefore" style="font-family:'JetBrains Mono',monospace;font-size:24px;">—</div></div>
+      <div class="stat"><div class="lab" data-i18n="stat_after">After</div><div class="big" id="sAfter" style="font-family:'JetBrains Mono',monospace;font-size:24px;">—</div></div>
+      <div class="stat"><div class="lab" data-i18n="stat_saved">You saved</div><div class="big save" id="sSaved">—</div><div class="bar"><i id="sBar"></i></div></div>
     </div>
 
     <button class="rtoggle" id="rtoggle">
-      <span id="rtoggle-txt">View full report</span>
+      <span id="rtoggle-txt" data-i18n="report_view">View full report</span>
       <svg class="chev" width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
     <div class="report" id="report">
       <div class="report-cols">
         <div class="rcol">
-          <div class="rlab">Modernized for EPUB 3.3</div>
+          <div class="rlab" data-i18n="rcol_modernized">Modernized for EPUB 3.3</div>
           <ul class="checks">
-            <li>Upgraded package to <code style="font-family:inherit">version="3.0"</code></li>
-            <li>Added <code style="font-family:inherit">dcterms:modified</code> timestamp</li>
-            <li>Generated <code style="font-family:inherit">nav.xhtml</code> from toc.ncx</li>
-            <li>Modernized DOCTYPEs to HTML5</li>
-            <li>Converted &lt;guide&gt; to landmarks nav</li>
-            <li>Kept legacy toc.ncx (opens on old readers too)</li>
+            <li data-i18n-html="chk_version">Upgraded package to <code style="font-family:inherit">version="3.0"</code></li>
+            <li data-i18n-html="chk_modified">Added <code style="font-family:inherit">dcterms:modified</code> timestamp</li>
+            <li data-i18n-html="chk_nav">Generated <code style="font-family:inherit">nav.xhtml</code> from toc.ncx</li>
+            <li data-i18n="chk_doctype">Modernized DOCTYPEs to HTML5</li>
+            <li data-i18n="chk_guide">Converted &lt;guide&gt; to landmarks nav</li>
+            <li data-i18n="chk_ncx">Kept legacy toc.ncx (opens on old readers too)</li>
           </ul>
         </div>
         <div class="rcol">
-          <div class="rlab"><span id="imgCount">0</span> image(s) re-encoded to WebP</div>
+          <div class="rlab"><span id="imgCount">0</span> <span data-i18n="rcol_images">image(s) re-encoded to WebP</span></div>
           <table class="itable">
-            <thead><tr><th>Image</th><th>Before</th><th>After</th><th>Saved</th></tr></thead>
+            <thead><tr><th data-i18n="th_image">Image</th><th data-i18n="th_before">Before</th><th data-i18n="th_after">After</th><th data-i18n="th_saved">Saved</th></tr></thead>
             <tbody id="itbody"></tbody>
           </table>
-          <a class="txtdl" id="txtdl" href="#" download><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 2v8m0 0L5 7m3 3l3-3M3 13h10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>Download report (.txt)</a>
+          <a class="txtdl" id="txtdl" href="#" download><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 2v8m0 0L5 7m3 3l3-3M3 13h10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg><span data-i18n="res_report_dl">Download report (.txt)</span></a>
         </div>
       </div>
     </div>
@@ -450,26 +491,27 @@
   <!-- trust strip -->
   <div class="strip reveal d5">
     <div class="tile">
-      <h4>🔒 Nothing is kept</h4>
-      <p>Your file is converted in memory and <b>deleted immediately</b>. We never store, log, or read your books.</p>
+      <h4 data-i18n="trust1_h">🔒 Nothing is kept</h4>
+      <p data-i18n-html="trust1_p">Your file is converted in memory and <b>deleted immediately</b>. We never store, log, or read your books.</p>
     </div>
     <div class="tile">
-      <h4>🐳 Run it yourself</h4>
-      <p>Prefer to self-host? <code>docker compose up</code> and you have your own private instance.</p>
+      <h4 data-i18n="trust2_h">🐳 Run it yourself</h4>
+      <p data-i18n-html="trust2_p">Prefer to self-host? <code>docker compose up</code> and you have your own private instance.</p>
     </div>
     <div class="tile">
-      <h4>✦ Fully open source</h4>
-      <p>Built in pure Rust, licensed <a href="https://www.gnu.org/licenses/agpl-3.0">AGPL-3.0</a>. <a href="https://github.com/ePubLift/epublift">Read the source →</a></p>
+      <h4 data-i18n="trust3_h">✦ Fully open source</h4>
+      <p data-i18n-html="trust3_p">Built in pure Rust, licensed <a href="https://www.gnu.org/licenses/agpl-3.0">AGPL-3.0</a>. <a href="https://github.com/ePubLift/epublift">Read the source →</a></p>
     </div>
   </div>
 
   <footer class="legal">
-    <span>© 2026 <b>ePubLift</b> · A pure-Rust EPUB modernizer</span>
-    <span>Converts on <b>epublift.itpax.net</b> · no files stored</span>
+    <span data-i18n-html="footer_1">© 2026 <b>ePubLift</b> · A pure-Rust EPUB modernizer</span>
+    <span data-i18n-html="footer_2">Converts on <b>epublift.itpax.net</b> · no files stored</span>
   </footer>
 
 </div>
 
+<script src="/i18n.js"></script>
 <script src="/app.js"></script>
 </body>
 </html>

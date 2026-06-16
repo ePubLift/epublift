@@ -147,6 +147,7 @@ async fn main() {
     let app = Router::new()
         .route("/", get(index))
         .route("/app.js", get(app_js))
+        .route("/i18n.js", get(i18n_js))
         .route("/healthz", get(|| async { "ok" }))
         .route("/convert", post(convert))
         .route("/download/{token}", get(download))
@@ -216,6 +217,18 @@ async fn app_js() -> impl IntoResponse {
             header::HeaderValue::from_static("text/javascript; charset=utf-8"),
         )],
         include_str!("../static/app.js"),
+    )
+}
+
+/// Serve the i18n bundle (translation strings + language switcher) as a
+/// same-origin script, like `/app.js`, so it loads under `script-src 'self'`.
+async fn i18n_js() -> impl IntoResponse {
+    (
+        [(
+            header::CONTENT_TYPE,
+            header::HeaderValue::from_static("text/javascript; charset=utf-8"),
+        )],
+        include_str!("../static/i18n.js"),
     )
 }
 
