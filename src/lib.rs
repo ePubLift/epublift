@@ -106,12 +106,14 @@ pub enum Packaging {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ZstdMode {
     /// Each entry is compressed independently — the standards-plausible,
-    /// conservative floor. (Phase 1.)
+    /// conservative floor.
     #[default]
     PerEntry,
-    // SharedDict — Phase 2: one trained dictionary shared across text entries,
-    // stored as META-INF/zstd-dict.bin. The real "big win", explicitly
-    // non-standard. Not implemented yet.
+    /// One dictionary, trained from the book's own text entries and stored as
+    /// `META-INF/zstd-dict.bin`, shared across all text entries — the
+    /// cross-chapter "big win". Explicitly non-standard (ZIP has no slot for a
+    /// shared dictionary; storing it as a named entry is our concrete proposal).
+    SharedDict,
 }
 
 /// Options controlling a conversion.
@@ -559,11 +561,11 @@ fn collect_ocf_entries(temp_dir: &Path) -> Result<Vec<zstd_ocf::OcfEntry>> {
 /// is intentionally non-conformant; see [`Packaging::Zstd`].
 #[cfg(feature = "zstd-experimental")]
 fn repackage_epub_zstd(temp_dir: &Path, output: &Path, mode: ZstdMode, level: i32) -> Result<()> {
-    match mode {
-        ZstdMode::PerEntry => {}
-    }
     let entries = collect_ocf_entries(temp_dir)?;
-    let archive = zstd_ocf::pack_zstd(&entries, level)?;
+    let archive = match mode {
+        ZstdMode::PerEntry => zstd_ocf::pack_zstd(&entries, level)?,
+        ZstdMode::SharedDict => zstd_ocf::pack_zstd_shared_dict(&entries, level)?,
+    };
     fs::write(output, archive)?;
     Ok(())
 }

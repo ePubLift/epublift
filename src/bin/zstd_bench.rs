@@ -28,7 +28,7 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use anyhow::{Context, Result, bail};
-use epublift::zstd_ocf::{OcfEntry, pack_zstd, unpack_zstd};
+use epublift::zstd_ocf::{OcfEntry, pack_zstd, pack_zstd_shared_dict, unpack_zstd};
 use structured_zstd::decoding::FrameDecoder;
 use structured_zstd::encoding::{CompressionLevel, compress_to_vec};
 use zip::write::SimpleFileOptions;
@@ -49,7 +49,10 @@ struct BookResult {
     name: String,
     raw: usize,
     deflate_archive: usize,
+    /// Per-entry Zstd archive size at the headline level.
     zstd_archive: usize,
+    /// Shared-dictionary Zstd archive size at the headline level.
+    zstd_shared_archive: usize,
     rust: Vec<(i32, Measure)>,
     #[cfg(feature = "zstd-c-bench")]
     c: Vec<(i32, Measure)>,
@@ -164,12 +167,14 @@ fn bench_one(path: &Path, levels: &[i32]) -> Result<BookResult> {
         .collect();
 
     let deflate_archive = deflate_archive_size(&entries)?;
-    // Archive-level zstd size uses the headline level (last in the sweep).
+    // Archive-level zstd sizes use the headline level (last in the sweep).
     let headline = *levels.last().unwrap();
-    let zstd_archive = pack_zstd(&entries, headline)?.len();
-    // Verify the archive round-trips (decode == original entries).
-    let back = unpack_zstd(&pack_zstd(&entries, headline)?)?;
-    if back != entries {
+    let per_entry_archive = pack_zstd(&entries, headline)?;
+    let zstd_archive = per_entry_archive.len();
+    let shared_archive = pack_zstd_shared_dict(&entries, headline)?;
+    let zstd_shared_archive = shared_archive.len();
+    // Verify BOTH archives round-trip (decode == original entries).
+    if unpack_zstd(&per_entry_archive)? != entries || unpack_zstd(&shared_archive)? != entries {
         bail!("archive round-trip mismatch — refusing to report numbers");
     }
 
@@ -191,6 +196,7 @@ fn bench_one(path: &Path, levels: &[i32]) -> Result<BookResult> {
         raw,
         deflate_archive,
         zstd_archive,
+        zstd_shared_archive,
         rust,
         #[cfg(feature = "zstd-c-bench")]
         c,
@@ -308,14 +314,21 @@ fn kb(n: usize) -> f64 {
 
 fn print_book(r: &BookResult, _levels: &[i32]) {
     println!("📖 {}", r.name);
+    let headline = r.rust.last().map(|(l, _)| *l).unwrap_or(0);
     println!(
-        "   raw {:>9.1} KB | deflate {:>9.1} KB ({:>5.1}% of raw) | zstd-archive(L{}) {:>9.1} KB ({:+.1}% vs deflate)",
+        "   raw {:>9.1} KB | deflate {:>9.1} KB ({:>5.1}% of raw)",
         kb(r.raw),
         kb(r.deflate_archive),
         pct(r.deflate_archive, r.raw),
-        r.rust.last().map(|(l, _)| *l).unwrap_or(0),
+    );
+    println!(
+        "   archive(L{}) per-entry {:>9.1} KB ({:+5.1}% vs deflate) | shared-dict {:>9.1} KB ({:+5.1}% vs deflate, {:+5.1}% vs per-entry)",
+        headline,
         kb(r.zstd_archive),
         pct(r.zstd_archive, r.deflate_archive) - 100.0,
+        kb(r.zstd_shared_archive),
+        pct(r.zstd_shared_archive, r.deflate_archive) - 100.0,
+        pct(r.zstd_shared_archive, r.zstd_archive) - 100.0,
     );
     for (lvl, m) in &r.rust {
         println!(
@@ -348,17 +361,23 @@ fn print_aggregate(results: &[BookResult], levels: &[i32]) {
     let raw: usize = results.iter().map(|r| r.raw).sum();
     let deflate: usize = results.iter().map(|r| r.deflate_archive).sum();
     let zstd_arch: usize = results.iter().map(|r| r.zstd_archive).sum();
+    let shared_arch: usize = results.iter().map(|r| r.zstd_shared_archive).sum();
 
     println!(
         "══════════════════════════ AGGREGATE ({} books) ══════════════════════════",
         results.len()
     );
+    println!("raw {:.1} KB | deflate {:.1} KB", kb(raw), kb(deflate));
     println!(
-        "raw {:.1} KB | deflate {:.1} KB | zstd-archive {:.1} KB → {:+.1}% vs deflate",
-        kb(raw),
-        kb(deflate),
+        "archive per-entry   {:.1} KB → {:+.1}% vs deflate",
         kb(zstd_arch),
         pct(zstd_arch, deflate) - 100.0,
+    );
+    println!(
+        "archive shared-dict {:.1} KB → {:+.1}% vs deflate ({:+.1}% vs per-entry)",
+        kb(shared_arch),
+        pct(shared_arch, deflate) - 100.0,
+        pct(shared_arch, zstd_arch) - 100.0,
     );
     for (i, &lvl) in levels.iter().enumerate() {
         let rb: usize = results.iter().map(|r| r.rust[i].1.bytes).sum();

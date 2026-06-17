@@ -20,6 +20,24 @@ use epublift::{EpubVersion, ImageStrategy, Options};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
+/// CLI surface for [`epublift::ZstdMode`] (experimental).
+#[cfg(feature = "zstd-experimental")]
+#[derive(clap::ValueEnum, Clone, Copy, Debug)]
+enum ZstdModeArg {
+    PerEntry,
+    SharedDict,
+}
+
+#[cfg(feature = "zstd-experimental")]
+impl From<ZstdModeArg> for epublift::ZstdMode {
+    fn from(m: ZstdModeArg) -> Self {
+        match m {
+            ZstdModeArg::PerEntry => epublift::ZstdMode::PerEntry,
+            ZstdModeArg::SharedDict => epublift::ZstdMode::SharedDict,
+        }
+    }
+}
+
 /// Optimize EPUB structure to 3.3 and convert images to WebP.
 #[derive(Parser, Debug)]
 #[command(
@@ -76,6 +94,18 @@ struct Args {
     #[arg(long, default_value_t = 19, value_name = "1-22")]
     zstd_level: i32,
 
+    /// [EXPERIMENTAL] How Zstandard shares context across entries: `per-entry`
+    /// (each entry independent) or `shared-dict` (one dictionary trained from
+    /// the book's text, stored as META-INF/zstd-dict.bin — the cross-chapter
+    /// win). Only meaningful with --zstd.
+    #[cfg(feature = "zstd-experimental")]
+    #[arg(
+        long,
+        value_name = "per-entry|shared-dict",
+        default_value = "per-entry"
+    )]
+    zstd_mode: ZstdModeArg,
+
     /// [EXPERIMENTAL] Decode a *_zstd-experimental.epub back into a conformant
     /// Deflate EPUB (the lossless round-trip check). With this flag, --input is
     /// the experimental archive.
@@ -129,7 +159,7 @@ fn run(args: Args) -> Result<()> {
     #[cfg(feature = "zstd-experimental")]
     let packaging = if args.zstd {
         epublift::Packaging::Zstd {
-            mode: epublift::ZstdMode::PerEntry,
+            mode: args.zstd_mode.into(),
             level: args.zstd_level,
         }
     } else {
