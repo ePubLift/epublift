@@ -64,9 +64,33 @@ const SIG_EOCD: u32 = 0x0605_4b50;
 const DOS_TIME: u16 = 0;
 const DOS_DATE: u16 = 0x0021;
 
-/// Below this much training text, or fewer than two text entries, a shared
-/// dictionary is not worth training — fall back to per-entry packing.
+/// Below this much training text a shared dictionary is not worth training —
+/// fall back to per-entry packing.
 const MIN_DICT_CORPUS: usize = 4 * 1024;
+
+/// Tunable knobs for shared-dictionary training. Exposed so the benchmark can
+/// sweep them; [`DictParams::default`] holds the shipping heuristic.
+#[derive(Debug, Clone, Copy)]
+pub struct DictParams {
+    /// Train a dictionary of about `corpus_len / size_divisor` bytes.
+    pub size_divisor: usize,
+    /// Cap the trained dictionary at this many bytes.
+    pub size_cap: usize,
+    /// Require at least this many dictionary-eligible text entries; below it a
+    /// dictionary can only be pure overhead (no cross-file redundancy to share),
+    /// so fall back to per-entry.
+    pub min_files: usize,
+}
+
+impl Default for DictParams {
+    fn default() -> Self {
+        Self {
+            size_divisor: 8,
+            size_cap: 110 * 1024,
+            min_files: 2,
+        }
+    }
+}
 
 /// True for entries whose contents are text and benefit from a shared
 /// dictionary (XHTML/CSS/OPF/…). Classification is purely by extension so the
@@ -138,18 +162,28 @@ pub fn pack_zstd(entries: &[OcfEntry], level: i32) -> Result<Vec<u8>> {
 /// [`DICT_ENTRY`]. Falls back to [`pack_zstd`] when there is too little text to
 /// train on, so callers always get a valid archive.
 pub fn pack_zstd_shared_dict(entries: &[OcfEntry], level: i32) -> Result<Vec<u8>> {
+    pack_zstd_shared_dict_with(entries, level, DictParams::default())
+}
+
+/// As [`pack_zstd_shared_dict`], but with explicit [`DictParams`] (used by the
+/// benchmark to sweep the dictionary heuristic).
+pub fn pack_zstd_shared_dict_with(
+    entries: &[OcfEntry],
+    level: i32,
+    params: DictParams,
+) -> Result<Vec<u8>> {
     let corpus: Vec<u8> = entries
         .iter()
         .filter(|e| is_dict_eligible(&e.name))
         .flat_map(|e| e.data.iter().copied())
         .collect();
     let eligible = entries.iter().filter(|e| is_dict_eligible(&e.name)).count();
-    if corpus.len() < MIN_DICT_CORPUS || eligible < 2 {
+    if corpus.len() < MIN_DICT_CORPUS || eligible < params.min_files {
         return pack_zstd(entries, level);
     }
 
     // Train a dictionary sized relative to the corpus, capped to a sane range.
-    let dict_size = (corpus.len() / 8).clamp(MIN_DICT_CORPUS, 110 * 1024);
+    let dict_size = (corpus.len() / params.size_divisor).clamp(MIN_DICT_CORPUS, params.size_cap);
     let mut dict = Vec::new();
     create_fastcover_dict_from_source(
         corpus.as_slice(),
@@ -190,6 +224,25 @@ pub fn pack_zstd_shared_dict(entries: &[OcfEntry], level: i32) -> Result<Vec<u8>
         prepared.insert(0, Prepared::stored(DICT_ENTRY, &dict)?);
     }
     write_archive(&prepared)
+}
+
+/// Size-safe shared-dictionary packing: produce **both** the per-entry and the
+/// shared-dictionary archive and return whichever is smaller. This mirrors the
+/// project's existing "never grow a book" image principle — the trained
+/// dictionary is kept only when it actually pays for its stored bytes (it wins
+/// on large multi-chapter text books, loses on small/single-file/image-heavy
+/// ones), so the result is **never worse than per-entry**.
+///
+/// (The naive [`pack_zstd_shared_dict`] — which always keeps the dictionary — is
+/// retained for honest measurement of the dictionary's raw cost/benefit.)
+pub fn pack_zstd_best(entries: &[OcfEntry], level: i32) -> Result<Vec<u8>> {
+    let per_entry = pack_zstd(entries, level)?;
+    let shared = pack_zstd_shared_dict(entries, level)?;
+    Ok(if shared.len() < per_entry.len() {
+        shared
+    } else {
+        per_entry
+    })
 }
 
 /// Lay prepared entries out as a complete ZIP: local file headers + payloads,
@@ -512,6 +565,21 @@ mod tests {
     // it — true for real books, not necessarily for tiny synthetic fixtures).
     // That size comparison is measured honestly by `zstd-bench` on a real
     // corpus, not asserted here where it would be brittle.
+
+    #[test]
+    fn pack_best_is_never_larger_than_per_entry() {
+        for entries in [sample_entries(), many_chapters()] {
+            let per_entry = pack_zstd(&entries, 19).unwrap().len();
+            let best = pack_zstd_best(&entries, 19).unwrap();
+            assert!(
+                best.len() <= per_entry,
+                "size-safe pack ({}) must not exceed per-entry ({per_entry})",
+                best.len()
+            );
+            // ...and it still round-trips losslessly whichever mode it picked.
+            assert_eq!(unpack_zstd(&best).unwrap(), entries);
+        }
+    }
 
     #[test]
     fn shared_dict_falls_back_when_too_little_text() {

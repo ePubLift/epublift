@@ -22,7 +22,12 @@ are tagged with the component they belong to.
   discussion. Two modes: **per-entry** (each entry independent — the
   conservative floor) and **shared-dict** (a dictionary trained from the book's
   own text entries, stored as `META-INF/zstd-dict.bin` — the cross-chapter win,
-  explicitly non-standard). Pure Rust (`structured-zstd`, `crc32fast`) via a
+  explicitly non-standard). `shared-dict` is **size-safe**: it keeps the trained
+  dictionary only when the result actually beats per-entry (mirroring the
+  existing "never grow a book" image principle), so it is never larger than
+  per-entry — capturing the win on large multi-chapter text books (up to ~−18%
+  vs per-entry observed) and falling back otherwise. Pure Rust (`structured-zstd`,
+  `crc32fast`) via a
   small self-contained ZIP writer; no C in any shipped artifact. A dev-only
   `zstd-bench` binary (and `zstd-c-bench` feature) compares the pure-Rust encoder
   against reference C `libzstd` for ratio and speed, reporting per-entry and

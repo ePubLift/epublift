@@ -110,9 +110,15 @@ pub enum ZstdMode {
     #[default]
     PerEntry,
     /// One dictionary, trained from the book's own text entries and stored as
-    /// `META-INF/zstd-dict.bin`, shared across all text entries — the
-    /// cross-chapter "big win". Explicitly non-standard (ZIP has no slot for a
-    /// shared dictionary; storing it as a named entry is our concrete proposal).
+    /// `META-INF/zstd-dict.bin`, shared across text entries — the cross-chapter
+    /// "big win" (explicitly non-standard: ZIP has no slot for a shared
+    /// dictionary; storing it as a named entry is our concrete proposal).
+    ///
+    /// This is **size-safe**: the dictionary is kept only when the resulting
+    /// archive actually beats per-entry (it wins on large multi-chapter text
+    /// books, loses to its own stored bytes on small/single-file/image-heavy
+    /// ones), mirroring the project's "never grow a book" image principle. So
+    /// the output is never larger than [`ZstdMode::PerEntry`].
     SharedDict,
 }
 
@@ -564,7 +570,8 @@ fn repackage_epub_zstd(temp_dir: &Path, output: &Path, mode: ZstdMode, level: i3
     let entries = collect_ocf_entries(temp_dir)?;
     let archive = match mode {
         ZstdMode::PerEntry => zstd_ocf::pack_zstd(&entries, level)?,
-        ZstdMode::SharedDict => zstd_ocf::pack_zstd_shared_dict(&entries, level)?,
+        // Size-safe: keep the dictionary only when it actually wins.
+        ZstdMode::SharedDict => zstd_ocf::pack_zstd_best(&entries, level)?,
     };
     fs::write(output, archive)?;
     Ok(())
