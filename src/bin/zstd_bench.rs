@@ -29,7 +29,8 @@ use std::time::Instant;
 
 use anyhow::{Context, Result, bail};
 use epublift::zstd_ocf::{
-    DictParams, OcfEntry, pack_zstd, pack_zstd_shared_dict, pack_zstd_shared_dict_with, unpack_zstd,
+    DictParams, OcfEntry, is_dict_eligible, pack_zstd, pack_zstd_best, pack_zstd_shared_dict,
+    pack_zstd_shared_dict_with, unpack_zstd,
 };
 use structured_zstd::decoding::FrameDecoder;
 use structured_zstd::encoding::{CompressionLevel, compress_to_vec};
@@ -65,6 +66,7 @@ fn main() -> Result<()> {
     let mut levels = vec![19];
     let mut inputs: Vec<String> = Vec::new();
     let mut dict_sweep = false;
+    let mut text_only = false;
     let mut it = args.iter();
     while let Some(a) = it.next() {
         match a.as_str() {
@@ -77,12 +79,15 @@ fn main() -> Result<()> {
                     .context("invalid --levels value")?;
             }
             "--dict-sweep" => dict_sweep = true,
+            "--text-only" => text_only = true,
             "-h" | "--help" => {
                 eprintln!(
-                    "usage: zstd-bench [--levels 3,9,19] [--dict-sweep] <dir-or-epub>...\n\
+                    "usage: zstd-bench [--levels 3,9,19] [--dict-sweep|--text-only] <dir-or-epub>...\n\
                      measures Deflate vs Zstandard (pure-Rust, and C under zstd-c-bench)\n\
-                     as an EPUB packaging method. --dict-sweep compares shared-dict\n\
-                     heuristics (divisor / min-files / keep-smaller) at the headline level."
+                     as an EPUB packaging method.\n\
+                     --dict-sweep  compares shared-dict heuristics (divisor / min-files).\n\
+                     --text-only   reports the text-only win (images/fonts excluded),\n\
+                                   bucketed small/medium/large by raw text size."
                 );
                 return Ok(());
             }
@@ -101,6 +106,9 @@ fn main() -> Result<()> {
     }
     if dict_sweep {
         return run_dict_sweep(&epubs, *levels.last().unwrap());
+    }
+    if text_only {
+        return run_text_only(&epubs, *levels.last().unwrap());
     }
     #[cfg(feature = "zstd-c-bench")]
     eprintln!("[backends] pure-Rust structured-zstd + reference C libzstd");
@@ -123,6 +131,123 @@ fn main() -> Result<()> {
     }
 
     print_aggregate(&results, &levels);
+    Ok(())
+}
+
+/// The question that actually matters for a "replace Deflate with Zstd" pitch:
+/// what does Zstd save on the **text** of a book (XHTML/CSS/OPF/…), with images
+/// and fonts EXCLUDED (they're already compressed and dilute the headline)?
+/// Books are bucketed by raw uncompressed text size (small / medium / large) so
+/// the answer is honest about where the win lives.
+fn run_text_only(epubs: &[PathBuf], level: i32) -> Result<()> {
+    struct Bucket {
+        label: &'static str,
+        // raw-text range [lo, hi) in bytes
+        lo: usize,
+        hi: usize,
+        books: usize,
+        raw: usize,
+        deflate: usize,
+        per_entry: usize,
+        safe: usize,
+    }
+    let mut buckets = [
+        Bucket {
+            label: "small  (<200 KB text)",
+            lo: 0,
+            hi: 200 * 1024,
+            books: 0,
+            raw: 0,
+            deflate: 0,
+            per_entry: 0,
+            safe: 0,
+        },
+        Bucket {
+            label: "medium (200KB–1MB)   ",
+            lo: 200 * 1024,
+            hi: 1024 * 1024,
+            books: 0,
+            raw: 0,
+            deflate: 0,
+            per_entry: 0,
+            safe: 0,
+        },
+        Bucket {
+            label: "large  (>1 MB text)  ",
+            lo: 1024 * 1024,
+            hi: usize::MAX,
+            books: 0,
+            raw: 0,
+            deflate: 0,
+            per_entry: 0,
+            safe: 0,
+        },
+    ];
+
+    for path in epubs {
+        let entries = match read_entries(path) {
+            Ok(e) => e,
+            Err(e) => {
+                eprintln!("[skip] {}: {e:#}", path.display());
+                continue;
+            }
+        };
+        // Keep only the compressible text entries — drop images, fonts, mimetype.
+        let text: Vec<OcfEntry> = entries
+            .into_iter()
+            .filter(|e| is_dict_eligible(&e.name))
+            .collect();
+        if text.is_empty() {
+            continue;
+        }
+        let raw: usize = text.iter().map(|e| e.data.len()).sum();
+        let deflate = deflate_archive_size(&text)?;
+        let per_entry = pack_zstd(&text, level)?.len();
+        let safe = pack_zstd_best(&text, level)?.len();
+
+        let b = buckets
+            .iter_mut()
+            .find(|b| raw >= b.lo && raw < b.hi)
+            .unwrap();
+        b.books += 1;
+        b.raw += raw;
+        b.deflate += deflate;
+        b.per_entry += per_entry;
+        b.safe += safe;
+    }
+
+    println!("══ TEXT-ONLY (images/fonts excluded, level {level}) ══");
+    println!(
+        "{:<24} {:>6} {:>12} {:>14} {:>16}",
+        "bucket (by raw text)", "books", "deflate KB", "zstd/entry", "zstd/size-safe"
+    );
+    let mut tot = (0usize, 0usize, 0usize, 0usize); // books, deflate, per_entry, safe
+    for b in &buckets {
+        if b.books == 0 {
+            continue;
+        }
+        println!(
+            "{:<24} {:>6} {:>12.0} {:>12.1}% {:>14.1}%",
+            b.label,
+            b.books,
+            kb(b.deflate),
+            pct(b.per_entry, b.deflate) - 100.0,
+            pct(b.safe, b.deflate) - 100.0,
+        );
+        tot.0 += b.books;
+        tot.1 += b.deflate;
+        tot.2 += b.per_entry;
+        tot.3 += b.safe;
+    }
+    println!(
+        "{:<24} {:>6} {:>12.0} {:>12.1}% {:>14.1}%",
+        "ALL",
+        tot.0,
+        kb(tot.1),
+        pct(tot.2, tot.1) - 100.0,
+        pct(tot.3, tot.1) - 100.0,
+    );
+    println!("\n(zstd/entry = per-entry; zstd/size-safe = shared-dict kept only when it wins.)");
     Ok(())
 }
 
