@@ -16,7 +16,7 @@ with the command included below.
 
 Hello — and apologies in advance if this has been discussed before and I missed it (pointers very welcome).
 
-I help maintain a small open-source tool that modernizes EPUB 2 files to EPUB 3 and re-encodes their images. While working on it I got curious about the **OCF ZIP container** itself: it mandates *Stored* + *Deflate*, while ZIP has long registered **Zstandard as compression method 93** (PKWARE APPNOTE). I couldn't find prior discussion of Zstd for OCF, so rather than argue for anything, I ran some measurements and would love to hear how the WG and implementers think about it.
+I help maintain a small open-source EPUB tool (ePubLift — AGPL, pure-Rust) that modernizes EPUB 2 files to EPUB 3 and re-encodes their images. While working on it I got curious about the **OCF ZIP container** itself: it mandates *Stored* + *Deflate*, while ZIP has long registered **Zstandard as compression method 93** (PKWARE APPNOTE). I couldn't find prior discussion of Zstd for OCF, so rather than argue for anything, I ran some measurements and would love to hear how the WG and implementers think about it.
 
 **To be clear about scope:** I understand EPUB 3.4 is effectively frozen, and I'm explicitly *not* proposing a change to it. I'm also fully aware of the elephant in the room — the installed base. A second compression method is worthless to a publisher until essentially every reading system supports it, and "the publishing industry is a large tanker." So please read this as *"here's some data, is this interesting to think about for the long term?"*, not as a proposal.
 
@@ -50,7 +50,7 @@ The small/medium Gutenberg books are mostly a *single* content file, so the shar
 for id in 11 35 84 100 174 345 996 1260 1342 1400 1661 1952 2554 2600 2701 5200; do
   curl -L -o "pg$id.epub" "https://www.gutenberg.org/cache/epub/$id/pg$id.epub"; sleep 2
 done
-# then, with the open-source tool's research build:
+# then run the tool's research build (github.com/ePubLift/epublift):
 zstd-bench --text-only --levels 19 .
 ```
 
