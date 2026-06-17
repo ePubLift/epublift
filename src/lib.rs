@@ -25,6 +25,8 @@ mod nav;
 mod opf;
 mod report;
 mod util;
+#[cfg(feature = "zstd-experimental")]
+pub mod zstd_ocf;
 
 use anyhow::{Context, Result, bail};
 use chrono::Utc;
@@ -79,6 +81,39 @@ pub enum ImageStrategy {
     KeepOriginal,
 }
 
+/// How the output container itself is compressed.
+///
+/// `Deflate` is the only **conformant** packaging and the shipping default —
+/// it matches what every reading system implements (OCF restricts the ZIP
+/// container to Stored + Deflate). `Zstd` is the **experimental research mode**
+/// (see `docs/design/zstd-ocf-experimental.md`): it writes non-mimetype entries
+/// with ZIP compression method 93 (Zstandard) to *measure* what Zstd would save
+/// over Deflate for EPUB packaging. A Zstd-packaged file is **not a conformant
+/// EPUB and will not open in current readers** — it exists purely to produce
+/// numbers for a future W3C `epub-specs` discussion. The actual encoding is only
+/// available when the crate is built with the `zstd-experimental` feature.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Packaging {
+    /// Conformant Deflate packaging (the default).
+    #[default]
+    Deflate,
+    /// Experimental, non-conformant Zstandard packaging at the given C-zstd
+    /// level (1–22). `mode` selects how entries share context.
+    Zstd { mode: ZstdMode, level: i32 },
+}
+
+/// How Zstandard packaging shares compression context across archive entries.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ZstdMode {
+    /// Each entry is compressed independently — the standards-plausible,
+    /// conservative floor. (Phase 1.)
+    #[default]
+    PerEntry,
+    // SharedDict — Phase 2: one trained dictionary shared across text entries,
+    // stored as META-INF/zstd-dict.bin. The real "big win", explicitly
+    // non-standard. Not implemented yet.
+}
+
 /// Options controlling a conversion.
 ///
 /// Construct via [`Options::default`] and override fields as needed.
@@ -98,6 +133,10 @@ pub struct Options {
     /// documents and name the output `<stem>.kepub.epub`. The result is still a
     /// valid EPUB 3 on top of the normal upgrades.
     pub kepub: bool,
+    /// Container packaging. Defaults to conformant [`Packaging::Deflate`];
+    /// [`Packaging::Zstd`] is the experimental measurement mode and requires the
+    /// `zstd-experimental` build feature.
+    pub packaging: Packaging,
     /// Explicit output path; when `None`, [`default_output_path`] is used.
     pub output: Option<PathBuf>,
 }
@@ -110,6 +149,7 @@ impl Default for Options {
             target_version: EpubVersion::LATEST,
             image_strategy: ImageStrategy::default(),
             kepub: false,
+            packaging: Packaging::default(),
             output: None,
         }
     }
@@ -175,14 +215,27 @@ pub fn output_stem(input: &Path, ascii: bool) -> String {
 }
 
 /// The default output path next to `input`: version-stamped (e.g. `book_v3.3.epub`),
-/// or a Kobo `book.kepub.epub` when [`Options::kepub`] is set.
+/// a Kobo `book.kepub.epub` when [`Options::kepub`] is set, or a
+/// `book_zstd-experimental.epub` when [`Packaging::Zstd`] is selected.
+///
+/// The `_zstd-experimental` suffix is deliberately *not* `_v3.x`: a Zstd archive
+/// is non-conformant, so a version-looking name would misrepresent it. The
+/// suffix is tied to the conformance axis and stays until the output actually
+/// becomes conformant — not when our measurements mature.
 pub fn default_output_path(input: &Path, options: &Options) -> PathBuf {
     let stem = output_stem(input, options.ascii);
     let parent = input.parent().unwrap_or_else(|| Path::new("."));
-    if options.kepub {
-        parent.join(format!("{}.kepub.epub", stem))
+    let base = if options.kepub {
+        format!("{}.kepub", stem)
+    } else if matches!(options.packaging, Packaging::Zstd { .. }) {
+        stem
     } else {
-        parent.join(format!("{}_v{}.epub", stem, options.target_version.tag()))
+        format!("{}_v{}", stem, options.target_version.tag())
+    };
+    if matches!(options.packaging, Packaging::Zstd { .. }) {
+        parent.join(format!("{}_zstd-experimental.epub", base))
+    } else {
+        parent.join(format!("{}.epub", base))
     }
 }
 
@@ -315,8 +368,30 @@ pub fn convert(input: &Path, options: &Options, progress: impl Fn(&str)) -> Resu
     }
 
     // Step 5: Repackage EPUB.
-    progress("[*] Repackaging folder into EPUB file...");
-    repackage_epub(temp_path, &output_path)?;
+    match options.packaging {
+        Packaging::Deflate => {
+            progress("[*] Repackaging folder into EPUB file...");
+            repackage_epub(temp_path, &output_path)?;
+        }
+        Packaging::Zstd { mode, level } => {
+            #[cfg(feature = "zstd-experimental")]
+            {
+                progress(
+                    "[*] Repackaging with EXPERIMENTAL Zstandard (method 93) — \
+                     NOT a conformant EPUB; will not open in current readers...",
+                );
+                repackage_epub_zstd(temp_path, &output_path, mode, level)?;
+            }
+            #[cfg(not(feature = "zstd-experimental"))]
+            {
+                let _ = (mode, level);
+                bail!(
+                    "Zstandard packaging requires building with the \
+                     `zstd-experimental` feature."
+                );
+            }
+        }
+    }
 
     let final_size = fs::metadata(&output_path)?.len();
     let output_name = output_path
@@ -439,6 +514,86 @@ fn repackage_epub(temp_dir: &Path, output: &Path) -> Result<()> {
         io::Write::write_all(&mut zip, &data)?;
     }
 
+    zip.finish()?;
+    Ok(())
+}
+
+/// Collect the working directory into ordered [`zstd_ocf::OcfEntry`]s — the
+/// `mimetype` first (stored), every other file after — mirroring the entry
+/// ordering of [`repackage_epub`].
+#[cfg(feature = "zstd-experimental")]
+fn collect_ocf_entries(temp_dir: &Path) -> Result<Vec<zstd_ocf::OcfEntry>> {
+    let mut entries = Vec::new();
+
+    let mimetype_path = temp_dir.join("mimetype");
+    let mimetype = if mimetype_path.exists() {
+        fs::read(&mimetype_path)?
+    } else {
+        b"application/epub+zip".to_vec()
+    };
+    entries.push(zstd_ocf::OcfEntry {
+        name: "mimetype".to_string(),
+        data: mimetype,
+    });
+
+    for entry in WalkDir::new(temp_dir).into_iter().filter_map(|e| e.ok()) {
+        if !entry.file_type().is_file() {
+            continue;
+        }
+        let path = entry.path();
+        let rel = path.strip_prefix(temp_dir)?;
+        let arcname = rel.to_string_lossy().replace('\\', "/");
+        if arcname == "mimetype" {
+            continue;
+        }
+        entries.push(zstd_ocf::OcfEntry {
+            name: arcname,
+            data: fs::read(path)?,
+        });
+    }
+    Ok(entries)
+}
+
+/// Repackage the working directory into an **experimental** Zstd-OCF archive
+/// (`mimetype` stored, everything else compressed with method 93). The result
+/// is intentionally non-conformant; see [`Packaging::Zstd`].
+#[cfg(feature = "zstd-experimental")]
+fn repackage_epub_zstd(temp_dir: &Path, output: &Path, mode: ZstdMode, level: i32) -> Result<()> {
+    match mode {
+        ZstdMode::PerEntry => {}
+    }
+    let entries = collect_ocf_entries(temp_dir)?;
+    let archive = zstd_ocf::pack_zstd(&entries, level)?;
+    fs::write(output, archive)?;
+    Ok(())
+}
+
+/// Decode an experimental Zstd-OCF archive back into a conformant Deflate EPUB.
+///
+/// This is the round-trip / "no data loss" path: every entry is decompressed
+/// (CRC-checked inside [`zstd_ocf::unpack_zstd`]) and rewritten as a normal
+/// Stored-mimetype + Deflate EPUB at `output`. The reconstructed container is a
+/// valid EPUB that opens in any reader.
+#[cfg(feature = "zstd-experimental")]
+pub fn decode_zstd_epub(input: &Path, output: &Path) -> Result<()> {
+    let archive = fs::read(input)
+        .with_context(|| format!("Failed to read Zstd-OCF input: {}", input.display()))?;
+    let entries = zstd_ocf::unpack_zstd(&archive)?;
+
+    let file = File::create(output)?;
+    let mut zip = ZipWriter::new(file);
+    let stored = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
+    let deflated = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
+
+    for entry in &entries {
+        let opts = if entry.name == "mimetype" {
+            stored
+        } else {
+            deflated
+        };
+        zip.start_file(&entry.name, opts)?;
+        io::Write::write_all(&mut zip, &entry.data)?;
+    }
     zip.finish()?;
     Ok(())
 }

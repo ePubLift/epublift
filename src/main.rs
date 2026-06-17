@@ -61,6 +61,27 @@ struct Args {
     /// still upgraded to EPUB 3.3.
     #[arg(long)]
     keep_images: bool,
+
+    /// [EXPERIMENTAL] Package the container with Zstandard (ZIP method 93)
+    /// instead of Deflate, to measure the size delta. The result is
+    /// NON-CONFORMANT and will NOT open in current reading systems — research
+    /// only. See docs/design/zstd-ocf-experimental.md.
+    #[cfg(feature = "zstd-experimental")]
+    #[arg(long)]
+    zstd: bool,
+
+    /// [EXPERIMENTAL] Zstandard level (C zstd numbering, 1-22). Higher = smaller
+    /// and slower.
+    #[cfg(feature = "zstd-experimental")]
+    #[arg(long, default_value_t = 19, value_name = "1-22")]
+    zstd_level: i32,
+
+    /// [EXPERIMENTAL] Decode a *_zstd-experimental.epub back into a conformant
+    /// Deflate EPUB (the lossless round-trip check). With this flag, --input is
+    /// the experimental archive.
+    #[cfg(feature = "zstd-experimental")]
+    #[arg(long)]
+    zstd_decode: bool,
 }
 
 fn main() -> ExitCode {
@@ -80,6 +101,43 @@ fn run(args: Args) -> Result<()> {
         .canonicalize()
         .with_context(|| format!("Input file not found: {}", args.input.display()))?;
 
+    // Experimental decode mode: reconstruct a conformant EPUB and return early.
+    #[cfg(feature = "zstd-experimental")]
+    if args.zstd_decode {
+        let output = args.output.clone().unwrap_or_else(|| {
+            let name = input
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .replace("_zstd-experimental.epub", "_decoded.epub");
+            let name = if name.ends_with("_decoded.epub") {
+                name
+            } else {
+                format!("{}_decoded.epub", epublift::output_stem(&input, false))
+            };
+            input.parent().unwrap_or_else(|| Path::new(".")).join(name)
+        });
+        println!(
+            "[*] Decoding experimental Zstd-OCF archive: {}",
+            input.display()
+        );
+        epublift::decode_zstd_epub(&input, &output)?;
+        println!("[+] Reconstructed conformant EPUB: {}", output.display());
+        return Ok(());
+    }
+
+    #[cfg(feature = "zstd-experimental")]
+    let packaging = if args.zstd {
+        epublift::Packaging::Zstd {
+            mode: epublift::ZstdMode::PerEntry,
+            level: args.zstd_level,
+        }
+    } else {
+        epublift::Packaging::Deflate
+    };
+    #[cfg(not(feature = "zstd-experimental"))]
+    let packaging = epublift::Packaging::Deflate;
+
     let mut options = Options {
         quality: args.quality.clamp(1, 100) as u8,
         ascii: args.ascii,
@@ -90,6 +148,7 @@ fn run(args: Args) -> Result<()> {
             ImageStrategy::WebP
         },
         kepub: args.kepub,
+        packaging,
         output: args.output.clone(),
     };
     // Resolve the output path up front so we can show it before converting.

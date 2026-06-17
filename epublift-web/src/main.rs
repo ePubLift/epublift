@@ -357,6 +357,9 @@ async fn convert(
                     ImageStrategy::WebP
                 },
                 kepub,
+                // The hosted service only ever emits conformant EPUBs; the
+                // experimental Zstd packaging is CLI/research-only.
+                packaging: epublift::Packaging::Deflate,
                 output: None,
             };
             let report = epublift::convert(&input_path, &opts, |_| {})?;

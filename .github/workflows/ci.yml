@@ -44,3 +44,13 @@ jobs:
 
       - name: Test
         run: cargo test --workspace --all-targets --locked
+
+      # The experimental Zstd-OCF research track is behind a default-off feature
+      # (pure Rust, no C). Build + test it too so it doesn't rot. The C ceiling
+      # (`zstd-c-bench`) is intentionally NOT built in CI — it pulls libzstd and
+      # is a local dev convenience only.
+      - name: Clippy (zstd-experimental)
+        run: cargo clippy --all-targets --locked --features zstd-experimental -- -D warnings
+
+      - name: Test (zstd-experimental)
+        run: cargo test --all-targets --locked --features zstd-experimental
