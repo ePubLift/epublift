@@ -245,11 +245,15 @@ The EPUB container (OCF) restricts ZIP compression to *Stored* + *Deflate*. ZIP 
 # Build with the feature, then:
 cargo run --features zstd-experimental -- -i book.epub --zstd
 # → book_zstd-experimental.epub   (NON-CONFORMANT; for measurement)
+
+# Cross-chapter "shared dictionary" mode (trains a dict from the book's text):
+cargo run --features zstd-experimental -- -i book.epub --zstd --zstd-mode shared-dict
+
 cargo run --features zstd-experimental -- -i book_zstd-experimental.epub --zstd-decode
 # → reconstructs a normal, conformant EPUB (proves no data loss)
 ```
 
-A dev-only `zstd-bench` compares the pure-Rust encoder against reference C `libzstd` for ratio and speed across a corpus. Full rationale, the two-axis (*maturity* vs *conformance*) framing, and the shared-dictionary plan live in [`docs/design/zstd-ocf-experimental.md`](docs/design/zstd-ocf-experimental.md).
+Two modes: **per-entry** (each entry compressed independently — the conservative floor) and **shared-dict** (one dictionary trained from the book's own text entries, stored as `META-INF/zstd-dict.bin`, then shared across chapters — the bigger win on text-heavy, multi-chapter books, and explicitly non-standard). A dev-only `zstd-bench` compares the pure-Rust encoder against reference C `libzstd` for ratio and speed across a corpus, reporting both modes. Full rationale and the two-axis (*maturity* vs *conformance*) framing live in [`docs/design/zstd-ocf-experimental.md`](docs/design/zstd-ocf-experimental.md).
 
 ---
 

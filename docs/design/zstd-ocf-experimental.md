@@ -1,6 +1,8 @@
 # Design — Experimental Zstandard OCF packaging (research track)
 
-**Status:** Draft / not started. Begins **after v1.3 (Kobo `.kepub`) ships.**
+**Status:** Phases 1 & 2 implemented (per-entry + shared-dictionary), behind the
+default-off `zstd-experimental` feature. Measurement-maturity: `preliminary`.
+Conformance: `non-conformant` (unchanged — by design).
 **Owner:** Baris Kayadelen
 
 This work is described on **two independent axes** — do not collapse them into one

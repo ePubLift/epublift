@@ -49,7 +49,7 @@ any_ascii = "0.3"
 # Experimental Zstandard-OCF packaging (research track) — see
 # docs/design/zstd-ocf-experimental.md. Pure Rust, no FFI. Opt-in at compile
 # time so the default shipped artifact is byte-identical to today (no new deps).
-structured-zstd = { version = "0.0.40", optional = true }
+structured-zstd = { version = "0.0.40", optional = true, features = ["dict_builder"] }
 crc32fast = { version = "1", optional = true }
 # Bench-only reference backend: the C libzstd. NEVER part of a shipped artifact —
 # gated behind `zstd-c-bench`, used only by the local benchmark to report the

@@ -28,7 +28,9 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use anyhow::{Context, Result, bail};
-use epublift::zstd_ocf::{OcfEntry, pack_zstd, unpack_zstd};
+use epublift::zstd_ocf::{
+    DictParams, OcfEntry, pack_zstd, pack_zstd_shared_dict, pack_zstd_shared_dict_with, unpack_zstd,
+};
 use structured_zstd::decoding::FrameDecoder;
 use structured_zstd::encoding::{CompressionLevel, compress_to_vec};
 use zip::write::SimpleFileOptions;
@@ -49,7 +51,10 @@ struct BookResult {
     name: String,
     raw: usize,
     deflate_archive: usize,
+    /// Per-entry Zstd archive size at the headline level.
     zstd_archive: usize,
+    /// Shared-dictionary Zstd archive size at the headline level.
+    zstd_shared_archive: usize,
     rust: Vec<(i32, Measure)>,
     #[cfg(feature = "zstd-c-bench")]
     c: Vec<(i32, Measure)>,
@@ -59,6 +64,7 @@ fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let mut levels = vec![19];
     let mut inputs: Vec<String> = Vec::new();
+    let mut dict_sweep = false;
     let mut it = args.iter();
     while let Some(a) = it.next() {
         match a.as_str() {
@@ -70,11 +76,13 @@ fn main() -> Result<()> {
                     .collect::<Result<_, _>>()
                     .context("invalid --levels value")?;
             }
+            "--dict-sweep" => dict_sweep = true,
             "-h" | "--help" => {
                 eprintln!(
-                    "usage: zstd-bench [--levels 3,9,19] <dir-or-epub>...\n\
+                    "usage: zstd-bench [--levels 3,9,19] [--dict-sweep] <dir-or-epub>...\n\
                      measures Deflate vs Zstandard (pure-Rust, and C under zstd-c-bench)\n\
-                     as an EPUB packaging method, per-entry."
+                     as an EPUB packaging method. --dict-sweep compares shared-dict\n\
+                     heuristics (divisor / min-files / keep-smaller) at the headline level."
                 );
                 return Ok(());
             }
@@ -82,12 +90,17 @@ fn main() -> Result<()> {
         }
     }
     if inputs.is_empty() {
-        bail!("no input given. usage: zstd-bench [--levels 3,9,19] <dir-or-epub>...");
+        bail!(
+            "no input given. usage: zstd-bench [--levels 3,9,19] [--dict-sweep] <dir-or-epub>..."
+        );
     }
 
     let epubs = collect_epubs(&inputs)?;
     if epubs.is_empty() {
         bail!("no .epub files found in the given paths");
+    }
+    if dict_sweep {
+        return run_dict_sweep(&epubs, *levels.last().unwrap());
     }
     #[cfg(feature = "zstd-c-bench")]
     eprintln!("[backends] pure-Rust structured-zstd + reference C libzstd");
@@ -110,6 +123,137 @@ fn main() -> Result<()> {
     }
 
     print_aggregate(&results, &levels);
+    Ok(())
+}
+
+/// Compare shared-dictionary heuristics against the per-entry baseline at one
+/// level, over the corpus. For each config we report the aggregate archive size
+/// (vs deflate and vs per-entry) and how many books it beats / loses to
+/// per-entry — plus a `keep-smaller` row that takes min(per-entry, shared) per
+/// book (the size-safe option that can never lose).
+fn run_dict_sweep(epubs: &[PathBuf], level: i32) -> Result<()> {
+    struct Cfg {
+        label: &'static str,
+        params: DictParams,
+    }
+    let base = DictParams::default();
+    let cfgs = [
+        Cfg {
+            label: "div4  min2 ",
+            params: DictParams {
+                size_divisor: 4,
+                ..base
+            },
+        },
+        Cfg {
+            label: "div8  min2 ",
+            params: DictParams {
+                size_divisor: 8,
+                ..base
+            },
+        },
+        Cfg {
+            label: "div16 min2 ",
+            params: DictParams {
+                size_divisor: 16,
+                ..base
+            },
+        },
+        Cfg {
+            label: "div32 min2 ",
+            params: DictParams {
+                size_divisor: 32,
+                ..base
+            },
+        },
+        Cfg {
+            label: "div8  min4 ",
+            params: DictParams {
+                size_divisor: 8,
+                min_files: 4,
+                ..base
+            },
+        },
+        Cfg {
+            label: "div8  min8 ",
+            params: DictParams {
+                size_divisor: 8,
+                min_files: 8,
+                ..base
+            },
+        },
+    ];
+
+    // Per book: deflate, per-entry, and each config's shared size.
+    let mut deflate_tot = 0usize;
+    let mut per_entry_tot = 0usize;
+    let mut cfg_tot = vec![0usize; cfgs.len()];
+    let mut cfg_win = vec![0usize; cfgs.len()];
+    let mut cfg_loss = vec![0usize; cfgs.len()];
+    // keep-smaller using the best (smallest) shared per book across configs.
+    let mut keepsmaller_tot = 0usize;
+    let mut books = 0usize;
+
+    for path in epubs {
+        let entries = match read_entries(path) {
+            Ok(e) => e,
+            Err(e) => {
+                eprintln!("[skip] {}: {e:#}", path.display());
+                continue;
+            }
+        };
+        let deflate = deflate_archive_size(&entries)?;
+        let per_entry = pack_zstd(&entries, level)?.len();
+        deflate_tot += deflate;
+        per_entry_tot += per_entry;
+
+        let mut best_shared = per_entry; // keep-smaller starts at per-entry
+        for (i, cfg) in cfgs.iter().enumerate() {
+            let s = pack_zstd_shared_dict_with(&entries, level, cfg.params)?.len();
+            cfg_tot[i] += s;
+            if s < per_entry {
+                cfg_win[i] += 1;
+            } else if s > per_entry {
+                cfg_loss[i] += 1;
+            }
+            best_shared = best_shared.min(s);
+        }
+        keepsmaller_tot += best_shared;
+        books += 1;
+    }
+    if books == 0 {
+        bail!("no books measured");
+    }
+
+    println!("══ DICT SWEEP ({books} books, level {level}) ══");
+    println!(
+        "baseline: deflate {:.0} KB | per-entry {:.0} KB ({:+.1}% vs deflate)",
+        kb(deflate_tot),
+        kb(per_entry_tot),
+        pct(per_entry_tot, deflate_tot) - 100.0,
+    );
+    println!(
+        "{:<12} {:>12} {:>14} {:>14} {:>8} {:>8}",
+        "config", "shared KB", "vs deflate", "vs per-entry", "won", "lost"
+    );
+    for (i, cfg) in cfgs.iter().enumerate() {
+        println!(
+            "{:<12} {:>12.0} {:>13.1}% {:>13.1}% {:>8} {:>8}",
+            cfg.label,
+            kb(cfg_tot[i]),
+            pct(cfg_tot[i], deflate_tot) - 100.0,
+            pct(cfg_tot[i], per_entry_tot) - 100.0,
+            cfg_win[i],
+            cfg_loss[i],
+        );
+    }
+    println!(
+        "{:<12} {:>12.0} {:>13.1}% {:>13.1}%   (size-safe: min(per-entry, shared) per book)",
+        "keep-smaller",
+        kb(keepsmaller_tot),
+        pct(keepsmaller_tot, deflate_tot) - 100.0,
+        pct(keepsmaller_tot, per_entry_tot) - 100.0,
+    );
     Ok(())
 }
 
@@ -164,12 +308,14 @@ fn bench_one(path: &Path, levels: &[i32]) -> Result<BookResult> {
         .collect();
 
     let deflate_archive = deflate_archive_size(&entries)?;
-    // Archive-level zstd size uses the headline level (last in the sweep).
+    // Archive-level zstd sizes use the headline level (last in the sweep).
     let headline = *levels.last().unwrap();
-    let zstd_archive = pack_zstd(&entries, headline)?.len();
-    // Verify the archive round-trips (decode == original entries).
-    let back = unpack_zstd(&pack_zstd(&entries, headline)?)?;
-    if back != entries {
+    let per_entry_archive = pack_zstd(&entries, headline)?;
+    let zstd_archive = per_entry_archive.len();
+    let shared_archive = pack_zstd_shared_dict(&entries, headline)?;
+    let zstd_shared_archive = shared_archive.len();
+    // Verify BOTH archives round-trip (decode == original entries).
+    if unpack_zstd(&per_entry_archive)? != entries || unpack_zstd(&shared_archive)? != entries {
         bail!("archive round-trip mismatch — refusing to report numbers");
     }
 
@@ -191,6 +337,7 @@ fn bench_one(path: &Path, levels: &[i32]) -> Result<BookResult> {
         raw,
         deflate_archive,
         zstd_archive,
+        zstd_shared_archive,
         rust,
         #[cfg(feature = "zstd-c-bench")]
         c,
@@ -308,14 +455,24 @@ fn kb(n: usize) -> f64 {
 
 fn print_book(r: &BookResult, _levels: &[i32]) {
     println!("📖 {}", r.name);
+    let headline = r.rust.last().map(|(l, _)| *l).unwrap_or(0);
     println!(
-        "   raw {:>9.1} KB | deflate {:>9.1} KB ({:>5.1}% of raw) | zstd-archive(L{}) {:>9.1} KB ({:+.1}% vs deflate)",
+        "   raw {:>9.1} KB | deflate {:>9.1} KB ({:>5.1}% of raw)",
         kb(r.raw),
         kb(r.deflate_archive),
         pct(r.deflate_archive, r.raw),
-        r.rust.last().map(|(l, _)| *l).unwrap_or(0),
+    );
+    let safe = r.zstd_archive.min(r.zstd_shared_archive);
+    println!(
+        "   archive(L{}) per-entry {:>9.1} KB ({:+5.1}% vs deflate) | shared-dict {:>9.1} KB ({:+5.1}% vs deflate, {:+5.1}% vs per-entry) | size-safe {:>9.1} KB ({:+5.1}% vs deflate)",
+        headline,
         kb(r.zstd_archive),
         pct(r.zstd_archive, r.deflate_archive) - 100.0,
+        kb(r.zstd_shared_archive),
+        pct(r.zstd_shared_archive, r.deflate_archive) - 100.0,
+        pct(r.zstd_shared_archive, r.zstd_archive) - 100.0,
+        kb(safe),
+        pct(safe, r.deflate_archive) - 100.0,
     );
     for (lvl, m) in &r.rust {
         println!(
@@ -348,17 +505,35 @@ fn print_aggregate(results: &[BookResult], levels: &[i32]) {
     let raw: usize = results.iter().map(|r| r.raw).sum();
     let deflate: usize = results.iter().map(|r| r.deflate_archive).sum();
     let zstd_arch: usize = results.iter().map(|r| r.zstd_archive).sum();
+    let shared_arch: usize = results.iter().map(|r| r.zstd_shared_archive).sum();
 
     println!(
         "══════════════════════════ AGGREGATE ({} books) ══════════════════════════",
         results.len()
     );
+    println!("raw {:.1} KB | deflate {:.1} KB", kb(raw), kb(deflate));
     println!(
-        "raw {:.1} KB | deflate {:.1} KB | zstd-archive {:.1} KB → {:+.1}% vs deflate",
-        kb(raw),
-        kb(deflate),
+        "archive per-entry   {:.1} KB → {:+.1}% vs deflate",
         kb(zstd_arch),
         pct(zstd_arch, deflate) - 100.0,
+    );
+    println!(
+        "archive shared-dict {:.1} KB → {:+.1}% vs deflate ({:+.1}% vs per-entry)",
+        kb(shared_arch),
+        pct(shared_arch, deflate) - 100.0,
+        pct(shared_arch, zstd_arch) - 100.0,
+    );
+    // Size-safe = min(per-entry, shared-dict) per book — never worse than
+    // per-entry, captures the dictionary wins where they exist.
+    let safe_arch: usize = results
+        .iter()
+        .map(|r| r.zstd_archive.min(r.zstd_shared_archive))
+        .sum();
+    println!(
+        "archive size-safe   {:.1} KB → {:+.1}% vs deflate ({:+.1}% vs per-entry)",
+        kb(safe_arch),
+        pct(safe_arch, deflate) - 100.0,
+        pct(safe_arch, zstd_arch) - 100.0,
     );
     for (i, &lvl) in levels.iter().enumerate() {
         let rb: usize = results.iter().map(|r| r.rust[i].1.bytes).sum();

@@ -13,16 +13,26 @@ are tagged with the component they belong to.
 ### Added
 - **Experimental Zstandard-OCF packaging (research track, opt-in).** A new
   default-off `zstd-experimental` build feature adds `--zstd` (plus
-  `--zstd-level`, and `--zstd-decode` for the lossless round-trip), which packs
-  the container with ZIP compression **method 93 (Zstandard)** instead of
-  Deflate and writes a `*_zstd-experimental.epub`. This is **deliberately
-  non-conformant** — it will not open in current reading systems — and exists
-  only to *measure* what Zstd would save over Deflate for EPUB packaging, to back
-  a future W3C `epub-specs` discussion. Pure Rust (`structured-zstd`,
-  `crc32fast`) via a small self-contained ZIP writer; no C in any shipped
-  artifact. A dev-only `zstd-bench` binary (and `zstd-c-bench` feature) compares
-  the pure-Rust encoder against reference C `libzstd` for ratio and speed.
-  Default builds and the hosted web service are unchanged. See
+  `--zstd-level`, `--zstd-mode per-entry|shared-dict`, and `--zstd-decode` for
+  the lossless round-trip), which packs the container with ZIP compression
+  **method 93 (Zstandard)** instead of Deflate and writes a
+  `*_zstd-experimental.epub`. This is **deliberately non-conformant** — it will
+  not open in current reading systems — and exists only to *measure* what Zstd
+  would save over Deflate for EPUB packaging, to back a future W3C `epub-specs`
+  discussion. Two modes: **per-entry** (each entry independent — the
+  conservative floor) and **shared-dict** (a dictionary trained from the book's
+  own text entries, stored as `META-INF/zstd-dict.bin` — the cross-chapter win,
+  explicitly non-standard). `shared-dict` is **size-safe**: it keeps the trained
+  dictionary only when the result actually beats per-entry (mirroring the
+  existing "never grow a book" image principle), so it is never larger than
+  per-entry — capturing the win on large multi-chapter text books (up to ~−18%
+  vs per-entry observed) and falling back otherwise. Pure Rust (`structured-zstd`,
+  `crc32fast`) via a
+  small self-contained ZIP writer; no C in any shipped artifact. A dev-only
+  `zstd-bench` binary (and `zstd-c-bench` feature) compares the pure-Rust encoder
+  against reference C `libzstd` for ratio and speed, reporting per-entry and
+  shared-dict separately. Default builds and the hosted web service are
+  unchanged. See
   [`docs/design/zstd-ocf-experimental.md`](docs/design/zstd-ocf-experimental.md).
 
 ## [web-v1.4.0] - 2026-06-17
