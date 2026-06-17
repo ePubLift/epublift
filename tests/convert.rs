@@ -566,3 +566,141 @@ fn default_run_has_no_kobospans() {
         "koboSpans must only appear with --kepub"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Experimental Zstandard-OCF packaging (feature-gated research track)
+// ---------------------------------------------------------------------------
+
+#[cfg(feature = "zstd-experimental")]
+mod zstd_experimental {
+    use super::*;
+    use epublift::{Packaging, ZstdMode, decode_zstd_epub};
+
+    fn read_bytes(epub: &Path, name: &str) -> Vec<u8> {
+        let mut zip = ZipArchive::new(std::fs::File::open(epub).unwrap()).unwrap();
+        let mut f = zip.by_name(name).unwrap();
+        let mut v = Vec::new();
+        f.read_to_end(&mut v).unwrap();
+        v
+    }
+
+    /// The credibility anchor: a Zstd-packaged EPUB decodes back to byte-for-byte
+    /// the same contents as the conformant Deflate output. (The OPF carries a
+    /// `dcterms:modified` timestamp that differs between the two independent
+    /// `convert` runs, so it is checked structurally rather than byte-compared.)
+    #[test]
+    fn zstd_packaging_round_trips_losslessly() {
+        let dir = tempfile::tempdir().unwrap();
+        let input = dir.path().join("legacy.epub");
+        build_epub(&input, &legacy_with_images());
+
+        // Conformant reference output.
+        let deflate = convert(&input, &Options::default(), |_| {}).unwrap();
+        assert!(mimetype_first_and_stored(&deflate.output_path));
+
+        // Experimental Zstd output, then decode it back to a conformant EPUB.
+        let zstd_opts = Options {
+            packaging: Packaging::Zstd {
+                mode: ZstdMode::PerEntry,
+                level: 19,
+            },
+            output: Some(dir.path().join("book_zstd-experimental.epub")),
+            ..Options::default()
+        };
+        let zstd = convert(&input, &zstd_opts, |_| {}).unwrap();
+
+        let decoded = dir.path().join("book_decoded.epub");
+        decode_zstd_epub(&zstd.output_path, &decoded).unwrap();
+
+        // Decoded archive is a normal, conformant EPUB again.
+        assert!(
+            mimetype_first_and_stored(&decoded),
+            "decoded mimetype stored first"
+        );
+
+        let mut a = entry_names(&deflate.output_path);
+        let mut b = entry_names(&decoded);
+        a.sort();
+        b.sort();
+        assert_eq!(a, b, "decoded entry set matches the conformant output");
+
+        // Every entry except the timestamped OPF is byte-identical — proving the
+        // Zstd encode/decode is lossless on text and (compressed) image payloads.
+        for name in &a {
+            if name.ends_with(".opf") {
+                continue;
+            }
+            assert_eq!(
+                read_bytes(&deflate.output_path, name),
+                read_bytes(&decoded, name),
+                "entry {name} must survive the Zstd round-trip byte-for-byte"
+            );
+        }
+        let opf = entry_names(&decoded)
+            .into_iter()
+            .find(|n| n.ends_with(".opf"))
+            .unwrap();
+        assert!(read_entry(&decoded, &opf).contains("version=\"3.0\""));
+    }
+
+    /// The output is named with the `_zstd-experimental` suffix (conformance
+    /// axis), never a version-looking `_v3.x` name.
+    #[test]
+    fn zstd_output_is_named_experimental() {
+        let dir = tempfile::tempdir().unwrap();
+        let input = dir.path().join("My Book.epub");
+        build_epub(&input, &legacy_text_only());
+
+        let opts = Options {
+            packaging: Packaging::Zstd {
+                mode: ZstdMode::PerEntry,
+                level: 3,
+            },
+            ..Options::default()
+        };
+        let report = convert(&input, &opts, |_| {}).unwrap();
+        assert_eq!(report.output_name, "My Book_zstd-experimental.epub");
+        assert!(!report.output_name.contains("_v3"));
+    }
+
+    /// Non-mimetype entries really use ZIP method 93 (Zstandard).
+    #[test]
+    fn zstd_entries_use_method_93() {
+        let dir = tempfile::tempdir().unwrap();
+        let input = dir.path().join("legacy.epub");
+        build_epub(&input, &legacy_text_only());
+
+        let opts = Options {
+            packaging: Packaging::Zstd {
+                mode: ZstdMode::PerEntry,
+                level: 3,
+            },
+            ..Options::default()
+        };
+        let report = convert(&input, &opts, |_| {}).unwrap();
+
+        // Read the central directory ourselves: count compression-method ids.
+        let bytes = std::fs::read(&report.output_path).unwrap();
+        let methods = central_directory_methods(&bytes);
+        assert!(methods.contains(&0), "mimetype should be Stored (method 0)");
+        assert!(methods.contains(&93), "content should be Zstd (method 93)");
+        assert!(
+            !methods.contains(&8),
+            "no Deflate (method 8) in a Zstd archive"
+        );
+    }
+
+    /// Scan central-directory headers and return each entry's compression method.
+    fn central_directory_methods(zip: &[u8]) -> Vec<u16> {
+        const SIG: [u8; 4] = [0x50, 0x4b, 0x01, 0x02];
+        let mut out = Vec::new();
+        let mut i = 0;
+        while i + 12 <= zip.len() {
+            if zip[i..i + 4] == SIG {
+                out.push(u16::from_le_bytes([zip[i + 10], zip[i + 11]]));
+            }
+            i += 1;
+        }
+        out
+    }
+}

@@ -8,6 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 The CLI and the web service version independently (`cli-v*` / `web-v*`); entries
 are tagged with the component they belong to.
 
+## [Unreleased]
+
+### Added
+- **Experimental Zstandard-OCF packaging (research track, opt-in).** A new
+  default-off `zstd-experimental` build feature adds `--zstd` (plus
+  `--zstd-level`, and `--zstd-decode` for the lossless round-trip), which packs
+  the container with ZIP compression **method 93 (Zstandard)** instead of
+  Deflate and writes a `*_zstd-experimental.epub`. This is **deliberately
+  non-conformant** — it will not open in current reading systems — and exists
+  only to *measure* what Zstd would save over Deflate for EPUB packaging, to back
+  a future W3C `epub-specs` discussion. Pure Rust (`structured-zstd`,
+  `crc32fast`) via a small self-contained ZIP writer; no C in any shipped
+  artifact. A dev-only `zstd-bench` binary (and `zstd-c-bench` feature) compares
+  the pure-Rust encoder against reference C `libzstd` for ratio and speed.
+  Default builds and the hosted web service are unchanged. See
+  [`docs/design/zstd-ocf-experimental.md`](docs/design/zstd-ocf-experimental.md).
+
 ## [web-v1.4.0] - 2026-06-17
 
 ### Added
