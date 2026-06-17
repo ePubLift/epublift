@@ -166,11 +166,18 @@ readers.
 
 Tracked but not committed to a release.
 
-- [ ] **Zstd-for-EPUB measurement mode.** Following an inquiry to the W3C about
-      allowing Zstandard alongside Deflate for EPUB packaging, add an opt-in
-      `--zstd` *measurement* mode that reports the size delta Zstd would yield.
-      Gated on the spec conversation; output would not be a conformant EPUB
-      until/unless the spec permits it.
+- [ ] **Experimental Zstandard OCF packaging.** Following an inquiry to the W3C
+      about allowing Zstandard (ZIP method 93) alongside Deflate for EPUB
+      packaging, add an opt-in `--zstd` mode that produces a reversible
+      `_zstd-experimental.epub` and measures the size delta vs the Deflate output
+      and the original — both *per-entry* and with a *shared dictionary* (the
+      cross-chapter win). Pure-Rust by default; a dev-only benchmark compares the
+      pure-Rust encoder against reference C `libzstd` for ratio and speed. Tracked
+      on two independent axes — *measurement-maturity* (`preliminary → validated`,
+      moves with our data) and *conformance* (`non-conformant → conformant`, moves
+      only when the spec registers Zstd **and** readers implement it). Starts
+      after v1.3; full design in
+      [`docs/design/zstd-ocf-experimental.md`](docs/design/zstd-ocf-experimental.md).
 - [ ] Optional lossless re-optimization pass for images already in a modern
       format.
 
