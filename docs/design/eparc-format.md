@@ -166,10 +166,11 @@ break the faithful-archive promise. **Forbidden as a default.**
     AVIF/JXL for a much smaller archive, at a conscious fidelity cost. Not faithful;
     the user chooses disk over pixels.
 - **Re-target on restore (Phase 2):** because the master is high-quality, restore
-  can transcode **down** to the device's needs in a single lossy step —
-  `--target 3.4` keeps AVIF/JXL (smallest), `--target 3.3` → WebP, an older target
-  → JPEG. This is the engine behind the EPUB-library-app vision (device syncs →
-  reports what it wants → we serve the matching format from one master).
+  can transcode **down** to the device's needs in a single lossy step — `--target
+  3.3` → WebP, an older target → JPEG, and (once **EPUB 3.4 is published**) a
+  `--target 3.4` that keeps AVIF/JXL (smallest). This is the engine behind the
+  EPUB-library-app vision (device syncs → reports what it wants → we serve the
+  matching format from one master).
 
 Phase 1 stores verbatim; the manifest's `media_format`/`source_format` fields make
 Phase 2 a `format_version` bump, not a redesign.
@@ -184,7 +185,8 @@ for re-targeting (it is a restore-time `convert()` pass).
 ```
 epublift restore book.eparc
     # default: content-exact — the original, as archived, no transform (fast, faithful)
-    --target <3.3|3.4>     # re-emit via the convert() pipeline at that EPUB version
+    --target 3.3           # re-emit via the convert() pipeline at EPUB 3.3
+                           # (3.4 added once that spec is published — see §6)
     --keep-images          # original JPEG/PNG instead of WebP (e.g. older Kobo)
     --kepub                # inject Kobo koboSpans (orthogonal; combinable)
     --modernize            # alias for "give me a clean, current EPUB/A" (→ default target)
@@ -195,10 +197,11 @@ epublift restore book.eparc
 - **Default = content-exact**: decompress `text.zst`, split by manifest sizes, add
   verbatim `media/`, re-zip in original order (mimetype first/stored) → a valid,
   content-identical `.epub`.
-- **`--target 3.3 / 3.4`**: run the existing `convert()` on the restored EPUB. These
-  reuse the same options the converter/web UI already expose ("Target version"
-  picker). Re-targeting can only derive from **what the original contains** (we
-  can't recreate a JPEG the source never had).
+- **`--target 3.3`**: run the existing `convert()` on the restored EPUB (3.3 is the
+  only published target today; `EpubVersion` gains 3.4 when that spec ships, and the
+  flag follows). Reuses the same options the converter/web UI already expose
+  ("Target version" picker). Re-targeting can only derive from **what the original
+  contains** (we can't recreate a JPEG the source never had).
 - **Deferred:** `--target 2.0` (downgrade — separate large feature) and `--exact`
   (bit-exact whole-file — preservation tier).
 
@@ -245,8 +248,8 @@ personal-library use case, not a single library bundle.
 1. **Phase 1 (this design):** `archive` + content-exact `restore`; ZIP container;
    solid zstd L19 text; verbatim media; manifest with SHA-256 + per-entry CRC32;
    forward-compatible `media_format` hooks.
-2. **Phase 1.5:** `restore --target 3.3 / 3.4`, `--keep-images`, `--kepub`,
-   `--modernize` (reuses `convert()`).
+2. **Phase 1.5:** `restore --target 3.3`, `--keep-images`, `--kepub`,
+   `--modernize` (reuses `convert()`). `--target 3.4` is added when EPUB 3.4 ships.
 3. **Phase 2 (with v3.4 image codecs):** lossless image re-pack (faithful, default)
    + opt-in lossy `--lossy-images`; transcode-down on restore (the library-app
    engine). `format_version: 2`.
