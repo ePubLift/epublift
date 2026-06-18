@@ -4,7 +4,7 @@ resolver = "2"
 
 [package]
 name = "epublift"
-version = "1.4.0"
+version = "1.4.1"
 edition = "2024"
 license = "AGPL-3.0-or-later"
 description = "Modernize and optimize EPUB files — upgrade structure and re-encode images"
@@ -15,6 +15,31 @@ repository = "https://github.com/ePubLift/epublift"
 homepage = "https://github.com/ePubLift/epublift"
 keywords = ["epub", "webp", "ebook", "epub3", "converter"]
 categories = ["command-line-utilities", "multimedia::images"]
+
+# Debian/Ubuntu/Raspberry Pi OS package metadata (used by `cargo deb` in the
+# release workflow). Only the `epublift` binary ships; `target/release/epublift`
+# is auto-rewritten to the per-target path when `--target` is passed.
+[package.metadata.deb]
+maintainer = "Baris Kayadelen <baris@kayadelen.com>"
+section = "utils"
+priority = "optional"
+extended-description = "Modernize and optimize EPUB files (upgrade to EPUB 3.3, re-encode images to WebP), and archive/restore a personal library as compact .eparc files."
+assets = [
+    ["target/release/epublift", "usr/bin/", "755"],
+    ["README.md", "usr/share/doc/epublift/README.md", "644"],
+    ["CHANGELOG.md", "usr/share/doc/epublift/CHANGELOG.md", "644"],
+]
+
+# Fedora/RHEL/openSUSE package metadata (used by `cargo generate-rpm` in the
+# release workflow). `auto-req = "no"` because the shipped binary is static musl
+# (no shared-library dependencies). `target/release` is rewritten per `--target`.
+[package.metadata.generate-rpm]
+auto-req = "no"
+assets = [
+    { source = "target/release/epublift", dest = "/usr/bin/epublift", mode = "755" },
+    { source = "README.md", dest = "/usr/share/doc/epublift/README.md", mode = "644" },
+    { source = "CHANGELOG.md", dest = "/usr/share/doc/epublift/CHANGELOG.md", mode = "644" },
+]
 
 [[bin]]
 name = "epublift"
