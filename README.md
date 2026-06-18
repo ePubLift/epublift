@@ -71,6 +71,7 @@ Grab the archive for your platform from the [**latest release**](https://github.
 | Platform | Archive |
 | :--- | :--- |
 | Linux (x86_64, static musl) | `epublift-<version>-x86_64-unknown-linux-musl.tar.gz` |
+| Linux (ARM64 / **Raspberry Pi**, static musl) | `epublift-<version>-aarch64-unknown-linux-musl.tar.gz` |
 | Windows (x86_64) | `epublift-<version>-x86_64-pc-windows-msvc.zip` |
 | macOS (Apple Silicon) | `epublift-<version>-aarch64-apple-darwin.tar.gz` |
 | macOS (Intel) | `epublift-<version>-x86_64-apple-darwin.tar.gz` |
@@ -82,7 +83,19 @@ tar -xzf epublift-*-aarch64-apple-darwin.tar.gz
 sudo install epublift-*/epublift /usr/local/bin/
 ```
 
-> The Linux build is statically linked against musl, so it runs on any x86_64 distribution with no glibc or system-library requirements.
+> The Linux builds are statically linked against musl, so they run on any x86_64 or ARM64 distribution (including 64-bit Raspberry Pi OS) with no glibc or system-library requirements.
+
+#### Linux packages (`.deb` / `.rpm`)
+
+Prefer your package manager? Each release also ships native packages for **amd64/arm64** (so they install cleanly on a Raspberry Pi too):
+
+```bash
+# Debian / Ubuntu / Raspberry Pi OS
+sudo apt install ./epublift_<version>-1_arm64.deb     # or _amd64
+
+# Fedora / RHEL / openSUSE
+sudo dnf install ./epublift-<version>-1.aarch64.rpm   # or .x86_64
+```
 
 #### First run on macOS and Windows
 
