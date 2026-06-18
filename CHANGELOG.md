@@ -10,6 +10,8 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+## [cli-v1.4.0] - 2026-06-18
+
 ### Added
 - **Archival mode — `archive` / `restore` (`.eparc`).** Two new CLI subcommands
   shrink a personal EPUB library to save disk and bring any book back on demand.
