@@ -73,9 +73,10 @@ brotli = { version = "8", optional = true }
 xz2 = { version = "0.1", optional = true }
 
 [features]
-# Archival mode: `epublift archive` / `restore` producing `.eparc` (pure Rust).
-# Opt-in for now (so the default CLI/web builds are unchanged this increment);
-# it moves into `default` once the CLI subcommands land. See docs/design/eparc-format.md.
+# Archival mode (`epublift archive` / `restore` → `.eparc`) ships by default.
+# All pure Rust; build with `--no-default-features` to drop it. See
+# docs/design/eparc-format.md.
+default = ["archival"]
 archival = ["dep:structured-zstd", "dep:crc32fast", "dep:sha2", "dep:serde", "dep:serde_json"]
 # Compile in the experimental `--zstd` packaging + decoder (pure Rust).
 zstd-experimental = ["dep:structured-zstd", "dep:crc32fast"]

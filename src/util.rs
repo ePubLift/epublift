@@ -36,7 +36,7 @@ pub fn unquote(s: &str) -> String {
 /// Classification is purely by extension so independent code paths (the archival
 /// packer and the experimental Zstd-OCF packer) agree without a side manifest.
 /// `mimetype` is excluded so it is always stored verbatim/first.
-#[cfg(any(feature = "archival", feature = "zstd-experimental"))]
+#[cfg(feature = "zstd-experimental")]
 pub fn is_text_entry(name: &str) -> bool {
     if name == "mimetype" {
         return false;

@@ -45,38 +45,46 @@ profile* a future `restore --target` may emit — not for this compressed blob.
 ## 2. Container
 
 A `.eparc` is a **ZIP archive, all entries `Stored` (no ZIP compression)** — built
-with the existing pure-Rust ZIP writer in `src/zstd_ocf.rs` (so **zero new
-dependencies**). Compression lives *inside* the entries, not in the ZIP layer.
+with the `zip` crate's `ZipWriter` (already a dependency, used the same way as the
+normal EPUB repackager), so **no new container code**. Compression lives *inside*
+the entries (`data.zst`), not in the ZIP layer.
 
 ```
 book.eparc                 (ZIP, stored)
 ├── manifest.json          ← inventory + provenance + integrity (§4)
-├── text.zst               ← all TEXT entries concatenated, one solid zstd frame (§3)
-└── media/                 ← each image/font stored VERBATIM (already compressed)
+├── data.zst               ← all COMPRESSIBLE entries concatenated, one solid frame (§3)
+└── media/                 ← each already-compressed entry stored VERBATIM
     ├── cover.jpg
-    ├── fonts/body.otf
+    ├── audio/clip.mp3
     └── …
 ```
 
 **Why ZIP (not tar):** the ZIP writer already exists; an EPUB is itself a ZIP, so
 we stay in one tool family; and it is transparently inspectable — a 2050 user runs
-`unzip book.eparc`, gets `manifest.json` + `text.zst` + `media/`, then
-`zstd -d text.zst`, and has everything with **no epublift binary required**. Media
-is `Stored`, so it stays byte-verbatim; `text.zst` is already compressed, so
+`unzip book.eparc`, gets `manifest.json` + `data.zst` + `media/`, then
+`zstd -d data.zst`, and has everything with **no epublift binary required**. Media
+is `Stored`, so it stays byte-verbatim; `data.zst` is already compressed, so
 storing it adds no overhead.
 
 ---
 
-## 3. The text payload (`text.zst`)
+## 3. The compressed payload (`data.zst`)
 
-All entries classified as **text** (XHTML/CSS/OPF/NCX/… — by extension, reusing
-`is_dict_eligible`) are concatenated **in manifest order** into one buffer and
-compressed as a **single solid zstd frame** (pure-Rust `structured-zstd`, level
-19). One window spans every chapter → cross-chapter redundancy captured with **no
-stored dictionary**.
+Every **compressible** entry — text (XHTML/CSS/OPF/NCX/…) **and fonts** (OTF/TTF)
+and any unknown extension — is concatenated **in manifest order** into one buffer
+and compressed as a **single solid zstd frame** (pure-Rust `structured-zstd`,
+level 19). One window spans every chapter → cross-chapter redundancy captured with
+**no stored dictionary**.
+
+Only content that is *already* compressed is kept out of the stream and stored
+verbatim (§6): images (JPEG/PNG/WebP/AVIF/JXL…), WOFF/WOFF2 web fonts, audio,
+video, archives. Everything else is compressed — crucially **OTF/TTF fonts**,
+which deflate well; an early version stored them verbatim and *inflated* small
+books. Unknown extensions default to the stream, where zstd never meaningfully
+grows even incompressible input (it stores raw blocks).
 
 No inline framing: entry boundaries come from the per-entry `size` fields in the
-manifest. On restore, `text.zst` is decompressed once into a single buffer and
+manifest. On restore, `data.zst` is decompressed once into a single buffer and
 split by those sizes, in order.
 
 Rationale for codec/level/solid (measured, 170-book corpus): see
@@ -107,10 +115,11 @@ self-description.
   "epub_version": "3.0",
   "codec": { "name": "zstd", "impl": "structured-zstd", "level": 19, "mode": "solid" },
   "entries": [
-    { "path": "mimetype",            "store": "media", "size": 20,    "crc32": "…" },
-    { "path": "META-INF/container.xml","store": "text","size": 240,   "crc32": "…" },
-    { "path": "OEBPS/ch1.xhtml",     "store": "text",  "size": 12345, "crc32": "…" },
-    { "path": "OEBPS/img/cover.jpg", "store": "media", "size": 99999, "crc32": "…",
+    { "path": "mimetype",            "store": "verbatim", "size": 20,    "crc32": "…" },
+    { "path": "META-INF/container.xml","store": "stream", "size": 240,   "crc32": "…" },
+    { "path": "OEBPS/ch1.xhtml",     "store": "stream",   "size": 12345, "crc32": "…" },
+    { "path": "OEBPS/fonts/body.otf","store": "stream",   "size": 40000, "crc32": "…" },
+    { "path": "OEBPS/img/cover.jpg", "store": "verbatim", "size": 99999, "crc32": "…",
       "media_format": "original", "source_format": "jpeg" }
   ]
 }
@@ -119,9 +128,10 @@ self-description.
 Field roles:
 - **`entries` order** = original ZIP entry order → content-exact re-emit
   (`mimetype` first and `Stored`, per OCF).
-- **`store`**: `text` (→ concatenated into `text.zst`) or `media` (→ verbatim file
-  under `media/`). `mimetype` is stored as media (verbatim) but kept first.
-- **`size`**: uncompressed entry size — splits the decompressed `text.zst` buffer
+- **`store`**: `stream` (→ concatenated into `data.zst`) or `verbatim` (→ stored
+  file under `media/`). `mimetype` is `verbatim` (kept first); already-compressed
+  media is `verbatim`; everything else (text, OTF/TTF fonts, unknown) is `stream`.
+- **`size`**: uncompressed entry size — splits the decompressed `data.zst` buffer
   back into entries; sanity-checks media.
 - **`crc32`**: per-entry integrity (cheap corruption detection; `crc32fast`, already
   a dependency). Crypto strength is unnecessary per-entry — the whole-file
@@ -154,7 +164,8 @@ original. Storing a *lossy* AVIF/JXL master would compound generation loss
 (`JPEG → AVIF → JPEG` = two lossy passes, visibly worse than the original) and
 break the faithful-archive promise. **Forbidden as a default.**
 
-- **Phase 1 (now):** media stored **verbatim**. Disk savings come from the text;
+- **Phase 1 (now):** already-compressed media stored **verbatim** (text and fonts
+  are compressed in the stream). Disk savings come from that compressed payload;
   image-heavy books shrink less (their images are already compressed and cannot be
   shrunk losslessly for free).
 - **Phase 2 (with the v3.4 image codecs — see `imazen` roadmap):**
@@ -194,7 +205,7 @@ epublift restore book.eparc
     -o, --output <dir>
 ```
 
-- **Default = content-exact**: decompress `text.zst`, split by manifest sizes, add
+- **Default = content-exact**: decompress `data.zst`, split by manifest sizes, add
   verbatim `media/`, re-zip in original order (mimetype first/stored) → a valid,
   content-identical `.epub`.
 - **`--target 3.3`**: run the existing `convert()` on the restored EPUB (3.3 is the
@@ -232,22 +243,22 @@ personal-library use case, not a single library bundle.
 
 | Job | Existing piece |
 |---|---|
-| Read `.epub` entries (uncompressed) | `zip` crate / the `read_entries` pattern |
-| Classify text vs media | `is_dict_eligible` (extension-based) |
-| Solid zstd encode / decode | `structured-zstd` (promote `zstd-experimental` → a shipped `archival` feature) |
-| Stored-ZIP container read/write | `src/zstd_ocf.rs` writer |
-| Re-zip on restore | `repackage_epub` |
+| Read `.epub` entries (uncompressed) | `zip` crate (`ZipArchive`) |
+| Classify stream vs verbatim | `eparc::store_verbatim` (extension-based) |
+| Solid zstd encode / decode | `structured-zstd` (the shipped, default-on `archival` feature) |
+| Stored-ZIP container + restore re-zip | `zip` crate `ZipWriter` (same as `repackage_epub`) |
 | Re-target / modernize restore | `convert()` |
 | Per-entry CRC32 | `crc32fast` (already a dependency) |
-| Whole-file SHA-256 | `sha2` (pure Rust) — the one small add |
+| Whole-file SHA-256 + JSON manifest | `sha2` + `serde`/`serde_json` (pure Rust; the new adds) |
 
 ---
 
 ## 10. Phasing
 
 1. **Phase 1 (this design):** `archive` + content-exact `restore`; ZIP container;
-   solid zstd L19 text; verbatim media; manifest with SHA-256 + per-entry CRC32;
-   forward-compatible `media_format` hooks.
+   solid zstd L19 compressed stream (text + fonts); verbatim already-compressed
+   media; manifest with SHA-256 + per-entry CRC32; forward-compatible
+   `media_format` hooks. CLI: `epublift archive` / `restore` subcommands.
 2. **Phase 1.5:** `restore --target 3.3`, `--keep-images`, `--kepub`,
    `--modernize` (reuses `convert()`). `--target 3.4` is added when EPUB 3.4 ships.
 3. **Phase 2 (with v3.4 image codecs):** lossless image re-pack (faithful, default)

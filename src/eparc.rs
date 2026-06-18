@@ -7,10 +7,16 @@
 //
 //   * manifest.json — the entry inventory, provenance (whole-file SHA-256) and
 //     per-entry CRC32 integrity;
-//   * text.zst      — every TEXT entry (XHTML/CSS/OPF/…) concatenated in entry
-//     order and compressed as ONE solid pure-Rust zstd frame (level 19);
-//   * media/<path>  — every image/font stored VERBATIM (already compressed; the
+//   * data.zst      — every COMPRESSIBLE entry (XHTML/CSS/OPF/… and fonts like
+//     OTF/TTF) concatenated in entry order and compressed as ONE solid pure-Rust
+//     zstd frame (level 19);
+//   * media/<path>  — every ALREADY-compressed entry (JPEG/PNG/WebP/AVIF, WOFF,
+//     audio/video) stored VERBATIM (re-compressing them is wasted CPU, and the
 //     archive master must never be lossier than the original).
+//
+// "Verbatim" is reserved for content that is already compressed; fonts and any
+// unknown extension go into the solid stream, so the archive never grows a book
+// (an early bug stored OTF/TTF fonts verbatim and *inflated* small books).
 //
 // Phase 1 restore is **content-exact**: every inner file is byte-identical and a
 // valid EPUB is re-emitted (the container is re-zipped, so the whole-file bytes
@@ -29,8 +35,6 @@ use structured_zstd::encoding::{CompressionLevel, compress_to_vec};
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
-use crate::util::is_text_entry;
-
 /// Bumped only on a backwards-incompatible layout change. A restore refuses an
 /// archive whose `format_version` it does not understand.
 const FORMAT_VERSION: u32 = 1;
@@ -38,7 +42,7 @@ const FORMAT_VERSION: u32 = 1;
 const ZSTD_LEVEL: i32 = 19;
 
 const MANIFEST_NAME: &str = "manifest.json";
-const TEXT_BLOB_NAME: &str = "text.zst";
+const STREAM_BLOB_NAME: &str = "data.zst";
 const MEDIA_PREFIX: &str = "media/";
 
 /// The `.eparc` manifest (serialized as human-readable `manifest.json`).
@@ -76,10 +80,10 @@ struct Codec {
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "lowercase")]
 enum Store {
-    /// Part of the solid `text.zst` blob (sliced back out by `size`, in order).
-    Text,
-    /// A verbatim file under `media/`.
-    Media,
+    /// Part of the solid `data.zst` blob (sliced back out by `size`, in order).
+    Stream,
+    /// A verbatim file under `media/` (already-compressed content).
+    Verbatim,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -87,12 +91,12 @@ struct Entry {
     /// Original ZIP path inside the EPUB (also the restore order).
     path: String,
     store: Store,
-    /// Uncompressed byte length (splits the text blob; sanity-checks media).
+    /// Uncompressed byte length (splits the stream blob; sanity-checks media).
     size: u64,
     /// CRC32 of the uncompressed bytes, hex (cheap corruption check).
     crc32: String,
-    /// Reserved for Phase 2 (lossless re-pack / transcode). Always `"original"`
-    /// for media in Phase 1; absent for text.
+    /// Reserved for Phase 2 (lossless re-pack / transcode). `"original"` for
+    /// verbatim media in Phase 1; absent for streamed entries.
     #[serde(skip_serializing_if = "Option::is_none")]
     media_format: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -103,12 +107,15 @@ struct Entry {
 pub struct ArchiveStats {
     pub original_size: u64,
     pub archive_size: u64,
-    pub text_entries: usize,
-    pub media_entries: usize,
+    /// Entries folded into the compressed solid stream (text, fonts, …).
+    pub compressed_entries: usize,
+    /// Entries stored verbatim (already-compressed media).
+    pub stored_entries: usize,
 }
 
 impl ArchiveStats {
-    /// Percentage of the original `.epub` size that was saved.
+    /// Percentage of the original `.epub` size that was saved (negative if the
+    /// archive is larger — which should not happen for a real book).
     pub fn percent_saved(&self) -> f64 {
         if self.original_size > 0 {
             (1.0 - self.archive_size as f64 / self.original_size as f64) * 100.0
@@ -126,9 +133,9 @@ pub struct RestoreStats {
 
 /// Archive a single `.epub` into a `.eparc` at `output`.
 ///
-/// The original file is never modified. Text entries are solid-zstd'd together;
-/// media is stored verbatim; a manifest records order, sizes, per-entry CRC32 and
-/// the whole-file SHA-256.
+/// The original file is never modified. Compressible entries (text + fonts) are
+/// solid-zstd'd together; already-compressed media is stored verbatim; a manifest
+/// records order, sizes, per-entry CRC32 and the whole-file SHA-256.
 pub fn archive_epub(input: &Path, output: &Path) -> Result<ArchiveStats> {
     let original = std::fs::read(input)
         .with_context(|| format!("Failed to read EPUB: {}", input.display()))?;
@@ -142,42 +149,42 @@ pub fn archive_epub(input: &Path, output: &Path) -> Result<ArchiveStats> {
         .with_context(|| format!("Not a readable EPUB (zip): {}", input.display()))?;
     let epub_version = detect_epub_version(&entries);
 
-    // Partition into the solid text blob + verbatim media, building the manifest
-    // in original entry order.
-    let mut text_blob: Vec<u8> = Vec::new();
+    // Partition into the solid stream blob + verbatim media, building the
+    // manifest in original entry order.
+    let mut stream_blob: Vec<u8> = Vec::new();
     let mut media: Vec<(String, Vec<u8>)> = Vec::new();
     let mut manifest_entries: Vec<Entry> = Vec::with_capacity(entries.len());
 
     for (name, data) in &entries {
         let crc32 = crc32_hex(data);
-        if is_text_entry(name) {
-            text_blob.extend_from_slice(data);
-            manifest_entries.push(Entry {
-                path: name.clone(),
-                store: Store::Text,
-                size: data.len() as u64,
-                crc32,
-                media_format: None,
-                source_format: None,
-            });
-        } else {
+        if store_verbatim(name) {
             media.push((format!("{MEDIA_PREFIX}{name}"), data.clone()));
             manifest_entries.push(Entry {
                 path: name.clone(),
-                store: Store::Media,
+                store: Store::Verbatim,
                 size: data.len() as u64,
                 crc32,
                 media_format: Some("original".to_string()),
                 source_format: Some(extension_of(name)),
             });
+        } else {
+            stream_blob.extend_from_slice(data);
+            manifest_entries.push(Entry {
+                path: name.clone(),
+                store: Store::Stream,
+                size: data.len() as u64,
+                crc32,
+                media_format: None,
+                source_format: None,
+            });
         }
     }
-    let text_entries = manifest_entries
+    let compressed_entries = manifest_entries
         .iter()
-        .filter(|e| e.store == Store::Text)
+        .filter(|e| e.store == Store::Stream)
         .count();
 
-    let text_zst = compress_to_vec(text_blob.as_slice(), CompressionLevel::Level(ZSTD_LEVEL));
+    let data_zst = compress_to_vec(stream_blob.as_slice(), CompressionLevel::Level(ZSTD_LEVEL));
 
     let manifest = Manifest {
         format: "eparc".to_string(),
@@ -196,15 +203,15 @@ pub fn archive_epub(input: &Path, output: &Path) -> Result<ArchiveStats> {
     };
     let manifest_json = serde_json::to_vec_pretty(&manifest)?;
 
-    // Write the stored-ZIP container: manifest.json, text.zst, then media/*.
+    // Write the stored-ZIP container: manifest.json, data.zst, then media/*.
     let stored = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
     let file = File::create(output)
         .with_context(|| format!("Failed to create archive: {}", output.display()))?;
     let mut zip = ZipWriter::new(file);
     zip.start_file(MANIFEST_NAME, stored)?;
     zip.write_all(&manifest_json)?;
-    zip.start_file(TEXT_BLOB_NAME, stored)?;
-    zip.write_all(&text_zst)?;
+    zip.start_file(STREAM_BLOB_NAME, stored)?;
+    zip.write_all(&data_zst)?;
     for (media_path, data) in &media {
         zip.start_file(media_path, stored)?;
         zip.write_all(data)?;
@@ -215,14 +222,14 @@ pub fn archive_epub(input: &Path, output: &Path) -> Result<ArchiveStats> {
     Ok(ArchiveStats {
         original_size: original.len() as u64,
         archive_size,
-        text_entries,
-        media_entries: media.len(),
+        compressed_entries,
+        stored_entries: media.len(),
     })
 }
 
 /// Restore a `.eparc` back to a content-exact `.epub` at `output`.
 ///
-/// Decompresses the solid text blob, splits it by the manifest sizes, pulls media
+/// Decompresses the solid stream, splits it by the manifest sizes, pulls media
 /// verbatim, verifies every entry's CRC32, and re-emits a valid EPUB (mimetype
 /// stored first, the rest deflated) in the original entry order.
 pub fn restore_eparc(input: &Path, output: &Path) -> Result<RestoreStats> {
@@ -249,22 +256,22 @@ pub fn restore_eparc(input: &Path, output: &Path) -> Result<RestoreStats> {
         );
     }
 
-    // Decompress the solid text blob once.
-    let text_total: usize = manifest
+    // Decompress the solid stream blob once.
+    let stream_total: usize = manifest
         .entries
         .iter()
-        .filter(|e| e.store == Store::Text)
+        .filter(|e| e.store == Store::Stream)
         .map(|e| e.size as usize)
         .sum();
-    let text_zst = read_zip_entry(&mut zip, TEXT_BLOB_NAME)?;
-    let mut text_buf = Vec::with_capacity(text_total);
+    let data_zst = read_zip_entry(&mut zip, STREAM_BLOB_NAME)?;
+    let mut stream_buf = Vec::with_capacity(stream_total);
     FrameDecoder::new()
-        .decode_all_to_vec(&text_zst, &mut text_buf)
-        .map_err(|e| anyhow::anyhow!("failed to decompress text.zst: {e:?}"))?;
-    if text_buf.len() != text_total {
+        .decode_all_to_vec(&data_zst, &mut stream_buf)
+        .map_err(|e| anyhow::anyhow!("failed to decompress {STREAM_BLOB_NAME}: {e:?}"))?;
+    if stream_buf.len() != stream_total {
         bail!(
-            "text blob size mismatch (expected {text_total}, got {}) — archive corrupt",
-            text_buf.len()
+            "stream size mismatch (expected {stream_total}, got {}) — archive corrupt",
+            stream_buf.len()
         );
     }
 
@@ -275,16 +282,16 @@ pub fn restore_eparc(input: &Path, output: &Path) -> Result<RestoreStats> {
         .with_context(|| format!("Failed to create output EPUB: {}", output.display()))?;
     let mut writer = ZipWriter::new(out);
 
-    let mut text_off = 0usize;
+    let mut stream_off = 0usize;
     for entry in &manifest.entries {
         let data: Vec<u8> = match entry.store {
-            Store::Text => {
-                let end = text_off + entry.size as usize;
-                let chunk = text_buf[text_off..end].to_vec();
-                text_off = end;
+            Store::Stream => {
+                let end = stream_off + entry.size as usize;
+                let chunk = stream_buf[stream_off..end].to_vec();
+                stream_off = end;
                 chunk
             }
-            Store::Media => read_zip_entry(&mut zip, &format!("{MEDIA_PREFIX}{}", entry.path))?,
+            Store::Verbatim => read_zip_entry(&mut zip, &format!("{MEDIA_PREFIX}{}", entry.path))?,
         };
         let got = crc32_hex(&data);
         if got != entry.crc32 {
@@ -313,6 +320,31 @@ pub fn restore_eparc(input: &Path, output: &Path) -> Result<RestoreStats> {
 }
 
 // ---- helpers --------------------------------------------------------------
+
+/// True for entries stored **verbatim**: the `mimetype`, plus content that is
+/// already compressed (images, web fonts, audio, video, archives). Everything
+/// else — text, OTF/TTF fonts, unknown extensions — goes into the solid stream,
+/// which never meaningfully grows even incompressible input. Classification is by
+/// extension so archive and restore agree without a side channel.
+fn store_verbatim(name: &str) -> bool {
+    if name == "mimetype" {
+        return true;
+    }
+    let ext = extension_of(name);
+    matches!(
+        ext.as_str(),
+        // raster images
+        "jpg" | "jpeg" | "png" | "gif" | "webp" | "avif" | "jxl" | "jp2" | "j2k"
+        | "jpf" | "jpx" | "heic" | "heif" | "tif" | "tiff"
+        // already-compressed web fonts (WOFF = zlib, WOFF2 = brotli)
+        | "woff" | "woff2"
+        // audio / video
+        | "mp3" | "m4a" | "aac" | "ogg" | "oga" | "opus" | "flac"
+        | "mp4" | "m4v" | "webm" | "mov" | "mkv" | "avi"
+        // archives / already-compressed blobs
+        | "zip" | "gz" | "zst" | "br" | "xz" | "7z" | "rar"
+    )
+}
 
 /// Read every file entry of an in-memory EPUB zip, in archive order, as
 /// `(name, uncompressed-bytes)`.
@@ -425,6 +457,11 @@ mod tests {
                 .collect();
             zip.write_all(&img).unwrap();
 
+            // A font (OTF) — NOT already compressed, so it must go into the
+            // stream (storing it verbatim would inflate the archive).
+            zip.start_file("OEBPS/fonts/body.otf", deflated).unwrap();
+            zip.write_all(&b"OTTO".repeat(2000)).unwrap();
+
             zip.finish().unwrap();
         }
         buf
@@ -439,8 +476,10 @@ mod tests {
         let restored_path = dir.path().join("restored.epub");
 
         let stats = archive_epub(&epub_path, &eparc_path).unwrap();
-        assert!(stats.text_entries >= 3, "opf/container/chapter are text");
-        assert_eq!(stats.media_entries, 2, "mimetype + cover.png are verbatim");
+        // text (opf/container/chapter) + the OTF font are compressed; mimetype and
+        // the png are stored verbatim.
+        assert!(stats.compressed_entries >= 4, "text + font are compressed");
+        assert_eq!(stats.stored_entries, 2, "mimetype + cover.png are verbatim");
 
         restore_eparc(&eparc_path, &restored_path).unwrap();
 
@@ -469,9 +508,9 @@ mod tests {
 
         let stats = archive_epub(Path::new(&src), &eparc).unwrap();
         println!(
-            "archived {} text + {} media: {} -> {} bytes ({:.1}% saved)",
-            stats.text_entries,
-            stats.media_entries,
+            "archived {} compressed + {} stored: {} -> {} bytes ({:.1}% saved)",
+            stats.compressed_entries,
+            stats.stored_entries,
             stats.original_size,
             stats.archive_size,
             stats.percent_saved(),
@@ -485,11 +524,15 @@ mod tests {
     }
 
     #[test]
-    fn text_is_classified_for_compression_media_is_not() {
-        assert!(is_text_entry("OEBPS/ch1.xhtml"));
-        assert!(is_text_entry("OEBPS/content.opf"));
-        assert!(!is_text_entry("mimetype"));
-        assert!(!is_text_entry("OEBPS/img/cover.png"));
-        assert!(!is_text_entry("OEBPS/fonts/body.otf"));
+    fn classification_keeps_compressible_in_the_stream() {
+        // Compressed → verbatim.
+        assert!(store_verbatim("mimetype"));
+        assert!(store_verbatim("OEBPS/img/cover.png"));
+        assert!(store_verbatim("OEBPS/fonts/body.woff2"));
+        // Compressible → stream.
+        assert!(!store_verbatim("OEBPS/ch1.xhtml"));
+        assert!(!store_verbatim("OEBPS/content.opf"));
+        assert!(!store_verbatim("OEBPS/fonts/body.otf"));
+        assert!(!store_verbatim("OEBPS/fonts/body.ttf"));
     }
 }

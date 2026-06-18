@@ -39,16 +39,26 @@ impl From<ZstdModeArg> for epublift::ZstdMode {
 }
 
 /// Optimize EPUB structure to 3.3 and convert images to WebP.
+///
+/// With no subcommand, `epublift -i book.epub` runs the optimizer (the original,
+/// backwards-compatible behavior). The `archive` / `restore` subcommands manage
+/// `.eparc` archives.
 #[derive(Parser, Debug)]
 #[command(
     name = "epublift",
-    about = "Optimize EPUB structure to 3.3 and convert images to WebP.",
-    after_help = "Example Usage:\n  epublift -i book.epub -q 75\n  epublift --input book.epub --output optimized.epub --quality 80 --report results.txt"
+    about = "Optimize EPUBs to 3.3 (default), or archive/restore them as .eparc.",
+    after_help = "Examples:\n  epublift -i book.epub -q 75\n  epublift archive ~/Books            # shrink a library to .eparc\n  epublift restore book.eparc         # back to a content-exact .epub",
+    args_conflicts_with_subcommands = true
 )]
 struct Args {
+    #[command(subcommand)]
+    #[cfg(feature = "archival")]
+    command: Option<Command>,
+
+    // ----- default (optimize) options; used when no subcommand is given -----
     /// Path to original EPUB file to lift
     #[arg(short, long)]
-    input: PathBuf,
+    input: Option<PathBuf>,
 
     /// Path to save the optimized EPUB (optional)
     #[arg(short, long)]
@@ -114,6 +124,40 @@ struct Args {
     zstd_decode: bool,
 }
 
+/// `.eparc` archive subcommands (see docs/design/eparc-format.md).
+#[cfg(feature = "archival")]
+#[derive(clap::Subcommand, Debug)]
+enum Command {
+    /// Shrink EPUB(s) into compact `.eparc` archives to save disk space.
+    Archive(ArchiveArgs),
+    /// Restore `.eparc` archive(s) back to a content-exact `.epub`.
+    Restore(RestoreArgs),
+}
+
+#[cfg(feature = "archival")]
+#[derive(clap::Args, Debug)]
+struct ArchiveArgs {
+    /// EPUB file(s), or a directory whose `.epub` files are all archived.
+    #[arg(required = true, value_name = "EPUB|DIR")]
+    paths: Vec<PathBuf>,
+
+    /// Directory to write `.eparc` files into (default: next to each input).
+    #[arg(short, long)]
+    output: Option<PathBuf>,
+}
+
+#[cfg(feature = "archival")]
+#[derive(clap::Args, Debug)]
+struct RestoreArgs {
+    /// `.eparc` archive file(s), or a directory of them.
+    #[arg(required = true, value_name = "EPARC|DIR")]
+    paths: Vec<PathBuf>,
+
+    /// Directory to write restored `.epub` files into (default: next to each input).
+    #[arg(short, long)]
+    output: Option<PathBuf>,
+}
+
 fn main() -> ExitCode {
     let args = Args::parse();
     match run(args) {
@@ -126,10 +170,23 @@ fn main() -> ExitCode {
 }
 
 fn run(args: Args) -> Result<()> {
-    let input = args
-        .input
+    #[cfg(feature = "archival")]
+    match &args.command {
+        Some(Command::Archive(a)) => return run_archive(a),
+        Some(Command::Restore(r)) => return run_restore(r),
+        None => {}
+    }
+    run_convert(args)
+}
+
+/// The default (no-subcommand) optimize path — the original CLI behavior.
+fn run_convert(args: Args) -> Result<()> {
+    let input = args.input.clone().context(
+        "no EPUB given — pass -i <FILE>, or a subcommand (archive/restore). See --help.",
+    )?;
+    let input = input
         .canonicalize()
-        .with_context(|| format!("Input file not found: {}", args.input.display()))?;
+        .with_context(|| format!("Input file not found: {}", input.display()))?;
 
     // Experimental decode mode: reconstruct a conformant EPUB and return early.
     #[cfg(feature = "zstd-experimental")]
@@ -223,4 +280,135 @@ fn run(args: Args) -> Result<()> {
     );
 
     Ok(())
+}
+
+/// `epublift archive` — shrink EPUB(s) into `.eparc`.
+#[cfg(feature = "archival")]
+fn run_archive(args: &ArchiveArgs) -> Result<()> {
+    use anyhow::bail;
+
+    let epubs = collect_with_ext(&args.paths, "epub");
+    if epubs.is_empty() {
+        bail!("no .epub files found in the given paths");
+    }
+    if let Some(dir) = &args.output {
+        std::fs::create_dir_all(dir)
+            .with_context(|| format!("Failed to create output directory: {}", dir.display()))?;
+    }
+
+    let (mut total_in, mut total_out) = (0u64, 0u64);
+    for epub in &epubs {
+        let out = sibling_path(epub, "eparc", args.output.as_deref());
+        let stats = epublift::eparc::archive_epub(epub, &out)
+            .with_context(|| format!("Failed to archive {}", epub.display()))?;
+        total_in += stats.original_size;
+        total_out += stats.archive_size;
+        println!(
+            "[+] {} -> {} ({:.1}% smaller; {} compressed + {} stored)",
+            file_name(epub),
+            file_name(&out),
+            stats.percent_saved(),
+            stats.compressed_entries,
+            stats.stored_entries,
+        );
+    }
+    if epubs.len() > 1 {
+        println!(
+            "[=] {} books: {:.2} MB -> {:.2} MB ({:.1}% smaller)",
+            epubs.len(),
+            total_in as f64 / 1024.0 / 1024.0,
+            total_out as f64 / 1024.0 / 1024.0,
+            saved_pct(total_in, total_out),
+        );
+    }
+    Ok(())
+}
+
+/// `epublift restore` — `.eparc` back to a content-exact `.epub`.
+#[cfg(feature = "archival")]
+fn run_restore(args: &RestoreArgs) -> Result<()> {
+    use anyhow::bail;
+
+    let archives = collect_with_ext(&args.paths, "eparc");
+    if archives.is_empty() {
+        bail!("no .eparc files found in the given paths");
+    }
+    if let Some(dir) = &args.output {
+        std::fs::create_dir_all(dir)
+            .with_context(|| format!("Failed to create output directory: {}", dir.display()))?;
+    }
+
+    for eparc in &archives {
+        let out = sibling_path(eparc, "epub", args.output.as_deref());
+        let stats = epublift::eparc::restore_eparc(eparc, &out)
+            .with_context(|| format!("Failed to restore {}", eparc.display()))?;
+        println!(
+            "[+] {} -> {} ({} entries, {:.2} MB)",
+            file_name(eparc),
+            file_name(&out),
+            stats.entries,
+            stats.output_size as f64 / 1024.0 / 1024.0,
+        );
+    }
+    Ok(())
+}
+
+/// Expand the given paths into a sorted, de-duplicated list of files with the
+/// wanted extension (directories are scanned recursively).
+#[cfg(feature = "archival")]
+fn collect_with_ext(paths: &[PathBuf], ext: &str) -> Vec<PathBuf> {
+    use walkdir::WalkDir;
+    let mut out = Vec::new();
+    for p in paths {
+        if p.is_dir() {
+            for e in WalkDir::new(p).into_iter().filter_map(|e| e.ok()) {
+                if e.file_type().is_file() && has_ext(e.path(), ext) {
+                    out.push(e.into_path());
+                }
+            }
+        } else if has_ext(p, ext) {
+            out.push(p.clone());
+        } else {
+            eprintln!("[skip] not a .{ext} or directory: {}", p.display());
+        }
+    }
+    out.sort();
+    out.dedup();
+    out
+}
+
+#[cfg(feature = "archival")]
+fn has_ext(path: &Path, ext: &str) -> bool {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.eq_ignore_ascii_case(ext))
+        .unwrap_or(false)
+}
+
+/// `<stem>.<new_ext>`, placed in `out_dir` if given, else next to `path`.
+#[cfg(feature = "archival")]
+fn sibling_path(path: &Path, new_ext: &str, out_dir: Option<&Path>) -> PathBuf {
+    let stem = path
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "output".to_string());
+    let name = format!("{stem}.{new_ext}");
+    match out_dir {
+        Some(d) => d.join(name),
+        None => path.parent().unwrap_or_else(|| Path::new(".")).join(name),
+    }
+}
+
+#[cfg(feature = "archival")]
+fn file_name(path: &Path) -> std::borrow::Cow<'_, str> {
+    path.file_name().unwrap_or_default().to_string_lossy()
+}
+
+#[cfg(feature = "archival")]
+fn saved_pct(input: u64, output: u64) -> f64 {
+    if input > 0 {
+        (1.0 - output as f64 / input as f64) * 100.0
+    } else {
+        0.0
+    }
 }
