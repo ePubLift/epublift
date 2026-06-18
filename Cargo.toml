@@ -4,7 +4,7 @@ resolver = "2"
 
 [package]
 name = "epublift"
-version = "1.3.0"
+version = "1.4.0"
 edition = "2024"
 license = "AGPL-3.0-or-later"
 description = "Modernize and optimize EPUB files — upgrade structure and re-encode images"
@@ -49,18 +49,45 @@ any_ascii = "0.3"
 # Experimental Zstandard-OCF packaging (research track) — see
 # docs/design/zstd-ocf-experimental.md. Pure Rust, no FFI. Opt-in at compile
 # time so the default shipped artifact is byte-identical to today (no new deps).
+# Also the compression backend for the archival mode (`archival` feature).
 structured-zstd = { version = "0.0.40", optional = true, features = ["dict_builder"] }
 crc32fast = { version = "1", optional = true }
+# Archival mode (`.eparc`) — see docs/design/eparc-format.md. Pure Rust. SHA-256
+# for whole-file provenance/fixity; serde(_json) for the human-readable manifest.
+sha2 = { version = "0.10", optional = true }
+serde = { version = "1", features = ["derive"], optional = true }
+serde_json = { version = "1", optional = true }
 # Bench-only reference backend: the C libzstd. NEVER part of a shipped artifact —
 # gated behind `zstd-c-bench`, used only by the local benchmark to report the
 # pure-Rust floor vs the C ceiling. Keeps Guiding Principle #1 (pure Rust, no C).
 zstd = { version = "0.13", optional = true }
+# Bench-only pure-Rust Brotli backend for the ARCHIVAL research track: brotli-11
+# has a web/HTML-tuned static dictionary, a strong candidate for the solid-stream
+# `.eparc` archive. Pure Rust (rust-brotli), bench-gated for now — it does not
+# ship until the archival mode lands. Used by `zstd-bench --solid`.
+brotli = { version = "8", optional = true }
+# Bench-only C reference CEILING for the archival track: xz/LZMA (liblzma) is the
+# usual ratio champion on text. Used ONLY to quantify how much ratio the pure-Rust
+# choice trades away (and, via --mem-probe, at what memory cost). NEVER shipped —
+# gated behind `ceiling-bench`, keeps Guiding Principle #1 (pure Rust, no C).
+xz2 = { version = "0.1", optional = true }
 
 [features]
+# Archival mode (`epublift archive` / `restore` → `.eparc`) ships by default.
+# All pure Rust; build with `--no-default-features` to drop it. See
+# docs/design/eparc-format.md.
+default = ["archival"]
+archival = ["dep:structured-zstd", "dep:crc32fast", "dep:sha2", "dep:serde", "dep:serde_json"]
 # Compile in the experimental `--zstd` packaging + decoder (pure Rust).
 zstd-experimental = ["dep:structured-zstd", "dep:crc32fast"]
 # Additionally compile the C libzstd reference backend for the benchmark only.
 zstd-c-bench = ["zstd-experimental", "dep:zstd"]
+# Archival research track: add the pure-Rust Brotli backend so `zstd-bench --solid`
+# can compare solid zstd-ultra vs brotli-11 for the `.eparc` archive format.
+archival-bench = ["zstd-experimental", "dep:brotli"]
+# Additionally add the C reference ceilings (libzstd --ultra + xz/LZMA) to the
+# solid comparison. Dev-only; documents the pure-Rust ratio/memory trade-off.
+ceiling-bench = ["archival-bench", "dep:zstd", "dep:xz2"]
 
 [dev-dependencies]
 # Used by the integration tests to assemble EPUB fixtures and inspect output.

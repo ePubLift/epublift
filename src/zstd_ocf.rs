@@ -93,17 +93,11 @@ impl Default for DictParams {
 }
 
 /// True for entries whose contents are text and benefit from a shared
-/// dictionary (XHTML/CSS/OPF/…). Classification is purely by extension so the
-/// encoder and decoder agree without storing any side manifest.
+/// dictionary (XHTML/CSS/OPF/…). Shares the extension classification with the
+/// archival packer via [`crate::util::is_text_entry`]; additionally excludes the
+/// stored dictionary itself, which must never be dictionary-compressed.
 pub fn is_dict_eligible(name: &str) -> bool {
-    if name == "mimetype" || name == DICT_ENTRY {
-        return false;
-    }
-    let ext = name.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
-    matches!(
-        ext.as_str(),
-        "xhtml" | "html" | "htm" | "css" | "opf" | "ncx" | "xml" | "svg" | "txt" | "json"
-    )
+    name != DICT_ENTRY && crate::util::is_text_entry(name)
 }
 
 /// A fully prepared entry ready to be written: payload is already compressed

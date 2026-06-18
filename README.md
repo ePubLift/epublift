@@ -33,6 +33,7 @@ ePubLift began as a Rust port of an earlier Python implementation but has since 
     *   Parses legacy `toc.ncx` maps and generates a standard **EPUB 3 Navigation Document (`nav.xhtml`)** with clean nested elements.
     *   Converts outdated `<guide>` landmark reference lists into HTML5 `<nav epub:type="landmarks">` maps.
     *   Standardizes legacy XHTML DOCTYPEs (like XHTML 1.1) to modern HTML5 `<!DOCTYPE html>` structure.
+*   **📦 Archive your library (`.eparc`)**: `epublift archive` shrinks EPUB(s) into compact, **lossless** `.eparc` archives to save disk space; `epublift restore` brings any book back — content-exact by default, or re-targeted for a specific reader (`--target 3.3`, `--keep-images`, `--kepub`). Pure-Rust solid Zstandard on text + fonts, media stored verbatim, so it never grows a book. See [Archive your library](#-archive-your-library-eparc).
 *   **📊 Detailed Audit Reports**: Generates a detailed size comparison table and conversion metrics report in an easy-to-read text file.
 *   **🌐 Browser & Docker Ready**: A hardened [web service](#-hosted-web-service-epublift-web) converts EPUBs in the browser — uploads are processed in memory and deleted immediately. Ships as a multi-arch Docker image for one-command self-hosting.
 
@@ -232,6 +233,36 @@ epublift -i "Işık Doğudan Yükselir.epub" --ascii
 ```
 
 This romanizes Unicode letters (e.g. Turkish `ş→s`, `ğ→g`, `ı→i`, `ö→o`, `ü→u`), turns whitespace into underscores, and drops other punctuation. Transliteration is lossy and not always locale-perfect, which is why it is **off by default**. The flag only affects auto-generated names — an explicit `-o`/`-r` path is always used verbatim.
+
+---
+
+## 📦 Archive your library (`.eparc`)
+
+Shrink a personal EPUB collection to save disk space, and get any book back on demand. `epublift archive` packs a book into a compact **`.eparc`** archive; `epublift restore` brings it back. It's **lossless** — your originals are always recoverable — and runs anywhere from a Raspberry Pi to a NAS or desktop.
+
+```bash
+# Archive one book, or a whole folder (one .eparc per book):
+epublift archive book.epub
+epublift archive ~/Books -o ~/Archive      # recurses the folder
+
+# Restore — by default you get back a content-exact .epub:
+epublift restore book.eparc
+```
+
+How it works: the compressible parts of a book (XHTML/CSS/OPF and **fonts**) are packed into a single solid [Zstandard](https://facebook.github.io/zstd/) stream, while already-compressed media (images, audio, WOFF) is stored verbatim — so the archive **never grows a book**. A `manifest.json` records the original's SHA-256 and a CRC32 per entry for integrity. The archive is just a ZIP, so even without epublift a future you can `unzip book.eparc` and `zstd -d data.zst`. Text-heavy books typically shrink ~30%; image-heavy ones less (their images are already compressed).
+
+### Restore for a specific device
+
+The archive is your **canonical master** — on restore you pick the output for the reader you're using (nothing extra is stored; it re-runs the optimizer):
+
+```bash
+epublift restore book.eparc                 # content-exact original (default)
+epublift restore book.eparc --target 3.3    # re-emit as EPUB 3.3 (WebP images)
+epublift restore book.eparc --keep-images   # modernized, but original JPEG/PNG (e.g. Kobo)
+epublift restore book.eparc --kepub         # → book.kepub.epub for Kobo
+```
+
+> EPUB **3.4** (AVIF/JXL) isn't published yet, so `--target` accepts **3.3** today; it'll gain 3.4 when that spec ships. Design notes: [`docs/design/eparc-format.md`](docs/design/eparc-format.md) and the codec rationale in [`docs/design/eparc-codec-choice.md`](docs/design/eparc-codec-choice.md).
 
 ---
 
