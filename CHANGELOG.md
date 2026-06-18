@@ -11,6 +11,27 @@ are tagged with the component they belong to.
 ## [Unreleased]
 
 ### Added
+- **Archival mode — `archive` / `restore` (`.eparc`).** Two new CLI subcommands
+  shrink a personal EPUB library to save disk and bring any book back on demand.
+  `epublift archive <epub|dir>` packs each book into a compact, **lossless**
+  `.eparc` archive (recurses directories, one archive per book, prints a per-book
+  and library-wide size summary); `epublift restore <eparc|dir>` returns it.
+  The archive is a stored ZIP holding `manifest.json` + a single solid Zstandard
+  stream (`data.zst`, level 19) of the compressible entries — text **and fonts** —
+  plus already-compressed media (images, WOFF/WOFF2, audio, video) stored
+  **verbatim**, so an archive **never grows a book** (text-heavy books shrink
+  ~30%; image-heavy ones less). Integrity is a whole-file **SHA-256** plus a
+  per-entry **CRC32** in the manifest. `restore` is **content-exact by default**
+  (the original book, byte-for-byte per entry); the archive acts as a *canonical
+  master* you can re-target on the way out — `--target 3.3` (only 3.3 today;
+  EPUB 3.4 lands when that spec ships), `--modernize`, `--keep-images` (for
+  non-WebP readers like Kobo), and `--kepub` all re-run the optimizer on the
+  restored book. The existing `epublift -i book.epub` optimize behavior and all
+  its flags are unchanged. Pure Rust (`structured-zstd`, `crc32fast`, `sha2`,
+  `serde`/`serde_json`) — no C in any artifact. Ships by default; build with
+  `--no-default-features` for a convert-only binary. See
+  [`docs/design/eparc-format.md`](docs/design/eparc-format.md) and the codec
+  rationale in [`docs/design/eparc-codec-choice.md`](docs/design/eparc-codec-choice.md).
 - **Experimental Zstandard-OCF packaging (research track, opt-in).** A new
   default-off `zstd-experimental` build feature adds `--zstd` (plus
   `--zstd-level`, `--zstd-mode per-entry|shared-dict`, and `--zstd-decode` for
