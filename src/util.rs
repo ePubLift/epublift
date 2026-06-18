@@ -30,6 +30,24 @@ pub fn unquote(s: &str) -> String {
     percent_decode_str(s).decode_utf8_lossy().into_owned()
 }
 
+/// True when an archive entry's contents are **text/markup** (XHTML/CSS/OPF/…)
+/// rather than already-compressed media (images/fonts) or the `mimetype`.
+///
+/// Classification is purely by extension so independent code paths (the archival
+/// packer and the experimental Zstd-OCF packer) agree without a side manifest.
+/// `mimetype` is excluded so it is always stored verbatim/first.
+#[cfg(any(feature = "archival", feature = "zstd-experimental"))]
+pub fn is_text_entry(name: &str) -> bool {
+    if name == "mimetype" {
+        return false;
+    }
+    let ext = name.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
+    matches!(
+        ext.as_str(),
+        "xhtml" | "html" | "htm" | "css" | "opf" | "ncx" | "xml" | "svg" | "txt" | "json"
+    )
+}
+
 /// Return the final path component (everything after the last `/`).
 pub fn basename(href: &str) -> &str {
     match href.rfind('/') {

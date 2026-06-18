@@ -19,6 +19,8 @@
 //! The CLI (`src/main.rs`) is a thin front-end over [`convert`]. Library callers
 //! build [`Options`], call [`convert`], and inspect the returned [`Report`].
 
+#[cfg(feature = "archival")]
+pub mod eparc;
 mod images;
 mod kepub;
 mod nav;

@@ -49,8 +49,14 @@ any_ascii = "0.3"
 # Experimental Zstandard-OCF packaging (research track) — see
 # docs/design/zstd-ocf-experimental.md. Pure Rust, no FFI. Opt-in at compile
 # time so the default shipped artifact is byte-identical to today (no new deps).
+# Also the compression backend for the archival mode (`archival` feature).
 structured-zstd = { version = "0.0.40", optional = true, features = ["dict_builder"] }
 crc32fast = { version = "1", optional = true }
+# Archival mode (`.eparc`) — see docs/design/eparc-format.md. Pure Rust. SHA-256
+# for whole-file provenance/fixity; serde(_json) for the human-readable manifest.
+sha2 = { version = "0.10", optional = true }
+serde = { version = "1", features = ["derive"], optional = true }
+serde_json = { version = "1", optional = true }
 # Bench-only reference backend: the C libzstd. NEVER part of a shipped artifact —
 # gated behind `zstd-c-bench`, used only by the local benchmark to report the
 # pure-Rust floor vs the C ceiling. Keeps Guiding Principle #1 (pure Rust, no C).
@@ -67,6 +73,10 @@ brotli = { version = "8", optional = true }
 xz2 = { version = "0.1", optional = true }
 
 [features]
+# Archival mode: `epublift archive` / `restore` producing `.eparc` (pure Rust).
+# Opt-in for now (so the default CLI/web builds are unchanged this increment);
+# it moves into `default` once the CLI subcommands land. See docs/design/eparc-format.md.
+archival = ["dep:structured-zstd", "dep:crc32fast", "dep:sha2", "dep:serde", "dep:serde_json"]
 # Compile in the experimental `--zstd` packaging + decoder (pure Rust).
 zstd-experimental = ["dep:structured-zstd", "dep:crc32fast"]
 # Additionally compile the C libzstd reference backend for the benchmark only.
