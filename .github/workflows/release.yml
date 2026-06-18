@@ -36,6 +36,11 @@ jobs:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-musl
             archive: tar.gz
+          # ARM64 Linux — Raspberry Pi (64-bit OS) / arm64 NAS & servers. Built
+          # natively on a GitHub arm64 runner; static musl = runs on any distro.
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-musl
+            archive: tar.gz
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             archive: zip
@@ -61,7 +66,7 @@ jobs:
           targets: ${{ matrix.target }}
 
       - name: Install musl tools (Linux)
-        if: matrix.target == 'x86_64-unknown-linux-musl'
+        if: endsWith(matrix.target, '-linux-musl')
         run: sudo apt-get update && sudo apt-get install -y musl-tools
 
       - name: Cache cargo registry and build
@@ -98,6 +103,27 @@ jobs:
           7z a "${name}.zip" "$name"
           certutil -hashfile "${name}.zip" SHA256 > "${name}.zip.sha256"
 
+      # Linux distro packages: .deb (Debian/Ubuntu/Raspberry Pi OS) and .rpm
+      # (Fedora/RHEL/openSUSE), amd64 + arm64. Each Linux target builds on its own
+      # -arch runner, so the host arch == target arch: we copy the native static
+      # binary to target/release/ and package WITHOUT --target, which labels the
+      # arch correctly and reuses the binary built above (no rebuild). Both tools
+      # are pure Rust — no dpkg-dev or rpmbuild needed. `--no-strip` keeps our
+      # RUSTFLAGS strip.
+      - name: Build .deb + .rpm packages (Linux)
+        if: endsWith(matrix.target, '-linux-musl')
+        shell: bash
+        run: |
+          mkdir -p target/release
+          cp "target/${{ matrix.target }}/release/epublift" target/release/epublift
+          cargo install cargo-deb cargo-generate-rpm --locked
+          cargo deb --no-build --no-strip
+          cargo generate-rpm
+          for pkg in target/debian/*.deb target/generate-rpm/*.rpm; do
+            cp "$pkg" .
+            shasum -a 256 "$(basename "$pkg")" > "$(basename "$pkg").sha256"
+          done
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v5
         with:
@@ -107,6 +133,10 @@ jobs:
             epublift-*.tar.gz.sha256
             epublift-*.zip
             epublift-*.zip.sha256
+            epublift*.deb
+            epublift*.deb.sha256
+            epublift*.rpm
+            epublift*.rpm.sha256
           if-no-files-found: error
 
   release:

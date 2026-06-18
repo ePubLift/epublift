@@ -10,6 +10,19 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+## [cli-v1.4.1] - 2026-06-18
+
+### Added
+- **ARM64 Linux (Raspberry Pi) prebuilt binary** — a static
+  `aarch64-unknown-linux-musl` archive, so the archival mode's headline target
+  (Raspberry Pi 3/4/5 and arm64 NAS/servers on a 64-bit OS) is download-and-run,
+  no longer build-from-source.
+- **Debian / Ubuntu / Raspberry Pi OS `.deb` packages** (amd64 + arm64), built
+  with `cargo-deb` and attached to the release — install with
+  `sudo apt install ./epublift_1.4.1_arm64.deb`.
+- **Fedora / RHEL / openSUSE `.rpm` packages** (x86_64 + aarch64), built with
+  `cargo-generate-rpm` — install with `sudo dnf install ./epublift-1.4.1-1.x86_64.rpm`.
+
 ## [cli-v1.4.0] - 2026-06-18
 
 ### Added
