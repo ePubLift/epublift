@@ -55,12 +55,28 @@ crc32fast = { version = "1", optional = true }
 # gated behind `zstd-c-bench`, used only by the local benchmark to report the
 # pure-Rust floor vs the C ceiling. Keeps Guiding Principle #1 (pure Rust, no C).
 zstd = { version = "0.13", optional = true }
+# Bench-only pure-Rust Brotli backend for the ARCHIVAL research track: brotli-11
+# has a web/HTML-tuned static dictionary, a strong candidate for the solid-stream
+# `.eparc` archive. Pure Rust (rust-brotli), bench-gated for now — it does not
+# ship until the archival mode lands. Used by `zstd-bench --solid`.
+brotli = { version = "8", optional = true }
+# Bench-only C reference CEILING for the archival track: xz/LZMA (liblzma) is the
+# usual ratio champion on text. Used ONLY to quantify how much ratio the pure-Rust
+# choice trades away (and, via --mem-probe, at what memory cost). NEVER shipped —
+# gated behind `ceiling-bench`, keeps Guiding Principle #1 (pure Rust, no C).
+xz2 = { version = "0.1", optional = true }
 
 [features]
 # Compile in the experimental `--zstd` packaging + decoder (pure Rust).
 zstd-experimental = ["dep:structured-zstd", "dep:crc32fast"]
 # Additionally compile the C libzstd reference backend for the benchmark only.
 zstd-c-bench = ["zstd-experimental", "dep:zstd"]
+# Archival research track: add the pure-Rust Brotli backend so `zstd-bench --solid`
+# can compare solid zstd-ultra vs brotli-11 for the `.eparc` archive format.
+archival-bench = ["zstd-experimental", "dep:brotli"]
+# Additionally add the C reference ceilings (libzstd --ultra + xz/LZMA) to the
+# solid comparison. Dev-only; documents the pure-Rust ratio/memory trade-off.
+ceiling-bench = ["archival-bench", "dep:zstd", "dep:xz2"]
 
 [dev-dependencies]
 # Used by the integration tests to assemble EPUB fixtures and inspect output.

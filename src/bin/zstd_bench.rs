@@ -67,6 +67,8 @@ fn main() -> Result<()> {
     let mut inputs: Vec<String> = Vec::new();
     let mut dict_sweep = false;
     let mut text_only = false;
+    let mut solid = false;
+    let mut mem_probe: Option<String> = None;
     let mut it = args.iter();
     while let Some(a) = it.next() {
         match a.as_str() {
@@ -80,14 +82,24 @@ fn main() -> Result<()> {
             }
             "--dict-sweep" => dict_sweep = true,
             "--text-only" => text_only = true,
+            "--solid" => solid = true,
+            "--mem-probe" => {
+                mem_probe = Some(
+                    it.next()
+                        .context("--mem-probe needs a codec name, e.g. 'brotli-11'")?
+                        .clone(),
+                );
+            }
             "-h" | "--help" => {
                 eprintln!(
-                    "usage: zstd-bench [--levels 3,9,19] [--dict-sweep|--text-only] <dir-or-epub>...\n\
+                    "usage: zstd-bench [--levels 3,9,19] [--dict-sweep|--text-only|--solid] <dir-or-epub>...\n\
                      measures Deflate vs Zstandard (pure-Rust, and C under zstd-c-bench)\n\
                      as an EPUB packaging method.\n\
                      --dict-sweep  compares shared-dict heuristics (divisor / min-files).\n\
                      --text-only   reports the text-only win (images/fonts excluded),\n\
-                                   bucketed small/medium/large by raw text size."
+                                   bucketed small/medium/large by raw text size.\n\
+                     --solid       ARCHIVAL track (.eparc): solid-stream zstd-ultra vs\n\
+                                   brotli-11 (needs --features archival-bench)."
                 );
                 return Ok(());
             }
@@ -109,6 +121,23 @@ fn main() -> Result<()> {
     }
     if text_only {
         return run_text_only(&epubs, *levels.last().unwrap());
+    }
+    if solid {
+        #[cfg(feature = "archival-bench")]
+        return run_solid(&epubs, &levels);
+        #[cfg(not(feature = "archival-bench"))]
+        bail!("--solid needs the Brotli backend: rebuild with --features archival-bench");
+    }
+    if let Some(codec) = mem_probe {
+        #[cfg(feature = "archival-bench")]
+        return run_mem_probe(&codec, &epubs[0], &levels);
+        #[cfg(not(feature = "archival-bench"))]
+        {
+            let _ = codec;
+            bail!(
+                "--mem-probe needs the archival backends: rebuild with --features archival-bench"
+            );
+        }
     }
     #[cfg(feature = "zstd-c-bench")]
     eprintln!("[backends] pure-Rust structured-zstd + reference C libzstd");
@@ -248,6 +277,296 @@ fn run_text_only(epubs: &[PathBuf], level: i32) -> Result<()> {
         pct(tot.3, tot.1) - 100.0,
     );
     println!("\n(zstd/entry = per-entry; zstd/size-safe = shared-dict kept only when it wins.)");
+    Ok(())
+}
+
+/// encode(raw) -> compressed.
+#[cfg(feature = "archival-bench")]
+type EncFn = Box<dyn Fn(&[u8]) -> Vec<u8>>;
+/// decode(compressed, expected_len) -> raw.
+#[cfg(feature = "archival-bench")]
+type DecFn = Box<dyn Fn(&[u8], usize) -> Vec<u8>>;
+
+/// A solid-stream codec under test: a name + encode/decode closures. The
+/// pure-Rust candidates (zstd-rust, brotli) are always present; the C reference
+/// *ceilings* (zstd-C incl. `--ultra 22`, xz/LZMA) are added under `ceiling-bench`
+/// so we can state — with numbers — exactly how much ratio the pure-Rust choice
+/// leaves on the table, and (via `--mem-probe`) at what memory cost C buys it.
+#[cfg(feature = "archival-bench")]
+struct Codec {
+    name: String,
+    enc: EncFn,
+    /// decode(compressed, expected_len) — `expected_len` pre-sizes the output
+    /// (structured-zstd's `decode_all_to_vec` needs the capacity up front).
+    dec: DecFn,
+}
+
+/// Running totals for one codec over the corpus, for one payload class.
+#[cfg(feature = "archival-bench")]
+#[derive(Clone, Default)]
+struct Tally {
+    bytes: usize,
+    enc_s: f64,
+    dec_s: f64,
+}
+
+/// Build the solid-codec line-up: pure-Rust always, C ceilings under `ceiling-bench`.
+#[cfg(feature = "archival-bench")]
+fn solid_codecs(levels: &[i32]) -> Vec<Codec> {
+    let mut v: Vec<Codec> = Vec::new();
+    for &lvl in levels {
+        v.push(Codec {
+            name: format!("zstd-rust L{lvl}"),
+            enc: Box::new(move |d| compress_to_vec(d, CompressionLevel::Level(lvl))),
+            dec: Box::new(|c, n| {
+                let mut dec = FrameDecoder::new();
+                let mut out = Vec::with_capacity(n);
+                dec.decode_all_to_vec(c, &mut out)
+                    .expect("zstd-rust decode");
+                out
+            }),
+        });
+    }
+    v.push(Codec {
+        name: "brotli-11".into(),
+        enc: Box::new(|d| {
+            let params = brotli::enc::BrotliEncoderParams {
+                quality: 11,
+                lgwin: 24,
+                ..Default::default()
+            };
+            let mut out = Vec::new();
+            brotli::BrotliCompress(&mut &d[..], &mut out, &params).expect("brotli encode");
+            out
+        }),
+        dec: Box::new(|c, _n| {
+            let mut out = Vec::new();
+            brotli::BrotliDecompress(&mut &c[..], &mut out).expect("brotli decode");
+            out
+        }),
+    });
+    // --- C reference ceilings (dev-only; NEVER shipped) ---------------------
+    #[cfg(feature = "ceiling-bench")]
+    {
+        for lvl in [19i32, 22] {
+            v.push(Codec {
+                name: format!("zstd-C L{lvl}"),
+                enc: Box::new(move |d| zstd::encode_all(d, lvl).expect("zstd-C encode")),
+                dec: Box::new(|c, _n| zstd::decode_all(c).expect("zstd-C decode")),
+            });
+        }
+        v.push(Codec {
+            name: "xz -9".into(),
+            enc: Box::new(|d| {
+                let mut e = xz2::write::XzEncoder::new(Vec::new(), 9);
+                std::io::Write::write_all(&mut e, d).expect("xz encode");
+                e.finish().expect("xz finish")
+            }),
+            dec: Box::new(|c, _n| {
+                let mut out = Vec::new();
+                xz2::read::XzDecoder::new(c)
+                    .read_to_end(&mut out)
+                    .expect("xz decode");
+                out
+            }),
+        });
+        v.push(Codec {
+            name: "xz -9e".into(),
+            enc: Box::new(|d| {
+                // 9 | LZMA_PRESET_EXTREME (the extreme bit is 1 << 31, which xz2
+                // does not re-export as a named constant).
+                let stream =
+                    xz2::stream::Stream::new_easy_encoder(9 | (1 << 31), xz2::stream::Check::Crc64)
+                        .expect("xz -9e stream");
+                let mut e = xz2::write::XzEncoder::new_stream(Vec::new(), stream);
+                std::io::Write::write_all(&mut e, d).expect("xz -9e encode");
+                e.finish().expect("xz -9e finish")
+            }),
+            dec: Box::new(|c, _n| {
+                let mut out = Vec::new();
+                xz2::read::XzDecoder::new(c)
+                    .read_to_end(&mut out)
+                    .expect("xz -9e decode");
+                out
+            }),
+        });
+    }
+    v
+}
+
+/// ARCHIVAL research track (`.eparc`). Unlike the OCF-experimental ZIP (per-entry,
+/// random-access), an archive is opened whole on restore, so it can be a single
+/// **solid** stream: all entries concatenated and compressed together. That lets
+/// one window span every chapter — capturing cross-chapter redundancy with NO
+/// stored dictionary (the Phase-2 shared-dict's overhead disappears). Baselines
+/// are Deflate (today's packaging) and zstd per-entry (the OCF floor); the codec
+/// line-up is built by `solid_codecs`. Reported on both the text payload and the
+/// whole archive. Encode is one-time + slow-OK on a Pi; decode MB/s is shown to
+/// prove restore stays fast regardless of compression effort.
+#[cfg(feature = "archival-bench")]
+fn run_solid(epubs: &[PathBuf], levels: &[i32]) -> Result<()> {
+    let codecs = solid_codecs(levels);
+    let mut text = vec![Tally::default(); codecs.len()];
+    let mut whole = vec![Tally::default(); codecs.len()];
+    let (mut tb, mut wb) = (0usize, 0usize);
+    let (mut traw, mut wraw) = (0usize, 0usize);
+    let (mut tdef, mut wdef) = (0usize, 0usize);
+    let (mut tpe, mut wpe) = (0usize, 0usize);
+    let last = *levels.last().unwrap();
+
+    for path in epubs {
+        let entries = match read_entries(path) {
+            Ok(e) => e,
+            Err(e) => {
+                eprintln!("[skip] {}: {e:#}", path.display());
+                continue;
+            }
+        };
+        // text-only = the compressible markup; whole = everything but mimetype.
+        let text_entries: Vec<&OcfEntry> = entries
+            .iter()
+            .filter(|e| is_dict_eligible(&e.name))
+            .collect();
+        let whole_entries: Vec<&OcfEntry> =
+            entries.iter().filter(|e| e.name != "mimetype").collect();
+
+        if !text_entries.is_empty() {
+            let buf = entries_text(&text_entries);
+            tb += 1;
+            traw += buf.len();
+            run_codecs(&codecs, &buf, &mut text)?;
+            let owned: Vec<OcfEntry> = text_entries.iter().map(|e| (*e).clone()).collect();
+            tdef += deflate_archive_size(&owned)?;
+            tpe += pack_zstd(&owned, last)?.len();
+        }
+        let wbuf = entries_text(&whole_entries);
+        wb += 1;
+        wraw += wbuf.len();
+        run_codecs(&codecs, &wbuf, &mut whole)?;
+        wdef += deflate_archive_size(&entries)?; // includes the stored mimetype
+        wpe += pack_zstd(&entries, last)?.len();
+    }
+
+    print_solid(
+        "TEXT-ONLY (images/fonts excluded)",
+        tb,
+        traw,
+        tdef,
+        tpe,
+        &codecs,
+        &text,
+    );
+    println!();
+    print_solid(
+        "WHOLE ARCHIVE (all entries)",
+        wb,
+        wraw,
+        wdef,
+        wpe,
+        &codecs,
+        &whole,
+    );
+    println!("\nSolid = all entries concatenated into ONE stream (length-prefixed).");
+    println!("Pure-Rust (shippable): zstd-rust (structured-zstd), brotli-11 (q11/lgwin24).");
+    #[cfg(feature = "ceiling-bench")]
+    println!(
+        "C ceilings (dev-only, never shipped): zstd-C (libzstd, incl. --ultra 22), xz (liblzma)."
+    );
+    println!("Encode is one-time (slow-OK on a Pi); decode MB/s stays high regardless of level.");
+    Ok(())
+}
+
+/// Concatenate entries into one length-prefixed solid buffer (the archive payload).
+#[cfg(feature = "archival-bench")]
+fn entries_text(entries: &[&OcfEntry]) -> Vec<u8> {
+    let total: usize = entries.iter().map(|e| 8 + e.data.len()).sum();
+    let mut buf = Vec::with_capacity(total);
+    for e in entries {
+        buf.extend_from_slice(&(e.data.len() as u64).to_le_bytes());
+        buf.extend_from_slice(&e.data);
+    }
+    buf
+}
+
+/// Run every codec on one solid buffer (round-trip verified) into the tallies.
+#[cfg(feature = "archival-bench")]
+fn run_codecs(codecs: &[Codec], buf: &[u8], tally: &mut [Tally]) -> Result<()> {
+    for (i, c) in codecs.iter().enumerate() {
+        let t = Instant::now();
+        let comp = (c.enc)(buf);
+        let enc_s = t.elapsed().as_secs_f64();
+        let t = Instant::now();
+        let out = (c.dec)(&comp, buf.len());
+        let dec_s = t.elapsed().as_secs_f64();
+        if out != buf {
+            bail!("solid round-trip mismatch for {}", c.name);
+        }
+        tally[i].bytes += comp.len();
+        tally[i].enc_s += enc_s;
+        tally[i].dec_s += dec_s;
+    }
+    Ok(())
+}
+
+/// Print one payload-class block: deflate / per-entry baselines + one row per codec.
+#[cfg(feature = "archival-bench")]
+#[allow(clippy::too_many_arguments)]
+fn print_solid(
+    title: &str,
+    books: usize,
+    raw: usize,
+    deflate: usize,
+    per_entry: usize,
+    codecs: &[Codec],
+    tally: &[Tally],
+) {
+    println!("══ SOLID — {title} ({books} books) ══");
+    println!(
+        "raw {:.0} KB | deflate {:.0} KB | zstd per-entry {:+.1}% vs deflate",
+        kb(raw),
+        kb(deflate),
+        pct(per_entry, deflate) - 100.0,
+    );
+    println!(
+        "{:<16} {:>12} {:>14} {:>12} {:>12}",
+        "method", "size KB", "vs deflate", "enc MB/s", "dec MB/s"
+    );
+    for (c, t) in codecs.iter().zip(tally) {
+        println!(
+            "{:<16} {:>12.0} {:>13.1}% {:>12.2} {:>12.0}",
+            c.name,
+            kb(t.bytes),
+            pct(t.bytes, deflate) - 100.0,
+            mb_per_s(raw, t.enc_s),
+            mb_per_s(raw, t.dec_s),
+        );
+    }
+}
+
+/// Single-codec ENCODE of one book's whole-archive solid buffer, so an external
+/// `/usr/bin/time -l` (macOS) / `-v` (GNU) wrapper can capture this process's peak
+/// RSS for that one codec. Encode is the memory-hungry phase and the real Pi
+/// constraint: it decides whether the device can even *make* the archive. Run:
+///   for c in "brotli-11" "zstd-rust L19" "zstd-C L22" "xz -9e"; do \
+///     /usr/bin/time -l zstd-bench --mem-probe "$c" big.epub; done
+#[cfg(feature = "archival-bench")]
+fn run_mem_probe(codec: &str, book: &Path, levels: &[i32]) -> Result<()> {
+    let entries = read_entries(book)?;
+    let whole: Vec<&OcfEntry> = entries.iter().filter(|e| e.name != "mimetype").collect();
+    let buf = entries_text(&whole);
+    let codecs = solid_codecs(levels);
+    let c = codecs.iter().find(|c| c.name == codec).ok_or_else(|| {
+        let names: Vec<&str> = codecs.iter().map(|c| c.name.as_str()).collect();
+        anyhow::anyhow!("unknown codec '{codec}'. available: {}", names.join(", "))
+    })?;
+    let comp = (c.enc)(&buf);
+    // Print (and thus keep) the result so the encode can't be optimised away.
+    println!(
+        "{codec}: {} KB -> {} KB ({:+.1}% of raw)",
+        buf.len() / 1024,
+        comp.len() / 1024,
+        pct(comp.len(), buf.len()) - 100.0,
+    );
     Ok(())
 }
 
