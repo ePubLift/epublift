@@ -134,245 +134,60 @@ cargo install --path .
 
 ---
 
-## 🚀 How to Use
-
-### Basic Command
+## 🚀 Usage
 
 ```bash
-epublift -i <path_to_input_epub>
-```
-*This command modernizes the input file and saves it in the same directory as `<input_name>_v3.3.epub`, generating a performance report in `<input_name>_report.txt`.*
-
-During development you can also run it directly with Cargo:
-
-```bash
-cargo run --release -- -i book.epub
+epublift -i book.epub            # modernize + shrink images → book_v3.3.epub
 ```
 
-### Which option should I use? (quick guide)
+| Your situation | Command |
+| :--- | :--- |
+| Smaller, modernized EPUB (most people) | `epublift -i book.epub` |
+| Reading on a Kobo | `epublift -i book.epub --kepub` |
+| Images blank after converting | `epublift -i book.epub --keep-images` |
+| ASCII-only output filename | `epublift -i book.epub --ascii` |
+| Shrink a whole library to `.eparc` | `epublift archive ~/Books` |
+| Restore an archived book | `epublift restore book.eparc` |
 
-Not sure which flags you need? Find your situation below and copy the command. In
-every example, replace `book.epub` with the path to your file (you can also just
-drag the file into the terminal to paste its path).
-
-**📚 I just want a smaller, modernized EPUB (most people):**
-
-```bash
-epublift -i book.epub
-```
-Upgrades the book to EPUB 3 and shrinks images to WebP. The new file appears next
-to the original as `book_v3.3.epub`. Great for Apple Books, Google Play Books,
-Calibre, and most reading apps.
-
-**📖 I read on a Kobo (Forma, Sage, Clara, Libra, …):**
-
-```bash
-epublift -i book.epub --kepub
-```
-Makes `book.kepub.epub`, tuned for Kobo: faster page turns, reading statistics,
-and tap-a-word dictionary. It also keeps your images in their original format,
-because **Kobo can't display WebP** (see the next item). Copy the
-`.kepub.epub` file onto your Kobo over USB (into the `.kobo` folder) or send it
-with Calibre.
-
-**🖼️ My converted book opens but the images are blank:**
-
-```bash
-epublift -i book.epub --keep-images
-```
-Some readers — most notably **Kobo e-ink devices** — claim to support modern
-EPUBs but don't actually draw WebP images, so they show up blank. `--keep-images`
-skips the WebP step and keeps your original JPEG/PNG pictures, while still
-modernizing the book. (If you use `--kepub`, this is already done for you.)
-
-**🔤 My device or computer mangles the Turkish/accented characters in the filename:**
-
-```bash
-epublift -i "Işık Doğudan Yükselir.epub" --ascii
-```
-Renames the output to plain ASCII (`Isik_Dogudan_Yukselir_v3.3.epub`). Handy for
-old devices, SD cards, or sync tools. The book's on-screen title isn't affected.
-
-> 💡 You can combine flags, e.g. `epublift -i book.epub --kepub --ascii`.
-
-### Advanced Options
-
-```bash
-epublift -i book.epub -o optimized_book.epub -q 85 -r stats_report.txt
-```
-
-### Command Line Interface Options
-
-| Argument | Long Flag | Description | Default |
-| :--- | :--- | :--- | :--- |
-| `-i` | `--input` | **[Required]** Path to the original EPUB file | *None* |
-| `-o` | `--output` | Path to save the modernized EPUB | `<input>_v3.3.epub` |
-| `-q` | `--quality`| WebP compression quality level (1-100) | `80` |
-| `-r` | `--report` | Path to write the conversion audit report | `<input>_report.txt` |
-| | `--ascii` | Transliterate the auto-generated output/report names to ASCII | *off* |
-| | `--keep-images` | Keep original images (skip JPEG/PNG → WebP) for readers that don't render WebP | *off* |
-| | `--kepub` | Produce a Kobo `.kepub.epub` (inject `koboSpan` markup; implies `--keep-images`) | *off* |
-
-#### Keep original images (`--keep-images`)
-
-By default epublift converts JPEG/PNG to **WebP**, which most readers (Apple Books, Calibre, and other apps) render fine and which gives the biggest size win. But some devices advertise EPUB 3.3 support yet **do not actually render WebP** — notably **Kobo e-ink readers** (Forma, Sage, …), where a WebP-converted book shows blank images. For those, use `--keep-images` to leave images in their original format while still modernizing the structure:
-
-```bash
-epublift -i book.epub --keep-images
-```
-
-`--kepub` turns this on automatically, since its target is Kobo.
-
-#### Kobo `.kepub` output (`--kepub`)
-
-[Kobo](https://www.kobo.com/) e-readers unlock their richer reading features — accurate page turns, reading statistics, and dictionary lookup — when a book carries Kobo's `koboSpan` markup. Add `--kepub` to produce a Kobo-optimized file alongside the normal EPUB 3 upgrades:
-
-```bash
-epublift -i book.epub --kepub
-# → book.kepub.epub
-```
-
-The result is still a valid EPUB 3 (Kobo simply keys on the `.kepub.epub` extension and the spans), so the same file also opens in other readers. The transform follows the approach of the open-source [`kepubify`](https://github.com/pgaskin/kepubify): sentence-level spans, each image in its own paragraph, and Kobo's column scaffolding. Sideload the `.kepub.epub` onto your Kobo (into the `.kobo` folder or via Calibre) to use it.
-
-#### ASCII-safe filenames (`--ascii`)
-
-By default epublift **preserves your original filename**, only appending the `_v3.3` suffix — so `Işık Doğudan Yükselir.epub` becomes `Işık Doğudan Yükselir_v3.3.epub`. Modern e-readers and filesystems handle these Unicode names without issue, and the title/author shown on your device come from the EPUB's own metadata, not the filename.
-
-If you prefer a shell-friendly, ASCII-only name (handy for the command line, FAT32 SD cards, or older sync tools), add `--ascii`:
-
-```bash
-epublift -i "Işık Doğudan Yükselir.epub" --ascii
-# → Isik_Dogudan_Yukselir_v3.3.epub
-```
-
-This romanizes Unicode letters (e.g. Turkish `ş→s`, `ğ→g`, `ı→i`, `ö→o`, `ü→u`), turns whitespace into underscores, and drops other punctuation. Transliteration is lossy and not always locale-perfect, which is why it is **off by default**. The flag only affects auto-generated names — an explicit `-o`/`-r` path is always used verbatim.
+Every flag, per-situation recipes, and sandbox testing are in the **[Usage guide](docs/usage.md)**. epublift is also a Rust **library** — build `Options`, call `convert()`, inspect the `Report`.
 
 ---
 
 ## 📦 Archive your library (`.eparc`)
 
-Shrink a personal EPUB collection to save disk space, and get any book back on demand. `epublift archive` packs a book into a compact **`.eparc`** archive; `epublift restore` brings it back. It's **lossless** — your originals are always recoverable — and runs anywhere from a Raspberry Pi to a NAS or desktop.
+Shrink a personal EPUB collection to save disk, and get any book back on demand — **losslessly**. `epublift archive` packs each book into a compact `.eparc` (pure-Rust solid [Zstandard](https://facebook.github.io/zstd/) on text + fonts, already-compressed media stored verbatim, so it **never grows a book**); `epublift restore` brings it back content-exact, or re-targeted for your reader.
 
 ```bash
-# Archive one book, or a whole folder (one .eparc per book):
-epublift archive book.epub
-epublift archive ~/Books -o ~/Archive      # recurses the folder
-
-# Restore — by default you get back a content-exact .epub:
-epublift restore book.eparc
+epublift archive ~/Books         # one .eparc per book; recurses the folder
+epublift restore book.eparc      # → content-exact .epub (or --target 3.3 / --keep-images / --kepub)
 ```
 
-How it works: the compressible parts of a book (XHTML/CSS/OPF and **fonts**) are packed into a single solid [Zstandard](https://facebook.github.io/zstd/) stream, while already-compressed media (images, audio, WOFF) is stored verbatim — so the archive **never grows a book**. A `manifest.json` records the original's SHA-256 and a CRC32 per entry for integrity. The archive is just a ZIP, so even without epublift a future you can `unzip book.eparc` and `zstd -d data.zst`. Text-heavy books typically shrink ~30%; image-heavy ones less (their images are already compressed).
-
-### Restore for a specific device
-
-The archive is your **canonical master** — on restore you pick the output for the reader you're using (nothing extra is stored; it re-runs the optimizer):
-
-```bash
-epublift restore book.eparc                 # content-exact original (default)
-epublift restore book.eparc --target 3.3    # re-emit as EPUB 3.3 (WebP images)
-epublift restore book.eparc --keep-images   # modernized, but original JPEG/PNG (e.g. Kobo)
-epublift restore book.eparc --kepub         # → book.kepub.epub for Kobo
-```
-
-> EPUB **3.4** (AVIF/JXL) isn't published yet, so `--target` accepts **3.3** today; it'll gain 3.4 when that spec ships. Design notes: [`docs/design/eparc-format.md`](docs/design/eparc-format.md) and the codec rationale in [`docs/design/eparc-codec-choice.md`](docs/design/eparc-codec-choice.md).
-
----
-
-## 🔬 Experimental: Zstandard packaging (research only)
-
-> ⚠️ **Not in release builds, and not a conformant EPUB.** This is a measurement-only research track, compiled in only when you build from source with a feature flag. A file packed this way **will not open in any current reading system.**
-
-The EPUB container (OCF) restricts ZIP compression to *Stored* + *Deflate*. ZIP also registers **Zstandard as method 93**, so we built an opt-in mode to *measure* what Zstd would save over Deflate for EPUB packaging — to bring real data to a future [W3C `epub-specs`](https://github.com/w3c/epub-specs/discussions) discussion. It's **pure Rust** (no C in any shipped artifact) and fully lossless (round-trip verified):
-
-```bash
-# Build with the feature, then:
-cargo run --features zstd-experimental -- -i book.epub --zstd
-# → book_zstd-experimental.epub   (NON-CONFORMANT; for measurement)
-
-# Cross-chapter "shared dictionary" mode (trains a dict from the book's text):
-cargo run --features zstd-experimental -- -i book.epub --zstd --zstd-mode shared-dict
-
-cargo run --features zstd-experimental -- -i book_zstd-experimental.epub --zstd-decode
-# → reconstructs a normal, conformant EPUB (proves no data loss)
-```
-
-Two modes: **per-entry** (each entry compressed independently — the conservative floor) and **shared-dict** (one dictionary trained from the book's own text entries, stored as `META-INF/zstd-dict.bin`, then shared across chapters — the bigger win on text-heavy, multi-chapter books, and explicitly non-standard). A dev-only `zstd-bench` compares the pure-Rust encoder against reference C `libzstd` for ratio and speed across a corpus, reporting both modes. Full rationale and the two-axis (*maturity* vs *conformance*) framing live in [`docs/design/zstd-ocf-experimental.md`](docs/design/zstd-ocf-experimental.md).
+Lossless, runs anywhere from a Raspberry Pi to a NAS. Full guide: **[Archiving guide](docs/archiving.md)** · design notes: [format](docs/design/eparc-format.md), [codec choice](docs/design/eparc-codec-choice.md).
 
 ---
 
 ## 🌐 Hosted Web Service (`epublift-web`)
 
-Beyond the CLI, ePubLift ships a small **web service**: drag-and-drop an EPUB in your browser and get back the modernized file plus an in-page audit report. It's powered by the same pure-Rust `convert()` core, and uploads are processed **in memory and deleted immediately** — nothing is ever stored or logged.
+Drag-and-drop an EPUB in your browser and get back the modernized file plus an in-page audit report — the same pure-Rust core, with uploads processed **in memory and deleted immediately** (nothing stored or logged). Available in **13 languages**.
 
-The interface is available in **13 languages** (English, Spanish, Turkish, German, French, Portuguese, Italian, Dutch, Polish, Russian, Japanese, Korean, Chinese) — it auto-detects your browser language on first visit and you can switch any time from the selector in the top-right corner.
-
-> 💡 A hosted instance runs at **<https://epublift.itpax.net>**. Or self-host it in one command (below).
-
-### Run with Docker
-
-A hardened, multi-arch (amd64 + arm64) image is published to the GitHub Container Registry on every release:
+> 💡 Hosted instance: **<https://epublift.itpax.net>**. Or self-host in one command:
 
 ```bash
-docker run -d --name epublift-web \
-  -p 127.0.0.1:8080:8080 \
-  ghcr.io/epublift/epublift-web:latest
+docker run -d -p 127.0.0.1:8080:8080 ghcr.io/epublift/epublift-web:latest
 ```
 
-Then open <http://127.0.0.1:8080>. Pin a specific version with a tag instead of `latest`, e.g. `ghcr.io/epublift/epublift-web:1.3.0`. The image is a static musl binary on Alpine, runs as a non-root user, and is only ~14 MB.
-
-### Run with Docker Compose (recommended)
-
-The repo's [`docker-compose.yml`](docker-compose.yml) adds the full hardening profile — read-only root filesystem, all Linux capabilities dropped, `no-new-privileges`, memory/PID limits, and a `tmpfs` for the only writable path:
-
-```bash
-docker compose up -d
-```
-
-### Put it behind a reverse proxy (TLS)
-
-The service speaks plain HTTP on port `8080` and binds to localhost, so terminate TLS with a reverse proxy (Nginx Proxy Manager, Caddy, Traefik, …) in front of it. One required setting: raise the proxy's max request-body size to match the service's **50 MiB** upload limit — otherwise large uploads are rejected at the proxy with `413`. For Nginx (and Nginx Proxy Manager's *Advanced* tab):
-
-```nginx
-client_max_body_size 50M;
-```
-
-If your proxy **also runs as a container**, it can't reach the host's `127.0.0.1:8080`. Put both on a shared Docker network and point the proxy at the service by name — `http://epublift-web:8080` (the container's internal port `8080`, regardless of how the host port is published).
-
-### Security & privacy
-
-The endpoint is public and the source is open, so these limits are the real defense — not obscurity:
-
-*   **No retention** — each request is converted in a temp dir wiped on success *or* error; no upload is stored or logged.
-*   **Strict Content-Security-Policy** (`default-src 'none'`) plus `X-Frame-Options`, `X-Content-Type-Options`, and locked-down CORS on every response.
-*   **Abuse limits** — a 50 MiB body cap, a request timeout, per-IP rate limiting, and a concurrency cap that keeps latency predictable.
-*   **Input hardening** (shared with the CLI) — zip-bomb (uncompressed-size + entry-count caps) and image decode-bomb (dimension/allocation limits) guards.
-*   **Optional egress-blocking** — the converter never makes outbound connections, so `docker-compose.yml` documents how to run it on an `internal` Docker network with no route to the internet at all.
-
-> **AGPL-3.0 note:** if you run a **modified** copy of this service over a network, §13 requires you to offer your modified source to its users. The page carries a visible **Source** link to satisfy this.
+The full hardening profile, reverse-proxy/TLS setup, and the privacy/security model are in the **[Web service guide](docs/web-service.md)**.
 
 ---
 
-## 🧪 Quick Sandbox Testing
+## 📚 Documentation
 
-A companion binary (`gen-sample`) builds a valid legacy EPUB 2.0 file containing test images and outdated structures, so you can safely evaluate the tool.
-
-### Step 1: Generate the Sample EPUB 2.0 File
-```bash
-cargo run --release --bin gen-sample
-```
-*This creates a new legacy file named `sample_epub2.epub` in your current folder.*
-
-### Step 2: Run epublift
-```bash
-cargo run --release --bin epublift -- -i sample_epub2.epub
-```
-*This converts the book, modernizes the structure to EPUB 3.3, and produces `sample_epub2_v3.3.epub` along with `sample_epub2_report.txt`.*
-
-### Step 3: Inspect the Output Audit Report
-```bash
-cat sample_epub2_report.txt
-```
+- **[Usage guide](docs/usage.md)** — every flag, per-situation recipes, sandbox testing.
+- **[Archiving guide](docs/archiving.md)** — `archive` / `restore` and the `.eparc` format.
+- **[Web service guide](docs/web-service.md)** — self-hosting `epublift-web`.
+- **[Experimental Zstandard packaging](docs/zstandard-research.md)** — research track (non-conformant, measurement only).
+- Design notes: [`.eparc` format](docs/design/eparc-format.md) · [`.eparc` codec choice](docs/design/eparc-codec-choice.md) · [Zstd-OCF experiment](docs/design/zstd-ocf-experimental.md).
+- [Roadmap](ROADMAP.md) · [Changelog](CHANGELOG.md).
 
 ---
 
