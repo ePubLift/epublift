@@ -156,6 +156,28 @@ struct RestoreArgs {
     /// Directory to write restored `.epub` files into (default: next to each input).
     #[arg(short, long)]
     output: Option<PathBuf>,
+
+    /// Re-emit at a specific EPUB version instead of content-exact. Only 3.3 is
+    /// supported today (EPUB 3.4 is not yet published).
+    #[arg(long, value_name = "3.3")]
+    target: Option<String>,
+
+    /// Modernize to a clean, current EPUB (equivalent to --target 3.3).
+    #[arg(long)]
+    modernize: bool,
+
+    /// Keep original images (no WebP) when re-targeting — for readers that don't
+    /// render WebP, e.g. Kobo e-ink.
+    #[arg(long)]
+    keep_images: bool,
+
+    /// Produce a Kobo `.kepub.epub` when re-targeting (implies --keep-images).
+    #[arg(long)]
+    kepub: bool,
+
+    /// WebP quality (1-100) when re-targeting with image conversion.
+    #[arg(short, long, default_value_t = 80)]
+    quality: i32,
 }
 
 fn main() -> ExitCode {
@@ -324,7 +346,9 @@ fn run_archive(args: &ArchiveArgs) -> Result<()> {
     Ok(())
 }
 
-/// `epublift restore` — `.eparc` back to a content-exact `.epub`.
+/// `epublift restore` — `.eparc` back to a `.epub`. Content-exact by default; with
+/// `--target`/`--modernize`/`--keep-images`/`--kepub` it runs the optimizer on the
+/// restored book so the output matches the reader/device the user is targeting.
 #[cfg(feature = "archival")]
 fn run_restore(args: &RestoreArgs) -> Result<()> {
     use anyhow::bail;
@@ -338,19 +362,111 @@ fn run_restore(args: &RestoreArgs) -> Result<()> {
             .with_context(|| format!("Failed to create output directory: {}", dir.display()))?;
     }
 
+    // A re-target is requested when any transform flag is present; otherwise the
+    // restore is content-exact (the original book, byte-for-byte).
+    let retarget = args.target.is_some() || args.modernize || args.keep_images || args.kepub;
+    let target_version = match &args.target {
+        Some(t) => parse_target(t)?,
+        None => EpubVersion::LATEST,
+    };
+
     for eparc in &archives {
-        let out = sibling_path(eparc, "epub", args.output.as_deref());
-        let stats = epublift::eparc::restore_eparc(eparc, &out)
+        if !retarget {
+            let out = sibling_path(eparc, "epub", args.output.as_deref());
+            let stats = epublift::eparc::restore_eparc(eparc, &out)
+                .with_context(|| format!("Failed to restore {}", eparc.display()))?;
+            println!(
+                "[+] {} -> {} ({} entries, {:.2} MB)",
+                file_name(eparc),
+                file_name(&out),
+                stats.entries,
+                stats.output_size as f64 / 1024.0 / 1024.0,
+            );
+            continue;
+        }
+
+        // Re-target: restore content-exact into a temp dir, then run convert().
+        let tmp = tempfile::Builder::new()
+            .prefix("eparc_restore_")
+            .tempdir()?;
+        let restored = tmp.path().join("restored.epub");
+        epublift::eparc::restore_eparc(eparc, &restored)
             .with_context(|| format!("Failed to restore {}", eparc.display()))?;
+
+        let out_dir = args.output.clone().unwrap_or_else(|| {
+            eparc
+                .parent()
+                .unwrap_or_else(|| Path::new("."))
+                .to_path_buf()
+        });
+        let options = Options {
+            quality: args.quality.clamp(1, 100) as u8,
+            ascii: false,
+            target_version,
+            image_strategy: if args.keep_images {
+                ImageStrategy::KeepOriginal
+            } else {
+                ImageStrategy::WebP
+            },
+            kepub: args.kepub,
+            packaging: epublift::Packaging::Deflate,
+            output: None,
+        };
+        // Name the output the way `convert` does, but in the chosen directory and
+        // based on the book's name (not the temp file).
+        let stem = eparc
+            .file_stem()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "book".to_string());
+        let name_basis = out_dir.join(format!("{stem}.epub"));
+        let final_out = epublift::default_output_path(&name_basis, &options);
+        let options = Options {
+            output: Some(final_out.clone()),
+            ..options
+        };
+
+        let report = epublift::convert(&restored, &options, |_| {})
+            .with_context(|| format!("Failed to re-target {}", eparc.display()))?;
         println!(
-            "[+] {} -> {} ({} entries, {:.2} MB)",
+            "[+] {} -> {} (re-targeted: {})",
             file_name(eparc),
-            file_name(&out),
-            stats.entries,
-            stats.output_size as f64 / 1024.0 / 1024.0,
+            file_name(&report.output_path),
+            retarget_label(args),
         );
     }
     Ok(())
+}
+
+/// Parse the `--target` value into an [`EpubVersion`], with friendly errors for
+/// the versions we deliberately don't support yet.
+#[cfg(feature = "archival")]
+fn parse_target(s: &str) -> Result<EpubVersion> {
+    use anyhow::bail;
+    match s.trim() {
+        "3.3" => Ok(EpubVersion::V3_3),
+        "3.4" => {
+            bail!("EPUB 3.4 is not supported yet (the spec isn't published). Use --target 3.3.")
+        }
+        "2" | "2.0" => {
+            bail!("downgrading to EPUB 2.0 isn't supported — epublift is an upgrader.")
+        }
+        other => bail!("unknown --target '{other}'. Supported: 3.3."),
+    }
+}
+
+/// A short human label of the re-target for the restore output line.
+#[cfg(feature = "archival")]
+fn retarget_label(args: &RestoreArgs) -> String {
+    let mut parts = Vec::new();
+    if args.kepub {
+        parts.push("kepub".to_string());
+    } else {
+        parts.push(format!("EPUB {}", EpubVersion::LATEST.tag()));
+    }
+    if args.keep_images {
+        parts.push("original images".to_string());
+    }
+    parts.join(", ")
 }
 
 /// Expand the given paths into a sorted, de-duplicated list of files with the
