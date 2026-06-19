@@ -10,6 +10,8 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+## [web-v1.5.0] - 2026-06-19
+
 ### Added (web)
 - **Archive & restore in the browser (`epublift-web`).** The web UI gains a
   three-way mode switch — **Optimize** (the existing convert flow), **Archive**,
