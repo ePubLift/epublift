@@ -511,7 +511,11 @@ async fn archive(
     let ascii = field_on(&fields, "ascii");
     let out_stem = {
         let s = epublift::output_stem(Path::new(&file_name), ascii);
-        if s.trim().is_empty() { "book".to_string() } else { s }
+        if s.trim().is_empty() {
+            "book".to_string()
+        } else {
+            s
+        }
     };
     let src_name = if file_name.trim().is_empty() {
         "book.epub".to_string()
@@ -551,8 +555,8 @@ async fn archive(
         .await
         .map_err(|_| ApiError(StatusCode::INTERNAL_SERVER_ERROR, "archive crashed".into()))?;
 
-    let (mut resp, out_bytes) = result
-        .map_err(|e| bad_request(format!("could not archive this EPUB: {e}")))?;
+    let (mut resp, out_bytes) =
+        result.map_err(|e| bad_request(format!("could not archive this EPUB: {e}")))?;
 
     resp.download_token = stash(
         &state,
@@ -664,8 +668,8 @@ async fn restore(
         .await
         .map_err(|_| ApiError(StatusCode::INTERNAL_SERVER_ERROR, "restore crashed".into()))?;
 
-    let (mut resp, out_bytes) = result
-        .map_err(|e| bad_request(format!("could not restore this .eparc: {e}")))?;
+    let (mut resp, out_bytes) =
+        result.map_err(|e| bad_request(format!("could not restore this .eparc: {e}")))?;
 
     resp.download_token = stash(
         &state,
