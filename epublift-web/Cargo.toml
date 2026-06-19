@@ -1,11 +1,12 @@
 [package]
 name = "epublift-web"
 # Versioned independently from the CLI: releases on `web-v*` tags. Baselined to
-# 1.3.0 (the GHCR image was at :1.3.0); 1.4.0 adds the multi-language UI.
-version = "1.4.0"
+# 1.3.0 (the GHCR image was at :1.3.0); 1.4.0 adds the multi-language UI; 1.5.0
+# adds in-browser archive/restore (.eparc).
+version = "1.5.0"
 edition = "2024"
 license = "AGPL-3.0-or-later"
-description = "Web service front-end for epublift: convert EPUBs in the browser"
+description = "Web front-end for epublift: convert, archive & restore EPUBs in the browser"
 repository = "https://github.com/ePubLift/epublift"
 rust-version = "1.94"
 publish = false
