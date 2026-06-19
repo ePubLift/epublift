@@ -1,11 +1,24 @@
 # Self-hosting the web service (`epublift-web`)
 
 ePubLift ships a small **web service**: drag-and-drop an EPUB in your browser and
-get back the modernized file plus an in-page audit report. It's powered by the
-same pure-Rust `convert()` core, and uploads are processed **in memory and deleted
-immediately** — nothing is ever stored or logged. The interface is available in
-**13 languages**, auto-detecting your browser language with a switcher in the
-top-right.
+choose a mode from the switcher at the top of the panel:
+
+- **Optimize** — modernize to EPUB 3.3 and re-encode images to WebP, with an
+  in-page audit report (the classic flow). Options: image quality, ASCII
+  filenames, *keep original images*, and Kobo `.kepub` output.
+- **Archive** — pack a book into a compact, **lossless** [`.eparc`](archiving.md)
+  archive (solid Zstandard on text + fonts, media stored verbatim). Optional
+  ASCII output name. An `.eparc` is an archive, not a readable e-book — keep it
+  for storage and restore it when you want to read.
+- **Restore** — turn an `.eparc` back into a working `.epub`. **Content-exact by
+  default** (the original book, byte-for-byte per entry); flip on **Modernize**
+  to re-run the optimizer on the way out (EPUB 3.3, WebP, `--keep-images`,
+  `.kepub`).
+
+It's powered by the same pure-Rust core, and every upload is processed **in memory
+and deleted immediately** — nothing is ever stored or logged, in any mode. The
+interface is available in **13 languages**, auto-detecting your browser language
+with a switcher in the top-right.
 
 > 💡 A hosted instance runs at **<https://epublift.itpax.net>**.
 

@@ -37,10 +37,13 @@ const DOWNLOAD_TTL: Duration = Duration::from_secs(120);
 const RL_BURST: f64 = 6.0;
 const RL_REFILL_PER_SEC: f64 = 0.2; // ~1 conversion every 5s, sustained
 
-/// A converted EPUB held in memory awaiting download.
+/// A converted/archived/restored file held in memory awaiting download.
 struct Pending {
     name: String,
     bytes: Vec<u8>,
+    /// MIME type for the download response — `application/epub+zip` for EPUBs,
+    /// `application/octet-stream` for `.eparc` archives.
+    content_type: &'static str,
     born: Instant,
 }
 
@@ -150,6 +153,8 @@ async fn main() {
         .route("/i18n.js", get(i18n_js))
         .route("/healthz", get(|| async { "ok" }))
         .route("/convert", post(convert))
+        .route("/archive", post(archive))
+        .route("/restore", post(restore))
         .route("/download/{token}", get(download))
         .layer(DefaultBodyLimit::max(MAX_UPLOAD_BYTES))
         .layer(TimeoutLayer::with_status_code(
@@ -199,8 +204,37 @@ async fn main() {
         listener,
         app.into_make_service_with_connect_info::<SocketAddr>(),
     )
+    .with_graceful_shutdown(shutdown_signal())
     .await
     .unwrap();
+}
+
+/// Resolve on Ctrl-C (SIGINT) or SIGTERM (e.g. `docker stop`), so the server
+/// stops cleanly on the first signal instead of being force-killed — and a
+/// foreground `docker run` doesn't leave an orphaned container holding the port.
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl-C handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("failed to install SIGTERM handler")
+            .recv()
+            .await;
+    };
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = terminate => {},
+    }
+
+    tracing::info!("shutdown signal received — stopping");
 }
 
 /// Serve the single-page front-end.
@@ -281,56 +315,19 @@ async fn convert(
         ));
     }
 
-    let mut file_bytes: Option<Vec<u8>> = None;
-    let mut file_name = String::from("book.epub");
-    let mut quality: u8 = 80;
-    let mut ascii = false;
-    let mut kepub = false;
-    let mut keep_images = false;
-
-    while let Some(field) = multipart
-        .next_field()
-        .await
-        .map_err(|e| bad_request(format!("malformed upload: {e}")))?
-    {
-        match field.name().unwrap_or_default() {
-            "file" => {
-                // Keep only the basename of the (untrusted) filename.
-                if let Some(name) = field.file_name()
-                    && let Some(base) = Path::new(name).file_name()
-                {
-                    file_name = base.to_string_lossy().into_owned();
-                }
-                let bytes = field
-                    .bytes()
-                    .await
-                    .map_err(|e| bad_request(format!("could not read file: {e}")))?;
-                file_bytes = Some(bytes.to_vec());
-            }
-            "quality" => {
-                let v = field.text().await.unwrap_or_default();
-                quality = v.trim().parse().unwrap_or(80);
-            }
-            "ascii" => {
-                let v = field.text().await.unwrap_or_default();
-                ascii = matches!(v.trim(), "true" | "on" | "1");
-            }
-            "kepub" => {
-                let v = field.text().await.unwrap_or_default();
-                kepub = matches!(v.trim(), "true" | "on" | "1");
-            }
-            "keep_images" => {
-                let v = field.text().await.unwrap_or_default();
-                keep_images = matches!(v.trim(), "true" | "on" | "1");
-            }
-            _ => { /* ignore unknown fields */ }
-        }
-    }
-
-    let file_bytes = file_bytes.ok_or_else(|| bad_request("no file was uploaded"))?;
-    if file_bytes.is_empty() {
-        return Err(bad_request("the uploaded file is empty"));
-    }
+    let (file_bytes, raw_name, fields) = read_upload(&mut multipart).await?;
+    let file_name = if raw_name.trim().is_empty() {
+        "book.epub".to_string()
+    } else {
+        raw_name
+    };
+    let quality: u8 = fields
+        .get("quality")
+        .and_then(|v| v.trim().parse().ok())
+        .unwrap_or(80);
+    let ascii = field_on(&fields, "ascii");
+    let kepub = field_on(&fields, "kepub");
+    let keep_images = field_on(&fields, "keep_images");
 
     // Bound concurrent conversions.
     let _permit = state
@@ -413,12 +410,279 @@ async fn convert(
         Pending {
             name: resp.output_name.clone(),
             bytes: out_bytes,
+            content_type: "application/epub+zip",
             born: Instant::now(),
         },
     );
     resp.download_token = token;
 
     Ok(Json(resp))
+}
+
+/// Stash a finished file in memory for one short-lived token download.
+fn stash(state: &AppState, name: String, bytes: Vec<u8>, content_type: &'static str) -> String {
+    let token = uuid::Uuid::new_v4().to_string();
+    state.pending.lock().unwrap().insert(
+        token.clone(),
+        Pending {
+            name,
+            bytes,
+            content_type,
+            born: Instant::now(),
+        },
+    );
+    token
+}
+
+/// Read the single uploaded `file` part (plus any extra text fields) from a
+/// multipart body. Returns the file bytes, its basename, and the text fields.
+async fn read_upload(
+    multipart: &mut Multipart,
+) -> Result<(Vec<u8>, String, HashMap<String, String>), ApiError> {
+    let mut file_bytes: Option<Vec<u8>> = None;
+    let mut file_name = String::new();
+    let mut fields: HashMap<String, String> = HashMap::new();
+
+    while let Some(field) = multipart
+        .next_field()
+        .await
+        .map_err(|e| bad_request(format!("malformed upload: {e}")))?
+    {
+        let name = field.name().unwrap_or_default().to_string();
+        if name == "file" {
+            // Keep only the basename of the (untrusted) filename.
+            if let Some(fname) = field.file_name()
+                && let Some(base) = Path::new(fname).file_name()
+            {
+                file_name = base.to_string_lossy().into_owned();
+            }
+            let bytes = field
+                .bytes()
+                .await
+                .map_err(|e| bad_request(format!("could not read file: {e}")))?;
+            file_bytes = Some(bytes.to_vec());
+        } else {
+            let v = field.text().await.unwrap_or_default();
+            fields.insert(name, v);
+        }
+    }
+
+    let bytes = file_bytes.ok_or_else(|| bad_request("no file was uploaded"))?;
+    if bytes.is_empty() {
+        return Err(bad_request("the uploaded file is empty"));
+    }
+    Ok((bytes, file_name, fields))
+}
+
+/// Whether a text multipart field reads as "on".
+fn field_on(fields: &HashMap<String, String>, key: &str) -> bool {
+    matches!(fields.get(key).map(|s| s.trim()), Some("true" | "on" | "1"))
+}
+
+#[derive(Serialize)]
+struct ArchiveResponse {
+    output_name: String,
+    original_size: u64,
+    archive_size: u64,
+    saved_pct: f64,
+    compressed_entries: usize,
+    stored_entries: usize,
+    download_token: String,
+}
+
+/// Archive an uploaded `.epub` into a compact `.eparc`; return stats + a token.
+async fn archive(
+    State(state): State<Arc<AppState>>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    mut multipart: Multipart,
+) -> Result<Json<ArchiveResponse>, ApiError> {
+    if !state.limiter.allow(client_ip(&headers, peer)) {
+        return Err(ApiError(
+            StatusCode::TOO_MANY_REQUESTS,
+            "Too many requests — please wait a moment and try again.".into(),
+        ));
+    }
+
+    let (file_bytes, file_name, fields) = read_upload(&mut multipart).await?;
+    // `ascii` transliterates the archive's *download* name (Işık → Isik) for older
+    // devices/filesystems. The archived bytes and the manifest's recorded source
+    // name keep the original — only the user-facing .eparc filename changes.
+    let ascii = field_on(&fields, "ascii");
+    let out_stem = {
+        let s = epublift::output_stem(Path::new(&file_name), ascii);
+        if s.trim().is_empty() { "book".to_string() } else { s }
+    };
+    let src_name = if file_name.trim().is_empty() {
+        "book.epub".to_string()
+    } else {
+        file_name
+    };
+
+    let _permit = state
+        .convert_slots
+        .acquire()
+        .await
+        .map_err(|_| ApiError(StatusCode::SERVICE_UNAVAILABLE, "server busy".into()))?;
+
+    let result =
+        tokio::task::spawn_blocking(move || -> anyhow::Result<(ArchiveResponse, Vec<u8>)> {
+            let tmp = tempfile::Builder::new().prefix("epublift_arc_").tempdir()?;
+            // Keep the original name on the temp input so it lands in the manifest;
+            // the output .eparc carries the (possibly transliterated) out_stem.
+            let input_path = tmp.path().join(&src_name);
+            let out_path = tmp.path().join(format!("{out_stem}.eparc"));
+            std::fs::write(&input_path, &file_bytes)?;
+
+            let stats = epublift::eparc::archive_epub(&input_path, &out_path)?;
+            let out_bytes = std::fs::read(&out_path)?;
+
+            let resp = ArchiveResponse {
+                output_name: format!("{out_stem}.eparc"),
+                original_size: stats.original_size,
+                archive_size: stats.archive_size,
+                saved_pct: stats.percent_saved(),
+                compressed_entries: stats.compressed_entries,
+                stored_entries: stats.stored_entries,
+                download_token: String::new(),
+            };
+            Ok((resp, out_bytes))
+        })
+        .await
+        .map_err(|_| ApiError(StatusCode::INTERNAL_SERVER_ERROR, "archive crashed".into()))?;
+
+    let (mut resp, out_bytes) = result
+        .map_err(|e| bad_request(format!("could not archive this EPUB: {e}")))?;
+
+    resp.download_token = stash(
+        &state,
+        resp.output_name.clone(),
+        out_bytes,
+        "application/octet-stream",
+    );
+    Ok(Json(resp))
+}
+
+#[derive(Serialize)]
+struct RestoreResponse {
+    output_name: String,
+    output_size: u64,
+    entries: usize,
+    /// Whether the book was re-optimized on the way out (vs. content-exact).
+    modernized: bool,
+    download_token: String,
+}
+
+/// Restore an uploaded `.eparc` back to a `.epub`. Content-exact by default; with
+/// `modernize` it re-runs the optimizer (mirroring the CLI `restore --target`).
+async fn restore(
+    State(state): State<Arc<AppState>>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    mut multipart: Multipart,
+) -> Result<Json<RestoreResponse>, ApiError> {
+    if !state.limiter.allow(client_ip(&headers, peer)) {
+        return Err(ApiError(
+            StatusCode::TOO_MANY_REQUESTS,
+            "Too many requests — please wait a moment and try again.".into(),
+        ));
+    }
+
+    let (file_bytes, file_name, fields) = read_upload(&mut multipart).await?;
+    let stem = file_stem_or(&file_name, "book");
+    let modernize = field_on(&fields, "modernize");
+    let keep_images = field_on(&fields, "keep_images");
+    let kepub = field_on(&fields, "kepub");
+    let quality: u8 = fields
+        .get("quality")
+        .and_then(|v| v.trim().parse().ok())
+        .unwrap_or(80);
+
+    let _permit = state
+        .convert_slots
+        .acquire()
+        .await
+        .map_err(|_| ApiError(StatusCode::SERVICE_UNAVAILABLE, "server busy".into()))?;
+
+    let result =
+        tokio::task::spawn_blocking(move || -> anyhow::Result<(RestoreResponse, Vec<u8>)> {
+            let tmp = tempfile::Builder::new().prefix("epublift_res_").tempdir()?;
+            let input_path = tmp.path().join(format!("{stem}.eparc"));
+            std::fs::write(&input_path, &file_bytes)?;
+
+            if !modernize {
+                // Content-exact: hand back the original book, byte-for-byte.
+                let out_path = tmp.path().join(format!("{stem}.epub"));
+                let stats = epublift::eparc::restore_eparc(&input_path, &out_path)?;
+                let out_bytes = std::fs::read(&out_path)?;
+                let resp = RestoreResponse {
+                    output_name: format!("{stem}.epub"),
+                    output_size: stats.output_size,
+                    entries: stats.entries,
+                    modernized: false,
+                    download_token: String::new(),
+                };
+                return Ok((resp, out_bytes));
+            }
+
+            // Modernize: restore content-exact into a temp file, then optimize it.
+            let restored = tmp.path().join("restored.epub");
+            epublift::eparc::restore_eparc(&input_path, &restored)?;
+
+            let opts = Options {
+                quality,
+                ascii: false,
+                target_version: EpubVersion::LATEST,
+                image_strategy: if keep_images {
+                    ImageStrategy::KeepOriginal
+                } else {
+                    ImageStrategy::WebP
+                },
+                kepub,
+                packaging: epublift::Packaging::Deflate,
+                output: None,
+            };
+            // Name the output the way `convert` does, but based on the archive's
+            // stem rather than the temp file.
+            let name_basis = tmp.path().join(format!("{stem}.epub"));
+            let out_path = epublift::default_output_path(&name_basis, &opts);
+            let opts = Options {
+                output: Some(out_path.clone()),
+                ..opts
+            };
+            let report = epublift::convert(&restored, &opts, |_| {})?;
+            let out_bytes = std::fs::read(&report.output_path)?;
+            let resp = RestoreResponse {
+                output_name: report.output_name.clone(),
+                output_size: report.final_size,
+                entries: report.image_metrics.len(),
+                modernized: true,
+                download_token: String::new(),
+            };
+            Ok((resp, out_bytes))
+        })
+        .await
+        .map_err(|_| ApiError(StatusCode::INTERNAL_SERVER_ERROR, "restore crashed".into()))?;
+
+    let (mut resp, out_bytes) = result
+        .map_err(|e| bad_request(format!("could not restore this .eparc: {e}")))?;
+
+    resp.download_token = stash(
+        &state,
+        resp.output_name.clone(),
+        out_bytes,
+        "application/epub+zip",
+    );
+    Ok(Json(resp))
+}
+
+/// The file stem of an (untrusted) upload name, or a fallback if it has none.
+fn file_stem_or(name: &str, fallback: &str) -> String {
+    Path::new(name)
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| fallback.to_string())
 }
 
 /// Stream a converted EPUB by token, then drop it from memory (one-shot).
@@ -436,7 +700,7 @@ async fn download(State(state): State<Arc<AppState>>, UrlPath(token): UrlPath<St
             let safe = sanitize_filename(&p.name);
             (
                 [
-                    (header::CONTENT_TYPE, "application/epub+zip".to_string()),
+                    (header::CONTENT_TYPE, p.content_type.to_string()),
                     (
                         header::CONTENT_DISPOSITION,
                         format!("attachment; filename=\"{safe}\""),

@@ -13,7 +13,7 @@ publish = false
 [dependencies]
 epublift = { path = ".." }
 axum = { version = "0.8", features = ["multipart"] }
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "net"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal"] }
 tower = "0.5"
 tower-http = { version = "0.7", features = ["timeout", "cors", "set-header"] }
 serde = { version = "1", features = ["derive"] }

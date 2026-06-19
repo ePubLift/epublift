@@ -196,6 +196,28 @@
   .pill small { display:block; font-family:"JetBrains Mono",monospace; font-size:10px; letter-spacing:.1em;
     text-transform:uppercase; font-weight:500; margin-top:3px; }
 
+  /* mode switch (Optimize · Archive · Restore) */
+  .modeswitch { display:flex; gap:8px; padding:18px 18px 0; }
+  .modeswitch .mode { flex:1; display:flex; flex-direction:column; align-items:center; gap:2px;
+    font:inherit; font-weight:600; font-size:14.5px; color: var(--muted);
+    background: var(--paper); border:1.5px solid var(--line); border-radius:12px;
+    padding:10px 8px; cursor:pointer; transition: border-color .15s, color .15s, background .15s, box-shadow .15s; }
+  .modeswitch .mode small { font-family:"JetBrains Mono",monospace; font-size:9.5px; letter-spacing:.06em;
+    text-transform:uppercase; font-weight:500; opacity:.7; }
+  .modeswitch .mode:hover { border-color: var(--ink-soft); color: var(--ink-soft); }
+  .modeswitch .mode.on { background: var(--ink); color: var(--paper); border-color: var(--ink);
+    box-shadow: 3px 3px 0 var(--accent); }
+  .modeswitch .mode.on small { opacity:.85; }
+  @media (max-width:560px){ .modeswitch .mode small { display:none; } }
+
+  /* mode-specific intro copy in the options column */
+  .modeinfo { display:flex; flex-direction:column; gap:12px; }
+  .modeinfo p { margin:0; font-size:14px; line-height:1.5; color: var(--ink-soft); }
+  .modeinfo p b { color: var(--ink); }
+
+  /* utility: hard hide regardless of the element's own display */
+  .hide { display:none !important; }
+
   /* CTA */
   .cta-row { padding: 0 28px 28px; }
   .cta {
@@ -223,6 +245,9 @@
     border:none; border-radius:11px; padding:12px 20px; font-weight:700; font-size:14.5px; cursor:pointer;
     box-shadow: 3px 3px 0 var(--accent); transition: transform .14s; text-decoration:none; }
   .dl:hover { transform: translate(-1px,-1px); }
+  .result-sub { padding:14px 28px; border-bottom:1px solid rgba(244,238,225,0.14);
+    font-family:"JetBrains Mono",monospace; font-size:12.5px; color: rgba(244,238,225,0.72); }
+  .result-sub b { color: var(--good-2); font-weight:700; }
   .result-body { display:grid; grid-template-columns: 1fr 1fr 1.3fr; gap:0; }
   @media (max-width:720px){ .result-body{ grid-template-columns:1fr; } }
   .stat { padding:24px 28px; border-right:1px solid rgba(244,238,225,0.14); }
@@ -357,6 +382,18 @@
 
   <!-- converter -->
   <div class="panel reveal d4">
+    <!-- mode switch -->
+    <div class="modeswitch" id="modeswitch" role="tablist" aria-label="Mode">
+      <button type="button" class="mode on" data-mode="optimize" role="tab" aria-selected="true">
+        <span data-i18n="mode_optimize">Optimize</span><small data-i18n="mode_optimize_sub">.epub → 3.3</small>
+      </button>
+      <button type="button" class="mode" data-mode="archive" role="tab" aria-selected="false">
+        <span data-i18n="mode_archive">Archive</span><small data-i18n="mode_archive_sub">.epub → .eparc</small>
+      </button>
+      <button type="button" class="mode" data-mode="restore" role="tab" aria-selected="false">
+        <span data-i18n="mode_restore">Restore</span><small data-i18n="mode_restore_sub">.eparc → .epub</small>
+      </button>
+    </div>
     <div class="panel-grid">
       <!-- dropzone -->
       <label class="drop" id="drop" for="file">
@@ -364,7 +401,7 @@
           <div class="sheet"></div>
           <span class="ln"></span><span class="ln"></span><span class="ln"></span>
         </div>
-        <h3 data-i18n-html="drop_title">Drop your <span style="color:var(--accent)">.epub</span> here</h3>
+        <h3 id="dropTitle" data-i18n-html="drop_title">Drop your <span style="color:var(--accent)">.epub</span> here</h3>
         <p data-i18n-html="drop_or">or <span class="browse">browse your files</span></p>
         <span class="filechip" id="chip"><span class="dot"></span><span id="chipname">book.epub</span></span>
         <input type="file" id="file" accept=".epub" hidden />
@@ -372,9 +409,35 @@
 
       <!-- options -->
       <div class="opts">
-        <p class="opt-h" data-i18n="opt_h">Conversion options</p>
+        <p class="opt-h" id="optsH" data-i18n="opt_h">Conversion options</p>
 
-        <div>
+        <!-- archive: no tuning, just an explanation -->
+        <div class="modeinfo" data-modes="archive">
+          <p data-i18n-html="archive_lede">Shrink a book into a compact <b>.eparc</b> archive — the text is losslessly compressed and the images are kept untouched. Your book is fully recoverable: switch to <b>Restore</b> anytime to get a working EPUB back.</p>
+          <p class="opt-note">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 1.5v6M8 10v.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M8 1.5l5.5 2.4v3.5c0 3.3-2.3 5.6-5.5 6.6-3.2-1-5.5-3.3-5.5-6.6V3.9L8 1.5z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
+            <span data-i18n="archive_note">An .eparc is an archive, not a readable e-book — it won't open in a reader. Keep it for storage and Restore it when you want to read.</span>
+          </p>
+        </div>
+
+        <!-- restore: intro + optional modernize -->
+        <div class="modeinfo" data-modes="restore">
+          <p data-i18n-html="restore_lede">Turn an <b>.eparc</b> archive back into a working <b>.epub</b>. By default you get your book back <b>exactly as it was archived</b>.</p>
+        </div>
+
+        <div class="toggle-row" data-modes="restore">
+          <div class="txt">
+            <span style="font-weight:600;font-size:15px;" data-i18n="modernize_title">Modernize while restoring</span>
+            <small data-i18n-html="modernize_desc">Re-run the optimizer on the way out: upgrade to EPUB 3.3 and re-encode images. Leave off for a content-exact copy.</small>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="modernize" />
+            <span class="slot"></span>
+          </label>
+        </div>
+
+        <!-- shared image-quality slider (Optimize + Restore-modernize) -->
+        <div data-modes="optimize restore" data-mz="1">
           <div class="field-label">
             <span data-i18n="opt_quality">Image quality</span>
             <span class="qval" id="qval">80</span>
@@ -387,7 +450,7 @@
           </p>
         </div>
 
-        <div class="toggle-row">
+        <div class="toggle-row" data-modes="optimize archive">
           <div class="txt">
             <span style="font-weight:600;font-size:15px;" data-i18n="ascii_title">ASCII filenames</span>
             <small data-i18n="ascii_desc">Transliterate the output name (Işık → Isik) for older devices.</small>
@@ -398,7 +461,7 @@
           </label>
         </div>
 
-        <div class="toggle-row">
+        <div class="toggle-row" data-modes="optimize restore" data-mz="1">
           <div class="txt">
             <span style="font-weight:600;font-size:15px;" data-i18n="keep_title">Keep original images</span>
             <small data-i18n-html="keep_desc">Skip JPEG/PNG → WebP. Use for readers that don't render WebP — notably <b>Kobo</b> e-ink devices. Structure is still upgraded to EPUB 3.3.</small>
@@ -409,7 +472,7 @@
           </label>
         </div>
 
-        <div class="toggle-row">
+        <div class="toggle-row" data-modes="optimize restore" data-mz="1">
           <div class="txt">
             <span style="font-weight:600;font-size:15px;" data-i18n="kepub_title">Kobo (.kepub) output</span>
             <small data-i18n-html="kepub_desc">Add Kobo's koboSpan markup for page turns, stats &amp; dictionary on Kobo devices. Output is named <code style="font-family:inherit">.kepub.epub</code>. Keeps original images automatically (Kobo can't render WebP).</small>
@@ -420,7 +483,7 @@
           </label>
         </div>
 
-        <div>
+        <div data-modes="optimize">
           <p class="opt-h" style="margin-bottom:10px" data-i18n="target_h">Target version</p>
           <div class="pills">
             <div class="pill on">EPUB 3.3<small data-i18n="pill_recommended">Recommended</small></div>
@@ -433,7 +496,7 @@
     <div class="cta-row">
       <button class="cta" id="go">
         <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M9 15V3M9 3L4 8M9 3l5 5" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        <span data-i18n="cta">Lift my EPUB</span>
+        <span id="ctaLabel" data-i18n="cta">Lift my EPUB</span>
       </button>
     </div>
   </div>
@@ -444,23 +507,24 @@
       <div class="ok">
         <span class="badge"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3.2 3.2L13 5" stroke="#1B1712" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
         <div>
-          <div style="font-family:'Fraunces',serif;font-weight:600;font-size:18px;" data-i18n="res_ready">Lifted &amp; ready</div>
+          <div id="resReady" style="font-family:'Fraunces',serif;font-weight:600;font-size:18px;" data-i18n="res_ready">Lifted &amp; ready</div>
           <div class="fname"><b id="outname">my-book_v3.3.epub</b></div>
         </div>
       </div>
       <a class="dl" id="dl" href="#" download><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M8 2v8m0 0L5 7m3 3l3-3M3 13h10" stroke="#1B1712" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span data-i18n="res_download">Download</span></a>
     </div>
-    <div class="result-body">
-      <div class="stat"><div class="lab" data-i18n="stat_before">Before</div><div class="big" id="sBefore" style="font-family:'JetBrains Mono',monospace;font-size:24px;">—</div></div>
-      <div class="stat"><div class="lab" data-i18n="stat_after">After</div><div class="big" id="sAfter" style="font-family:'JetBrains Mono',monospace;font-size:24px;">—</div></div>
-      <div class="stat"><div class="lab" data-i18n="stat_saved">You saved</div><div class="big save" id="sSaved">—</div><div class="bar"><i id="sBar"></i></div></div>
+    <div class="result-sub" id="resultSub" hidden></div>
+    <div class="result-body" id="resultBody" data-result-modes="optimize archive">
+      <div class="stat"><div class="lab" id="labBefore" data-i18n="stat_before">Before</div><div class="big" id="sBefore" style="font-family:'JetBrains Mono',monospace;font-size:24px;">—</div></div>
+      <div class="stat"><div class="lab" id="labAfter" data-i18n="stat_after">After</div><div class="big" id="sAfter" style="font-family:'JetBrains Mono',monospace;font-size:24px;">—</div></div>
+      <div class="stat"><div class="lab" id="labSaved" data-i18n="stat_saved">You saved</div><div class="big save" id="sSaved">—</div><div class="bar"><i id="sBar"></i></div></div>
     </div>
 
-    <button class="rtoggle" id="rtoggle">
+    <button class="rtoggle" id="rtoggle" data-result-modes="optimize">
       <span id="rtoggle-txt" data-i18n="report_view">View full report</span>
       <svg class="chev" width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
-    <div class="report" id="report">
+    <div class="report" id="report" data-result-modes="optimize">
       <div class="report-cols">
         <div class="rcol">
           <div class="rlab" data-i18n="rcol_modernized">Modernized for EPUB 3.3</div>
