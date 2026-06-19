@@ -10,6 +10,28 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+### Added (web)
+- **Archive & restore in the browser (`epublift-web`).** The web UI gains a
+  three-way mode switch — **Optimize** (the existing convert flow), **Archive**,
+  and **Restore** — bringing the CLI's `.eparc` archival to the hosted/self-hosted
+  service. *Archive* packs an uploaded `.epub` into a compact, lossless `.eparc`
+  (new `POST /archive`); *Restore* turns an `.eparc` back into a working `.epub`
+  (new `POST /restore`) — **content-exact by default**, or with a **Modernize**
+  toggle that re-runs the optimizer (EPUB 3.3, WebP, keep-images, `.kepub`). Like
+  conversion, every request is processed **in memory and deleted immediately** —
+  nothing is stored or logged in any mode. New strings are localized across all
+  **13 languages**, and the hero copy now reflects all three capabilities.
+- **ASCII output name for Archive.** The *ASCII filenames* toggle now also applies
+  in Archive mode, transliterating the downloaded `.eparc` name (e.g. `Işık` →
+  `Isik`) for older devices/filesystems; the archived bytes and the manifest's
+  recorded source name are unchanged.
+
+### Fixed (web)
+- **Graceful shutdown on SIGINT/SIGTERM.** The server now stops cleanly on the
+  first Ctrl-C and on `docker stop` (instead of being force-killed after the
+  ~10 s timeout), so a foreground `docker run` no longer leaves an orphaned
+  container holding port 8080.
+
 ## [cli-v1.4.1] - 2026-06-18
 
 ### Added

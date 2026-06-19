@@ -35,7 +35,7 @@ ePubLift began as a Rust port of an earlier Python implementation but has since 
     *   Standardizes legacy XHTML DOCTYPEs (like XHTML 1.1) to modern HTML5 `<!DOCTYPE html>` structure.
 *   **📦 Archive your library (`.eparc`)**: `epublift archive` shrinks EPUB(s) into compact, **lossless** `.eparc` archives to save disk space; `epublift restore` brings any book back — content-exact by default, or re-targeted for a specific reader (`--target 3.3`, `--keep-images`, `--kepub`). Pure-Rust solid Zstandard on text + fonts, media stored verbatim, so it never grows a book. See [Archive your library](#-archive-your-library-eparc).
 *   **📊 Detailed Audit Reports**: Generates a detailed size comparison table and conversion metrics report in an easy-to-read text file.
-*   **🌐 Browser & Docker Ready**: A hardened [web service](#-hosted-web-service-epublift-web) converts EPUBs in the browser — uploads are processed in memory and deleted immediately. Ships as a multi-arch Docker image for one-command self-hosting.
+*   **🌐 Browser & Docker Ready**: A hardened [web service](#-hosted-web-service-epublift-web) does it all in the browser — **optimize** an EPUB, **archive** a book to a compact `.eparc`, or **restore** one back — with uploads processed in memory and deleted immediately. Ships as a multi-arch Docker image for one-command self-hosting.
 
 ---
 
@@ -168,7 +168,7 @@ Lossless, runs anywhere from a Raspberry Pi to a NAS. Full guide: **[Archiving g
 
 ## 🌐 Hosted Web Service (`epublift-web`)
 
-Drag-and-drop an EPUB in your browser and get back the modernized file plus an in-page audit report — the same pure-Rust core, with uploads processed **in memory and deleted immediately** (nothing stored or logged). Available in **13 languages**.
+Drag-and-drop an EPUB in your browser and pick a mode: **Optimize** (modernize to EPUB 3.3 + WebP, with an in-page audit report), **Archive** a book to a compact `.eparc`, or **Restore** an `.eparc` back to a working `.epub` — content-exact by default, or modernized on the way out. The same pure-Rust core, with uploads processed **in memory and deleted immediately** (nothing stored or logged). Available in **13 languages**.
 
 > 💡 Hosted instance: **<https://epublift.itpax.net>**. Or self-host in one command:
 
