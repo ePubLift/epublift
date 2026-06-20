@@ -152,9 +152,16 @@ epublift -i book.epub --target 3.4 --image-format jxl # JPEG XL images
 
 First validation (synthetic book): JPEG cover re-encoded to a valid AVIF
 (`ftypavif`) and JPEG XL (`ff0a` codestream) with correct manifest media types;
-a tiny PNG was left untouched by the size-safe guard. Next: measure AVIF/JXL vs
-WebP on a **photo-heavy** corpus (the synthetic solid-colour images aren't
-representative), tune quality mapping, and wire `--target 3.4` into `restore`.
+a tiny PNG was left untouched by the size-safe guard.
+
+**Calibrated codec comparison (done):** at equal perceptual quality the best codec
+is **content-dependent** — WebP wins on diagram/line-art books, AVIF on
+photographic ones. So AVIF must **not** be a blind `--target 3.4` default; the
+source format (PNG vs JPEG) is a free content-type signal. Full methodology, the
+two-book data, and the `img-calib` bench are in
+**[`design/epub-3.4-image-codec-choice.md`](design/epub-3.4-image-codec-choice.md)**.
+Next: wire the source-format heuristic into `--target 3.4`, calibrate the
+per-format quality mapping, and extend `--target 3.4` to `restore` / web.
 
 ## Related
 

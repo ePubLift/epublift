@@ -56,6 +56,12 @@ name = "zstd-bench"
 path = "src/bin/zstd_bench.rs"
 required-features = ["zstd-experimental"]
 
+# Dev-only EPUB 3.4 image-codec calibration bench. Built only with `img-calib`.
+[[bin]]
+name = "img-calib"
+path = "src/bin/img_calib.rs"
+required-features = ["img-calib"]
+
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 zip = { version = "8", default-features = false, features = ["deflate"] }
@@ -108,6 +114,7 @@ brotli = { version = "8", optional = true }
 # choice trades away (and, via --mem-probe, at what memory cost). NEVER shipped —
 # gated behind `ceiling-bench`, keeps Guiding Principle #1 (pure Rust, no C).
 xz2 = { version = "0.1", optional = true }
+butteraugli = { version = "0.9", optional = true }
 
 [features]
 # Archival mode (`epublift archive` / `restore` → `.eparc`) ships by default.
@@ -129,6 +136,13 @@ archival-bench = ["zstd-experimental", "dep:brotli"]
 # Additionally add the C reference ceilings (libzstd --ultra + xz/LZMA) to the
 # solid comparison. Dev-only; documents the pure-Rust ratio/memory trade-off.
 ceiling-bench = ["archival-bench", "dep:zstd", "dep:xz2"]
+butteraugli = ["dep:butteraugli"]
+# Dev-only image-codec calibration bench: compare WebP/AVIF/JXL at EQUAL
+# perceptual quality (butteraugli) on a directory of images. Never shipped.
+# NOTE: zenavif's pure-Rust rav1d decoder (0.1.6) panics on Apple Silicon for some
+# AVIF inputs (a loop-restoration SIMD bug). The bench catches those panics and
+# excludes the affected images from the comparison (see src/bin/img_calib.rs).
+img-calib = ["epub34", "dep:butteraugli", "zenjxl?/decode"]
 
 [dev-dependencies]
 # Used by the integration tests to assemble EPUB fixtures and inspect output.
