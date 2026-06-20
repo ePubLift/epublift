@@ -170,8 +170,13 @@ already avoids the line-art→AVIF disaster (a diagram book stays WebP: 20.5 MB 
 mapped per codec (fit over 48 images / 11 books) so equal N ≈ equal perceptual
 quality (butteraugli). At matched quality, `--target 3.4` is **≈0–11% smaller**
 than 3.3 on photo books (historical photos most). Before calibration, raw q80
-over-delivered quality and 3.4 was *larger* than 3.3. Next: `restore` / web,
-and possibly a non-linear calibration fit.
+over-delivered quality and 3.4 was *larger* than 3.3.
+
+**Per-image "smallest" mode (done): `--image-format best`** encodes every
+candidate per image and keeps the smallest (valid because quality is calibrated).
+It beats both fixed modes by correcting the heuristic's per-image misroutes — on
+the photo book it picked 13 WebP + 3 AVIF (839 KB, vs 842 WebP-only / 847
+AVIF-Auto) — at the cost of multiple encodes per image. Next: `restore` / web.
 
 ## Related
 

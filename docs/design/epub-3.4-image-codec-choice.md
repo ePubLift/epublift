@@ -161,9 +161,19 @@ photo book was *larger* under 3.4 (q80-raw over-delivers quality).
    photo win — at matched quality, `--target 3.4` is **≈0–11% smaller** than 3.3
    on photo books (historical photos most). Before calibration, raw q80
    over-delivered quality and 3.4 came out *larger* than 3.3.
-3. **Next:** refine the calibration (more books, non-linear fit, per-format speed),
-   extend `--target 3.4` to `restore` / web, and consider a per-image "keep
-   smallest at matched quality" mode. JXL stays available via `--image-format jxl`.
+3. **Per-image "keep smallest" mode (done): `--image-format best`.** Encodes every
+   candidate per image and keeps the smallest — valid because `--quality` is
+   calibrated, so smallest bytes = smallest *at matched quality*. It corrects the
+   heuristic's per-image misroutes: on the photo book it chose **13 WebP + 3 AVIF**
+   and came out **839 KB**, beating both the WebP-only (842 KB) and the
+   AVIF-everywhere Auto (847 KB). The cost is multiple encodes per image (the slow
+   AVIF one included), so it's an opt-in "thorough" mode — `Auto` stays the fast
+   default. (Notably, the heuristic over-routes to AVIF here: WebP actually wins on
+   most of this book's JPEGs at matched quality.)
+4. **Next:** refine the calibration further (more books, non-linear fit, per-format
+   speed), and extend `--target 3.4` to `restore` / web. JXL stays available via
+   `--image-format jxl`, though it is size-dominated in both regimes (never the
+   smallest), so `best` rarely picks it.
 
 ## Related
 

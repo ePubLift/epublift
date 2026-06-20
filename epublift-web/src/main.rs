@@ -353,6 +353,7 @@ async fn convert(
                 } else {
                     ImageStrategy::WebP
                 },
+                image_policy: None,
                 kepub,
                 // The hosted service only ever emits conformant EPUBs; the
                 // experimental Zstd packaging is CLI/research-only.
@@ -642,6 +643,7 @@ async fn restore(
                 } else {
                     ImageStrategy::WebP
                 },
+                image_policy: None,
                 kepub,
                 packaging: epublift::Packaging::Deflate,
                 output: None,

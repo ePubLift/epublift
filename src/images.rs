@@ -64,10 +64,16 @@ pub enum FormatPolicy {
     /// quality: AVIF wins on photos, WebP wins on line-art (see
     /// docs/design/epub-3.4-image-codec-choice.md). So **JPEG → AVIF, PNG → WebP**.
     Auto,
+    /// Thorough: encode every candidate format per image and keep the smallest
+    /// (at matched quality, since `--quality` is calibrated). Best size, but
+    /// pays the cost of multiple encodes per image (notably the slow AVIF one).
+    Best,
 }
 
 impl FormatPolicy {
-    /// The output format for a source of the given media type.
+    /// The output format for a source of the given media type. Only meaningful
+    /// for `Fixed`/`Auto`; `Best` selects per image by encoding all candidates,
+    /// so it never calls this (the `WebP` arm is an unreachable safe default).
     pub fn format_for(self, media_type: &str) -> ImageFormat {
         match self {
             FormatPolicy::Fixed(f) => f,
@@ -75,6 +81,7 @@ impl FormatPolicy {
                 "image/jpeg" | "image/jpg" => ImageFormat::Avif,
                 _ => ImageFormat::WebP,
             },
+            FormatPolicy::Best => ImageFormat::WebP,
         }
     }
 
@@ -83,6 +90,7 @@ impl FormatPolicy {
         match self {
             FormatPolicy::Fixed(f) => f.label(),
             FormatPolicy::Auto => "AVIF for photos, WebP for line-art",
+            FormatPolicy::Best => "smallest per image",
         }
     }
 }
@@ -133,10 +141,6 @@ pub fn optimize_images(
             continue;
         }
 
-        // Output format for this image — fixed, or chosen from the source type
-        // (the 3.4 content-adaptive heuristic). The rest of the loop uses `format`.
-        let format = policy.format_for(&item.media_type);
-
         // Hrefs are URL-encoded; decode to obtain the real on-disk path.
         let decoded_href = unquote(&item.href);
         let img_path = package_dir.join(&decoded_href);
@@ -149,8 +153,6 @@ pub fn optimize_images(
             continue;
         }
 
-        let new_href = with_ext(&decoded_href, format.extension());
-        let new_img_path = package_dir.join(&new_href);
         let old_name = basename(&decoded_href).to_string();
 
         // Read the original bytes once: we need its size, its raw bytes (to
@@ -184,12 +186,28 @@ pub fn optimize_images(
             quality
         };
 
-        // (3) Encode grayscale as grayscale so we never pay for empty colour
-        // channels. Encode to memory first so we can compare sizes.
-        let encoded = match encode_image(&dynimg, eff_quality, format) {
-            Ok(b) => b,
-            Err(e) => {
-                progress(&format!("  [!] Failed to convert image {old_name}: {e}"));
+        // (3) Encode. Fixed/Auto is a single format; `Best` tries every candidate
+        // and keeps the smallest — valid because `--quality` is calibrated to equal
+        // perceptual quality across codecs, so smallest bytes = smallest at matched
+        // quality. (Grayscale stays grayscale inside each encoder.) Encode to memory
+        // first so we can compare sizes against the original.
+        let candidates: Vec<ImageFormat> = match policy {
+            FormatPolicy::Fixed(f) => vec![f],
+            FormatPolicy::Auto => vec![policy.format_for(&item.media_type)],
+            FormatPolicy::Best => vec![ImageFormat::WebP, ImageFormat::Avif, ImageFormat::Jxl],
+        };
+        let mut best: Option<(ImageFormat, Vec<u8>)> = None;
+        for cand in candidates {
+            if let Ok(bytes) = encode_image(&dynimg, eff_quality, cand)
+                && best.as_ref().is_none_or(|(_, b)| bytes.len() < b.len())
+            {
+                best = Some((cand, bytes));
+            }
+        }
+        let (format, encoded) = match best {
+            Some(x) => x,
+            None => {
+                progress(&format!("  [!] Failed to convert image {old_name}"));
                 continue;
             }
         };
@@ -216,6 +234,10 @@ pub fn optimize_images(
             continue;
         }
 
+        // The output extension/path follow the chosen format (known only now for
+        // the `Best` policy, which selects per image).
+        let new_href = with_ext(&decoded_href, format.extension());
+        let new_img_path = package_dir.join(&new_href);
         if let Err(e) = fs::write(&new_img_path, &encoded) {
             progress(&format!(
                 "  [!] Failed to write {}: {e}",

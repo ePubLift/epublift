@@ -42,7 +42,7 @@ use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
 use opf::RewriteParams;
 
-pub use images::{ImageFormat, ImageMetric};
+pub use images::{FormatPolicy, ImageFormat, ImageMetric};
 
 /// Target EPUB specification version for the converted output.
 ///
@@ -148,10 +148,12 @@ pub struct Options {
     /// documents and name the output `<stem>.kepub.epub`. The result is still a
     /// valid EPUB 3 on top of the normal upgrades.
     pub kepub: bool,
-    /// Output raster image format. `None` uses the target version's default
-    /// ([`EpubVersion::default_image_format`]: WebP for 3.3, AVIF for 3.4).
-    /// `Some(..)` forces a specific format (AVIF/JXL need the `epub34` feature).
-    pub image_format: Option<ImageFormat>,
+    /// How the output raster image format is chosen. `None` uses the target
+    /// version's default ([`FormatPolicy::Fixed`]`(WebP)` for 3.3, the
+    /// content-adaptive [`FormatPolicy::Auto`] for 3.4). `Some(..)` overrides:
+    /// `Fixed(f)` forces one format, `Best` keeps the smallest per image. AVIF /
+    /// JXL (incl. `Auto`/`Best` emitting them) need the `epub34` feature.
+    pub image_policy: Option<FormatPolicy>,
     /// Container packaging. Defaults to conformant [`Packaging::Deflate`];
     /// [`Packaging::Zstd`] is the experimental measurement mode and requires the
     /// `zstd-experimental` build feature.
@@ -167,7 +169,7 @@ impl Default for Options {
             ascii: false,
             target_version: EpubVersion::LATEST,
             image_strategy: ImageStrategy::default(),
-            image_format: None,
+            image_policy: None,
             kepub: false,
             packaging: Packaging::default(),
             output: None,
@@ -313,16 +315,15 @@ pub fn convert(input: &Path, options: &Options, progress: impl Fn(&str)) -> Resu
     };
     let opt = match image_strategy {
         ImageStrategy::WebP => {
-            // Format selection: an explicit `--image-format` forces one format for
-            // every image; otherwise 3.3 → WebP, and 3.4 → content-adaptive (per
-            // image, from the source type: JPEG → AVIF, PNG → WebP).
-            let policy = match options.image_format {
-                Some(f) => images::FormatPolicy::Fixed(f),
-                None => match options.target_version {
-                    EpubVersion::V3_3 => images::FormatPolicy::Fixed(ImageFormat::WebP),
-                    EpubVersion::V3_4 => images::FormatPolicy::Auto,
-                },
-            };
+            // Format selection: an explicit policy wins; otherwise the version
+            // default — 3.3 → WebP, 3.4 → content-adaptive (per image, from the
+            // source type: JPEG → AVIF, PNG → WebP).
+            let policy = options
+                .image_policy
+                .unwrap_or(match options.target_version {
+                    EpubVersion::V3_3 => FormatPolicy::Fixed(ImageFormat::WebP),
+                    EpubVersion::V3_4 => FormatPolicy::Auto,
+                });
             progress(&format!(
                 "[*] Converting and compressing images ({})...",
                 policy.label()
