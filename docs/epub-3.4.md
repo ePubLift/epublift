@@ -160,8 +160,14 @@ photographic ones. So AVIF must **not** be a blind `--target 3.4` default; the
 source format (PNG vs JPEG) is a free content-type signal. Full methodology, the
 two-book data, and the `img-calib` bench are in
 **[`design/epub-3.4-image-codec-choice.md`](design/epub-3.4-image-codec-choice.md)**.
-Next: wire the source-format heuristic into `--target 3.4`, calibrate the
-per-format quality mapping, and extend `--target 3.4` to `restore` / web.
+
+**Source-format heuristic wired (done):** `--target 3.4` now picks per image —
+**JPEG → AVIF, PNG → WebP** (`--image-format avif|jxl` forces one format). This
+already avoids the line-art→AVIF disaster (a diagram book stays WebP: 20.5 MB /
+16 s vs forced AVIF 23.3 MB / 4 min). The photo *size* win still needs the
+per-format **quality-mapping calibration** (AVIF q80 over-delivers quality, so it
+can be larger than WebP q80 until equal-quality mapping lands). Next: that
+calibration, then `restore` / web.
 
 ## Related
 

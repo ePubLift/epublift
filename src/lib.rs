@@ -70,15 +70,6 @@ impl EpubVersion {
             EpubVersion::V3_4 => "3.4",
         }
     }
-
-    /// The default output image format for this version: WebP for 3.3, AVIF for
-    /// the experimental 3.4 target.
-    pub fn default_image_format(self) -> ImageFormat {
-        match self {
-            EpubVersion::V3_3 => ImageFormat::WebP,
-            EpubVersion::V3_4 => ImageFormat::Avif,
-        }
-    }
 }
 
 /// How raster images are handled during conversion.
@@ -322,21 +313,26 @@ pub fn convert(input: &Path, options: &Options, progress: impl Fn(&str)) -> Resu
     };
     let opt = match image_strategy {
         ImageStrategy::WebP => {
-            // Output format: explicit override, else the target version's default
-            // (WebP for 3.3, AVIF for the experimental 3.4).
-            let format = options
-                .image_format
-                .unwrap_or_else(|| options.target_version.default_image_format());
+            // Format selection: an explicit `--image-format` forces one format for
+            // every image; otherwise 3.3 → WebP, and 3.4 → content-adaptive (per
+            // image, from the source type: JPEG → AVIF, PNG → WebP).
+            let policy = match options.image_format {
+                Some(f) => images::FormatPolicy::Fixed(f),
+                None => match options.target_version {
+                    EpubVersion::V3_3 => images::FormatPolicy::Fixed(ImageFormat::WebP),
+                    EpubVersion::V3_4 => images::FormatPolicy::Auto,
+                },
+            };
             progress(&format!(
-                "[*] Converting and compressing images to {}...",
-                format.label()
+                "[*] Converting and compressing images ({})...",
+                policy.label()
             ));
             let opt = images::optimize_images(
                 &package_dir,
                 &info.items,
                 info.cover_id.as_deref(),
                 quality,
-                format,
+                policy,
                 &progress,
             )?;
             images::update_document_references(temp_path, &opt.ref_pairs, &progress);

@@ -104,13 +104,22 @@ avif  q85   0.5886  1405.3 KB        jxl  d2.0  0.8775  1099.6 KB
 
 ## Decision / direction
 
-1. **Do not** make AVIF a blind `--target 3.4` default. Today `--target 3.4`
-   defaults to AVIF for *experimentation*; production format selection must be
-   content-aware.
-2. **Next:** wire the source-format heuristic (JPEG→AVIF/JXL, PNG→WebP) into
-   `--target 3.4`, and/or a per-image "keep smallest at matched quality" mode.
-3. Re-measure on more books per content type, and calibrate the per-format quality
-   knobs so `--quality N` means the same perceptual quality across codecs.
+1. **Source-format heuristic is wired into `--target 3.4`** (the default): per
+   image, **JPEG → AVIF, PNG → WebP** (`FormatPolicy::Auto`). An explicit
+   `--image-format avif|jxl` forces one format for every image. This already
+   delivers the unambiguous win — a diagram/line-art book no longer gets AVIF
+   (which was +93% size *and* ~15× slower); it stays WebP, fast and small.
+2. **Quality mapping is the remaining half (not done).** `convert` uses a fixed
+   `--quality` (e.g. 80) mapped naïvely per codec, so AVIF q80 and WebP q80 are
+   *different* perceptual qualities — AVIF q80 over-delivers quality and can come
+   out **larger** than WebP q80 on a photo book (measured 0.96 MB vs 0.82 MB),
+   even though AVIF is −14% **at equal quality**. The photo size win is only
+   realized once `--quality N` means the same butteraugli across codecs. Until
+   then, 3.4 on a photo book is *higher quality* but not smaller than 3.3.
+3. **Next:** calibrate the per-format quality knobs (map `--quality` → each
+   codec's knob so equal N = equal perceptual quality), re-measure on more books
+   per content type, and consider a per-image "keep smallest at matched quality"
+   mode. JXL stays available via `--image-format jxl`.
 
 ## Related
 

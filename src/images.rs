@@ -52,6 +52,41 @@ impl ImageFormat {
     }
 }
 
+/// How the output format is chosen for each image.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FormatPolicy {
+    /// The same format for every image (an explicit `--image-format`, or the
+    /// EPUB 3.3 default of WebP).
+    Fixed(ImageFormat),
+    /// Content-adaptive (the EPUB 3.4 default): pick per image from its *source*
+    /// format, which is a free content-type signal — publishers use JPEG for
+    /// photographs and PNG for line-art/screenshots. Measured at equal perceptual
+    /// quality: AVIF wins on photos, WebP wins on line-art (see
+    /// docs/design/epub-3.4-image-codec-choice.md). So **JPEG → AVIF, PNG → WebP**.
+    Auto,
+}
+
+impl FormatPolicy {
+    /// The output format for a source of the given media type.
+    pub fn format_for(self, media_type: &str) -> ImageFormat {
+        match self {
+            FormatPolicy::Fixed(f) => f,
+            FormatPolicy::Auto => match media_type {
+                "image/jpeg" | "image/jpg" => ImageFormat::Avif,
+                _ => ImageFormat::WebP,
+            },
+        }
+    }
+
+    /// Short label for the conversion progress header.
+    pub fn label(self) -> &'static str {
+        match self {
+            FormatPolicy::Fixed(f) => f.label(),
+            FormatPolicy::Auto => "AVIF for photos, WebP for line-art",
+        }
+    }
+}
+
 /// Per-image size statistics, used by the report.
 #[derive(Debug, Clone)]
 pub struct ImageMetric {
@@ -84,7 +119,7 @@ pub fn optimize_images(
     items: &[ManifestItem],
     cover_id: Option<&str>,
     quality: u8,
-    format: ImageFormat,
+    policy: FormatPolicy,
     progress: &dyn Fn(&str),
 ) -> Result<OptimizeResult> {
     let mut result = OptimizeResult {
@@ -97,6 +132,10 @@ pub fn optimize_images(
         if !is_target_media_type(&item.media_type) {
             continue;
         }
+
+        // Output format for this image — fixed, or chosen from the source type
+        // (the 3.4 content-adaptive heuristic). The rest of the loop uses `format`.
+        let format = policy.format_for(&item.media_type);
 
         // Hrefs are URL-encoded; decode to obtain the real on-disk path.
         let decoded_href = unquote(&item.href);

@@ -90,14 +90,15 @@ struct Args {
     #[arg(long)]
     keep_images: bool,
 
-    /// [EXPERIMENTAL] Target EPUB version: "3.3" (default) or "3.4". 3.4 re-encodes
-    /// images to AVIF (or JPEG XL), which become core media types in EPUB 3.4.
-    /// Requires the `epub34` build feature. See docs/epub-3.4.md.
+    /// [EXPERIMENTAL] Target EPUB version: "3.3" (default) or "3.4". 3.4 uses the
+    /// new core image types content-adaptively: photos (JPEG sources) → AVIF,
+    /// line-art (PNG sources) → WebP. Needs the `epub34` feature. See docs/epub-3.4.md.
     #[cfg(feature = "epub34")]
     #[arg(long, default_value = "3.3", value_name = "3.3|3.4")]
     target: String,
 
-    /// [EXPERIMENTAL] Image format for --target 3.4: "avif" (default) or "jxl".
+    /// [EXPERIMENTAL] Force one image format for --target 3.4: "avif" or "jxl"
+    /// (default: content-adaptive — AVIF for JPEG sources, WebP for PNG).
     #[cfg(feature = "epub34")]
     #[arg(long, value_name = "avif|jxl")]
     image_format: Option<String>,
