@@ -167,10 +167,11 @@ already avoids the line-art→AVIF disaster (a diagram book stays WebP: 20.5 MB 
 16 s vs forced AVIF 23.3 MB / 4 min).
 
 **Quality calibration wired (done):** `--quality N` is the WebP reference scale,
-mapped per codec so equal N ≈ equal perceptual quality (butteraugli). This
-realizes the photo win: `--target 3.4` on the photo book went from 0.96 MB (raw
-q80, *bigger* than 3.3) to **0.789 MB (−4% vs 3.3 WebP)** at matched quality.
-Next: refine the calibration (more books), then `restore` / web.
+mapped per codec (fit over 48 images / 11 books) so equal N ≈ equal perceptual
+quality (butteraugli). At matched quality, `--target 3.4` is **≈0–11% smaller**
+than 3.3 on photo books (historical photos most). Before calibration, raw q80
+over-delivered quality and 3.4 was *larger* than 3.3. Next: `restore` / web,
+and possibly a non-linear calibration fit.
 
 ## Related
 

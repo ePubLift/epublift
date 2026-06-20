@@ -87,33 +87,43 @@ over-delivers quality and comes out **larger** than WebP q80 even though AVIF is
 smaller *at equal quality*. We therefore treat **WebP quality as the reference
 scale** and map N → each codec's knob to hit the same butteraugli.
 
-Calibration table (`img-calib`, photo book — where AVIF/JXL are actually used):
+Calibration table (`img-calib` over **48 JPEG-source images from 11 books** — the
+content AVIF/JXL are actually applied to: real photos *and* JPEG-saved charts):
 
 | webp_q | butteraugli | avif_q (match) | avif Δ | jxl_d (match) | jxl Δ |
 | ---: | ---: | ---: | ---: | ---: | ---: |
-| 50 | 1.54 | 52 | −5% | — | |
-| 60 | 1.40 | 55 | −9% | 3.62 | +8% |
-| 70 | 1.27 | 59 | −8% | 3.21 | +4% |
-| 80 | 1.06 | 67 | −14% | 2.56 | −5% |
-| 90 | 0.77 | 78 | −25% | 1.71 | −25% |
+| 50 | 1.39 | 54 | −3% | 3.36 | +3% |
+| 60 | 1.25 | 58 | −4% | 2.92 | +1% |
+| 70 | 1.13 | 61 | −5% | 2.61 | −1% |
+| 80 | 0.90 | 68 | −11% | 2.08 | −9% |
+| 90 | 0.60 | 79 | −19% | 1.24 | −19% |
 
-First-pass linear fits (in `src/images.rs`, `epub34`):
+Least-squares linear fits (in `src/images.rs`, `epub34`):
 
 ```
-avif_q   ≈ 0.64 · webp_q + 17      (clamped 1..100)
-jxl_dist ≈ −0.064 · webp_q + 7.4   (clamped 0.4..15)
+avif_q   ≈ 0.60 · webp_q + 22      (clamped 1..100)
+jxl_dist ≈ −0.051 · webp_q + 6.0   (clamped 0.4..15)
 ```
 
 AVIF reaches WebP's quality at a *lower* knob, and its size advantage grows with
-quality. **Effect, end-to-end on the photo book** (`--target 3.4`, default
-quality): before calibration AVIF was **0.957 MB** (bigger than 3.3 WebP's
-0.822 MB, because q80-raw over-delivered quality); after calibration it is
-**0.789 MB (−4% vs 3.3 WebP)** at matched quality. (Less than the bench's −14%
-because of the size-safe guard, the real book vs the 16-image sample, the linear
-fit, and AVIF production speed 4 vs bench speed 6 — but the sign is now right.)
+quality. **End-to-end verification** (`--target 3.4` vs `--target 3.3` at default
+quality, AVIF at matched quality):
 
-> First pass: one photo book. Refine with more books, and consider a non-linear
-> fit and per-format speed tuning.
+| Book | 3.3 WebP | 3.4 AVIF | Δ |
+| :--- | ---: | ---: | ---: |
+| Üç Kıtada Osmanlılar (historical photos) | 1952 KB | 1737 KB | **−11%** |
+| Sapiens | 1953 KB | 1874 KB | −4% |
+| Küçük Prens | 1251 KB | 1205 KB | −4% |
+| Senin Kovan | 842 KB | 847 KB | +0.6% |
+
+So AVIF's advantage on JPEG-source content is real but **content-dependent and
+modest** (≈0–11%; historical photos benefit most). Before calibration the same
+photo book was *larger* under 3.4 (q80-raw over-delivers quality).
+
+> Calibrated on 48 images / 11 books. The earlier single-book fit (0.64·q+17)
+> was slightly overfit to one book; the multi-book fit is less aggressive and
+> more representative. Could refine further with a non-linear fit and per-format
+> speed tuning.
 
 ## Tooling caveats (important)
 
@@ -146,10 +156,11 @@ fit, and AVIF production speed 4 vs bench speed 6 — but the sign is now right.
    delivers the unambiguous win — a diagram/line-art book no longer gets AVIF
    (which was +93% size *and* ~15× slower); it stays WebP, fast and small.
 2. **Quality mapping is calibrated (done).** `--quality N` is the WebP reference
-   scale; AVIF/JXL knobs are derived from N (see "Quality calibration" above) so
-   equal N ≈ equal butteraugli. This realizes the photo win: `--target 3.4` on the
-   photo book went from 0.96 MB (raw, bigger than 3.3) to **0.789 MB (−4% vs 3.3
-   WebP)** at matched quality.
+   scale; AVIF/JXL knobs are derived from N (see "Quality calibration" above, fit
+   over 48 images / 11 books) so equal N ≈ equal butteraugli. This realizes the
+   photo win — at matched quality, `--target 3.4` is **≈0–11% smaller** than 3.3
+   on photo books (historical photos most). Before calibration, raw q80
+   over-delivered quality and 3.4 came out *larger* than 3.3.
 3. **Next:** refine the calibration (more books, non-linear fit, per-format speed),
    extend `--target 3.4` to `restore` / web, and consider a per-image "keep
    smallest at matched quality" mode. JXL stays available via `--image-format jxl`.

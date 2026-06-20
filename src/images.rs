@@ -350,21 +350,21 @@ fn encode_webp(dynimg: &DynamicImage, quality: u8) -> Result<Vec<u8>> {
 
 /// Map a WebP-scale `--quality` (1-100, the reference) to the AVIF quality knob
 /// that yields the *same* perceptual quality (butteraugli) — so `--quality N`
-/// means the same thing across codecs. First-pass linear calibration on a
-/// photographic (JPEG-source) book; AVIF reaches WebP's quality at a lower knob,
-/// and its size advantage grows with quality. See
+/// means the same thing across codecs. Linear calibration over 48 JPEG-source
+/// images from 11 books; AVIF reaches WebP's quality at a lower knob, and its
+/// size advantage grows with quality. See
 /// docs/design/epub-3.4-image-codec-choice.md.
 #[cfg(feature = "epub34")]
 fn calibrated_avif_quality(webp_quality: u8) -> f32 {
-    (0.64 * webp_quality as f32 + 17.0).clamp(1.0, 100.0)
+    (0.60 * webp_quality as f32 + 22.0).clamp(1.0, 100.0)
 }
 
 /// Map a WebP-scale `--quality` (1-100) to the JPEG XL butteraugli *distance*
 /// that matches WebP's perceptual quality (lower distance = higher quality).
-/// First-pass linear calibration on photographic content (see above).
+/// Same 48-image / 11-book calibration as above.
 #[cfg(feature = "epub34")]
 fn calibrated_jxl_distance(webp_quality: u8) -> f32 {
-    (-0.064 * webp_quality as f32 + 7.4).clamp(0.4, 15.0)
+    (-0.051 * webp_quality as f32 + 6.0).clamp(0.4, 15.0)
 }
 
 /// Encode to AVIF via the pure-Rust imazen `zenavif` (rav1e) encoder, `quality`
