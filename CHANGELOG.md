@@ -10,6 +10,26 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+### Added (experimental)
+- **EPUB 3.4 image codecs — AVIF & JPEG XL (`epub34` feature).** Behind a new
+  opt-in build feature, `epublift -i book.epub --target 3.4` re-encodes images to
+  the formats that become core media types in EPUB 3.4. The default is
+  **content-adaptive**, picked per image from the source type: **JPEG → AVIF,
+  PNG → WebP** — a free content-type signal, since (measured at equal perceptual
+  quality with butteraugli) AVIF wins on photographs while WebP wins decisively on
+  line-art/diagrams. `--image-format avif|jxl` forces one format for every image,
+  and `--image-format best` encodes every candidate per image and keeps the
+  smallest (at matched quality). Pure-Rust imazen codecs (`zenavif`, `zenjxl`)
+  alongside the existing `zenwebp`; the size-safe "never grow a book" guard applies
+  to all formats. `--quality` is **calibrated** to the WebP scale across codecs (so
+  equal quality ≈ equal perceptual quality), which realizes AVIF's size advantage
+  on photos. `restore --target 3.4` re-targets archives to 3.4 too. The web UI
+  (`epublift-web`, now built with the `epub34` feature) exposes it via a **Target
+  version** selector (3.3 / 3.4 experimental) with an AVIF / JPEG XL / Keep-original
+  image-format choice. The CLI default build is unchanged (EPUB 3.3 / WebP). See
+  [`docs/epub-3.4.md`](docs/epub-3.4.md) and
+  [`docs/design/epub-3.4-image-codec-choice.md`](docs/design/epub-3.4-image-codec-choice.md).
+
 ## [web-v1.5.0] - 2026-06-19
 
 ### Added (web)

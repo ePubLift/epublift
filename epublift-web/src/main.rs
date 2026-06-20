@@ -329,6 +329,23 @@ async fn convert(
     let kepub = field_on(&fields, "kepub");
     let keep_images = field_on(&fields, "keep_images");
 
+    // Experimental EPUB 3.4: AVIF / JPEG XL images. Defaults to 3.3 / WebP.
+    let target_34 = fields.get("target").map(|s| s.trim()) == Some("3.4");
+    let target_version = if target_34 {
+        EpubVersion::V3_4
+    } else {
+        EpubVersion::LATEST
+    };
+    let image_policy = if target_34 {
+        match fields.get("image_format").map(|s| s.trim()) {
+            Some("avif") => Some(epublift::FormatPolicy::Fixed(epublift::ImageFormat::Avif)),
+            Some("jxl") => Some(epublift::FormatPolicy::Fixed(epublift::ImageFormat::Jxl)),
+            _ => None,
+        }
+    } else {
+        None
+    };
+
     // Bound concurrent conversions.
     let _permit = state
         .convert_slots
@@ -347,12 +364,13 @@ async fn convert(
             let opts = Options {
                 quality,
                 ascii,
-                target_version: EpubVersion::LATEST,
+                target_version,
                 image_strategy: if keep_images {
                     ImageStrategy::KeepOriginal
                 } else {
                     ImageStrategy::WebP
                 },
+                image_policy,
                 kepub,
                 // The hosted service only ever emits conformant EPUBs; the
                 // experimental Zstd packaging is CLI/research-only.
@@ -642,6 +660,7 @@ async fn restore(
                 } else {
                     ImageStrategy::WebP
                 },
+                image_policy: None,
                 kepub,
                 packaging: epublift::Packaging::Deflate,
                 output: None,

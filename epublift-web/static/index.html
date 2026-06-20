@@ -192,7 +192,9 @@
   .pill { flex:1; text-align:center; padding:11px 8px; border:1.5px solid var(--ink); border-radius:11px;
     font-weight:600; font-size:14px; background: var(--paper); cursor:pointer; transition:.15s; }
   .pill.on { background: var(--ink); color: var(--paper); box-shadow: 3px 3px 0 var(--accent); }
-  .pill.off { opacity:.45; cursor:not-allowed; }
+  .pill.off, .pill.locked { opacity:.45; cursor:not-allowed; }
+  .pills-3 .pill { padding:10px 5px; }
+  .pills-3 .pill small { font-size:9px; }
   .pill small { display:block; font-family:"JetBrains Mono",monospace; font-size:10px; letter-spacing:.1em;
     text-transform:uppercase; font-weight:500; margin-top:3px; }
 
@@ -409,6 +411,19 @@
 
       <!-- options -->
       <div class="opts">
+        <!-- target version (Optimize only), above the options -->
+        <div data-modes="optimize">
+          <p class="opt-h" data-i18n="target_h">Target version</p>
+          <div class="pills" id="verpills">
+            <div class="pill on" data-ver="3.3">EPUB 3.3<small data-i18n="pill_recommended">Recommended</small></div>
+            <div class="pill" data-ver="3.4">EPUB 3.4<small data-i18n="pill_experimental">Experimental</small></div>
+          </div>
+          <p class="opt-note hide" id="ver34note" style="margin:10px 0 0;">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 1.5v6M8 10v.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M8 1.5l5.5 2.4v3.5c0 3.3-2.3 5.6-5.5 6.6-3.2-1-5.5-3.3-5.5-6.6V3.9L8 1.5z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
+            <span data-i18n-html="ver34_note">EPUB 3.4 is a draft spec with new <b>AVIF</b> / <b>JPEG XL</b> image formats. Experimental — for trying out; not all reading systems support it yet.</span>
+          </p>
+        </div>
+
         <p class="opt-h" id="optsH" data-i18n="opt_h">Conversion options</p>
 
         <!-- archive: no tuning, just an explanation -->
@@ -461,7 +476,7 @@
           </label>
         </div>
 
-        <div class="toggle-row" data-modes="optimize restore" data-mz="1">
+        <div class="toggle-row" data-modes="optimize restore" data-mz="1" data-ver="3.3">
           <div class="txt">
             <span style="font-weight:600;font-size:15px;" data-i18n="keep_title">Keep original images</span>
             <small data-i18n-html="keep_desc">Skip JPEG/PNG → WebP. Use for readers that don't render WebP — notably <b>Kobo</b> e-ink devices. Structure is still upgraded to EPUB 3.3.</small>
@@ -470,6 +485,16 @@
             <input type="checkbox" id="keep_images" />
             <span class="slot"></span>
           </label>
+        </div>
+
+        <!-- 3.4 image format selector (Keep original / AVIF / JPEG XL) -->
+        <div data-modes="optimize" data-ver="3.4">
+          <p class="opt-h" style="margin-bottom:10px" data-i18n="imgfmt_h">Image format</p>
+          <div class="pills pills-3" id="imgfmtpills">
+            <div class="pill on" data-fmt="avif">AVIF<small data-i18n="imgfmt_avif_sub">Smallest on photos</small></div>
+            <div class="pill" data-fmt="jxl">JPEG XL<small data-i18n="imgfmt_jxl_sub">Newest codec</small></div>
+            <div class="pill" data-fmt="keep"><span data-i18n="imgfmt_keep">Keep original</span><small data-i18n="imgfmt_keep_sub">No re-encode</small></div>
+          </div>
         </div>
 
         <div class="toggle-row" data-modes="optimize restore" data-mz="1">
@@ -483,13 +508,6 @@
           </label>
         </div>
 
-        <div data-modes="optimize">
-          <p class="opt-h" style="margin-bottom:10px" data-i18n="target_h">Target version</p>
-          <div class="pills">
-            <div class="pill on">EPUB 3.3<small data-i18n="pill_recommended">Recommended</small></div>
-            <div class="pill off">EPUB 3.4<small data-i18n="pill_soon">Soon</small></div>
-          </div>
-        </div>
       </div>
     </div>
 

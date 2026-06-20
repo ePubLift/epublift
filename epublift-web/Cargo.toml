@@ -12,7 +12,9 @@ rust-version = "1.94"
 publish = false
 
 [dependencies]
-epublift = { path = ".." }
+# `epub34` enables the experimental EPUB 3.4 image codecs (AVIF / JPEG XL) so the
+# web UI's "Target version: 3.4" option works. Pure Rust (zenavif/zenjxl).
+epublift = { path = "..", features = ["epub34"] }
 axum = { version = "0.8", features = ["multipart"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal"] }
 tower = "0.5"

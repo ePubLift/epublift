@@ -56,13 +56,13 @@ pub fn basename(href: &str) -> &str {
     }
 }
 
-/// Replace the file extension of an href with `.webp`, mirroring
-/// `pathlib.Path(href).with_suffix('.webp')`.
-pub fn with_webp_ext(href: &str) -> String {
+/// Replace the file extension of an href with `.{ext}`, mirroring
+/// `pathlib.Path(href).with_suffix('.{ext}')`. `ext` is given without the dot.
+pub fn with_ext(href: &str, ext: &str) -> String {
     let slash = href.rfind('/').map(|i| i as isize).unwrap_or(-1);
     match href.rfind('.') {
-        Some(dot) if (dot as isize) > slash => format!("{}.webp", &href[..dot]),
-        _ => format!("{}.webp", href),
+        Some(dot) if (dot as isize) > slash => format!("{}.{ext}", &href[..dot]),
+        _ => format!("{href}.{ext}"),
     }
 }
 

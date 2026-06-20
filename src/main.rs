@@ -90,6 +90,21 @@ struct Args {
     #[arg(long)]
     keep_images: bool,
 
+    /// [EXPERIMENTAL] Target EPUB version: "3.3" (default) or "3.4". 3.4 uses the
+    /// new core image types content-adaptively: photos (JPEG sources) → AVIF,
+    /// line-art (PNG sources) → WebP. Needs the `epub34` feature. See docs/epub-3.4.md.
+    #[cfg(feature = "epub34")]
+    #[arg(long, default_value = "3.3", value_name = "3.3|3.4")]
+    target: String,
+
+    /// [EXPERIMENTAL] Image format for EPUB 3.4 (implies --target 3.4): "avif" or
+    /// "jxl" forces one format; "best" encodes every candidate per image and keeps
+    /// the smallest (thorough but slow). Default (no flag) is content-adaptive —
+    /// AVIF for JPEG sources, WebP for PNG.
+    #[cfg(feature = "epub34")]
+    #[arg(long, value_name = "avif|jxl|best")]
+    image_format: Option<String>,
+
     /// [EXPERIMENTAL] Package the container with Zstandard (ZIP method 93)
     /// instead of Deflate, to measure the size delta. The result is
     /// NON-CONFORMANT and will NOT open in current reading systems — research
@@ -157,9 +172,9 @@ struct RestoreArgs {
     #[arg(short, long)]
     output: Option<PathBuf>,
 
-    /// Re-emit at a specific EPUB version instead of content-exact. Only 3.3 is
-    /// supported today (EPUB 3.4 is not yet published).
-    #[arg(long, value_name = "3.3")]
+    /// Re-emit at a specific EPUB version instead of content-exact: "3.3", or
+    /// "3.4" (experimental, AVIF/JXL — needs the `epub34` build feature).
+    #[arg(long, value_name = "3.3|3.4")]
     target: Option<String>,
 
     /// Modernize to a clean, current EPUB (equivalent to --target 3.3).
@@ -178,6 +193,13 @@ struct RestoreArgs {
     /// WebP quality (1-100) when re-targeting with image conversion.
     #[arg(short, long, default_value_t = 80)]
     quality: i32,
+
+    /// [EXPERIMENTAL] Image format for a 3.4 re-target (implies --target 3.4):
+    /// "avif" or "jxl" forces one, "best" keeps the smallest per image. Default
+    /// (no flag) is content-adaptive — AVIF for JPEG sources, WebP for PNG.
+    #[cfg(feature = "epub34")]
+    #[arg(long, value_name = "avif|jxl|best")]
+    image_format: Option<String>,
 }
 
 fn main() -> ExitCode {
@@ -247,15 +269,44 @@ fn run_convert(args: Args) -> Result<()> {
     #[cfg(not(feature = "zstd-experimental"))]
     let packaging = epublift::Packaging::Deflate;
 
+    // Target version + image format policy. 3.4 (AVIF/JXL) is experimental and
+    // only available under the `epub34` feature; the default build is 3.3/WebP.
+    #[cfg(feature = "epub34")]
+    let image_policy = match args.image_format.as_deref() {
+        None => None,
+        Some("avif") => Some(epublift::FormatPolicy::Fixed(epublift::ImageFormat::Avif)),
+        Some("jxl") => Some(epublift::FormatPolicy::Fixed(epublift::ImageFormat::Jxl)),
+        Some("best") => Some(epublift::FormatPolicy::Best),
+        Some(other) => {
+            anyhow::bail!("unknown --image-format '{other}'. Supported: avif, jxl, best.")
+        }
+    };
+    // avif/jxl/best are 3.4 formats, so an explicit `--image-format` implies 3.4.
+    #[cfg(feature = "epub34")]
+    let target_version = if image_policy.is_some() {
+        EpubVersion::V3_4
+    } else {
+        match args.target.trim() {
+            "3.3" => EpubVersion::V3_3,
+            "3.4" => EpubVersion::V3_4,
+            other => anyhow::bail!("unknown --target '{other}'. Supported: 3.3, 3.4."),
+        }
+    };
+    #[cfg(not(feature = "epub34"))]
+    let target_version = EpubVersion::LATEST;
+    #[cfg(not(feature = "epub34"))]
+    let image_policy = None;
+
     let mut options = Options {
         quality: args.quality.clamp(1, 100) as u8,
         ascii: args.ascii,
-        target_version: EpubVersion::LATEST,
+        target_version,
         image_strategy: if args.keep_images {
             ImageStrategy::KeepOriginal
         } else {
             ImageStrategy::WebP
         },
+        image_policy,
         kepub: args.kepub,
         packaging,
         output: args.output.clone(),
@@ -362,12 +413,34 @@ fn run_restore(args: &RestoreArgs) -> Result<()> {
             .with_context(|| format!("Failed to create output directory: {}", dir.display()))?;
     }
 
+    // Image format policy for a 3.4 re-target (avif/jxl/best implies 3.4).
+    #[cfg(feature = "epub34")]
+    let image_policy = match args.image_format.as_deref() {
+        None => None,
+        Some("avif") => Some(epublift::FormatPolicy::Fixed(epublift::ImageFormat::Avif)),
+        Some("jxl") => Some(epublift::FormatPolicy::Fixed(epublift::ImageFormat::Jxl)),
+        Some("best") => Some(epublift::FormatPolicy::Best),
+        Some(other) => {
+            anyhow::bail!("unknown --image-format '{other}'. Supported: avif, jxl, best.")
+        }
+    };
+    #[cfg(not(feature = "epub34"))]
+    let image_policy: Option<epublift::FormatPolicy> = None;
+
     // A re-target is requested when any transform flag is present; otherwise the
     // restore is content-exact (the original book, byte-for-byte).
-    let retarget = args.target.is_some() || args.modernize || args.keep_images || args.kepub;
-    let target_version = match &args.target {
-        Some(t) => parse_target(t)?,
-        None => EpubVersion::LATEST,
+    let retarget = args.target.is_some()
+        || args.modernize
+        || args.keep_images
+        || args.kepub
+        || image_policy.is_some();
+    let target_version = if image_policy.is_some() {
+        EpubVersion::V3_4
+    } else {
+        match &args.target {
+            Some(t) => parse_target(t)?,
+            None => EpubVersion::LATEST,
+        }
     };
 
     for eparc in &archives {
@@ -408,6 +481,7 @@ fn run_restore(args: &RestoreArgs) -> Result<()> {
             } else {
                 ImageStrategy::WebP
             },
+            image_policy,
             kepub: args.kepub,
             packaging: epublift::Packaging::Deflate,
             output: None,
@@ -431,7 +505,7 @@ fn run_restore(args: &RestoreArgs) -> Result<()> {
             "[+] {} -> {} (re-targeted: {})",
             file_name(eparc),
             file_name(&report.output_path),
-            retarget_label(args),
+            retarget_label(args, target_version),
         );
     }
     Ok(())
@@ -444,24 +518,27 @@ fn parse_target(s: &str) -> Result<EpubVersion> {
     use anyhow::bail;
     match s.trim() {
         "3.3" => Ok(EpubVersion::V3_3),
+        #[cfg(feature = "epub34")]
+        "3.4" => Ok(EpubVersion::V3_4),
+        #[cfg(not(feature = "epub34"))]
         "3.4" => {
-            bail!("EPUB 3.4 is not supported yet (the spec isn't published). Use --target 3.3.")
+            bail!("EPUB 3.4 (AVIF/JXL) needs the experimental `epub34` build feature.")
         }
         "2" | "2.0" => {
             bail!("downgrading to EPUB 2.0 isn't supported — epublift is an upgrader.")
         }
-        other => bail!("unknown --target '{other}'. Supported: 3.3."),
+        other => bail!("unknown --target '{other}'. Supported: 3.3, 3.4."),
     }
 }
 
 /// A short human label of the re-target for the restore output line.
 #[cfg(feature = "archival")]
-fn retarget_label(args: &RestoreArgs) -> String {
+fn retarget_label(args: &RestoreArgs, target_version: EpubVersion) -> String {
     let mut parts = Vec::new();
     if args.kepub {
         parts.push("kepub".to_string());
     } else {
-        parts.push(format!("EPUB {}", EpubVersion::LATEST.tag()));
+        parts.push(format!("EPUB {}", target_version.tag()));
     }
     if args.keep_images {
         parts.push("original images".to_string());
