@@ -23,8 +23,12 @@ are tagged with the component they belong to.
   alongside the existing `zenwebp`; the size-safe "never grow a book" guard applies
   to all formats. `--quality` is **calibrated** to the WebP scale across codecs (so
   equal quality ≈ equal perceptual quality), which realizes AVIF's size advantage
-  on photos. The default build is unchanged (EPUB 3.3 / WebP). See [`docs/epub-3.4.md`](docs/epub-3.4.md)
-  and [`docs/design/epub-3.4-image-codec-choice.md`](docs/design/epub-3.4-image-codec-choice.md).
+  on photos. `restore --target 3.4` re-targets archives to 3.4 too. The web UI
+  (`epublift-web`, now built with the `epub34` feature) exposes it via a **Target
+  version** selector (3.3 / 3.4 experimental) with an AVIF / JPEG XL / Keep-original
+  image-format choice. The CLI default build is unchanged (EPUB 3.3 / WebP). See
+  [`docs/epub-3.4.md`](docs/epub-3.4.md) and
+  [`docs/design/epub-3.4-image-codec-choice.md`](docs/design/epub-3.4-image-codec-choice.md).
 
 ## [web-v1.5.0] - 2026-06-19
 

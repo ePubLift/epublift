@@ -5,7 +5,9 @@ choose a mode from the switcher at the top of the panel:
 
 - **Optimize** — modernize to EPUB 3.3 and re-encode images to WebP, with an
   in-page audit report (the classic flow). Options: image quality, ASCII
-  filenames, *keep original images*, and Kobo `.kepub` output.
+  filenames, *keep original images*, and Kobo `.kepub` output. A **Target
+  version** selector also offers **EPUB 3.4** (experimental) — the draft spec's
+  new **AVIF** / **JPEG XL** image formats; pick AVIF, JPEG XL, or keep original.
 - **Archive** — pack a book into a compact, **lossless** [`.eparc`](archiving.md)
   archive (solid Zstandard on text + fonts, media stored verbatim). Optional
   ASCII output name. An `.eparc` is an archive, not a readable e-book — keep it

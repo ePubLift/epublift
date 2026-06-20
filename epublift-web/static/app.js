@@ -34,6 +34,13 @@ const modeswitch = document.getElementById('modeswitch');
 
 let selectedFile = null;
 
+// EPUB target version (Optimize) + the experimental 3.4 image-format choice.
+const verpills = document.getElementById('verpills');
+const imgfmtpills = document.getElementById('imgfmtpills');
+const ver34note = document.getElementById('ver34note');
+let ver = '3.3';
+let imgfmt = 'avif';
+
 // Per-mode configuration: which file type, which i18n keys, which endpoint.
 const MODE_CFG = {
   optimize: { accept: '.epub',  dropKey: 'drop_title',       hKey: 'opt_h',         ctaKey: 'cta',         workKey: 'cta_working',         readyKey: 'res_ready',         endpoint: '/convert' },
@@ -84,14 +91,43 @@ function updateOptionVisibility(){
     const modes = el.getAttribute('data-modes').split(/\s+/);
     let show = modes.includes(mode);
     if (show && mode === 'restore' && el.hasAttribute('data-mz')) show = modernize.checked;
+    // Version-specific controls (Optimize only): a data-ver gate.
+    if (show && mode === 'optimize' && el.dataset.ver) show = el.dataset.ver === ver;
     el.classList.toggle('hide', !show);
   });
+  // The 3.4 explainer shows only when Optimize + 3.4 is selected.
+  if (ver34note) ver34note.classList.toggle('hide', !(mode === 'optimize' && ver === '3.4'));
 }
 
 modeswitch.querySelectorAll('.mode').forEach(b => {
   b.addEventListener('click', () => applyMode(b.dataset.mode));
 });
 modernize.addEventListener('change', () => { if (mode === 'restore') updateOptionVisibility(); });
+
+// Target version pills (Optimize).
+if (verpills) verpills.querySelectorAll('.pill').forEach(p => {
+  p.addEventListener('click', () => {
+    ver = p.dataset.ver;
+    verpills.querySelectorAll('.pill').forEach(x => x.classList.toggle('on', x === p));
+    updateOptionVisibility();
+  });
+});
+
+// 3.4 image-format pills (Keep original / AVIF / JPEG XL).
+function setImgfmt(fmt, locked) {
+  imgfmt = fmt;
+  if (!imgfmtpills) return;
+  imgfmtpills.querySelectorAll('.pill').forEach(x => {
+    x.classList.toggle('on', x.dataset.fmt === fmt);
+    x.classList.toggle('locked', locked);
+  });
+}
+if (imgfmtpills) imgfmtpills.querySelectorAll('.pill').forEach(p => {
+  p.addEventListener('click', () => {
+    if (p.classList.contains('locked')) return;
+    setImgfmt(p.dataset.fmt, false);
+  });
+});
 
 // ---- submit ------------------------------------------------------------------
 go.addEventListener('click', async () => {
@@ -108,7 +144,14 @@ go.addEventListener('click', async () => {
       fd.append('quality', q.value);
       fd.append('ascii', ascii.checked ? 'true' : 'false');
       fd.append('kepub', kepub.checked ? 'true' : 'false');
-      fd.append('keep_images', keepImages.checked ? 'true' : 'false');
+      fd.append('target', ver);
+      if (ver === '3.4'){
+        // 3.4: the image-format pills choose Keep original / AVIF / JPEG XL.
+        if (imgfmt === 'keep') fd.append('keep_images', 'true');
+        else fd.append('image_format', imgfmt); // avif | jxl
+      } else {
+        fd.append('keep_images', keepImages.checked ? 'true' : 'false');
+      }
     } else if (mode === 'archive'){
       fd.append('ascii', ascii.checked ? 'true' : 'false');
     } else if (mode === 'restore'){
@@ -224,14 +267,19 @@ function renderImageReport(data){
 // Kobo (.kepub) forces keep-original images (Kobo can't render WebP), so reflect
 // that in the UI: tick and lock the "Keep original images" toggle while kepub is on.
 let keepImagesPrev = keepImages.checked;
+let imgfmtPrev = imgfmt;
 kepub.addEventListener('change', () => {
   if (kepub.checked) {
     keepImagesPrev = keepImages.checked;
     keepImages.checked = true;
     keepImages.disabled = true;
+    // Kobo can't render WebP/AVIF/JXL → lock the 3.4 selector to Keep original.
+    imgfmtPrev = imgfmt;
+    setImgfmt('keep', true);
   } else {
     keepImages.disabled = false;
     keepImages.checked = keepImagesPrev;
+    setImgfmt(imgfmtPrev, false);
   }
 });
 

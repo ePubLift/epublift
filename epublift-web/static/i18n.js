@@ -109,6 +109,13 @@
       sub_archive: `{c} entries compressed · {s} stored verbatim`,
       sub_restore_exact: `{n} entries · {size} · content-exact`,
       sub_restore_modernized: `{n} images re-encoded · {size}`,
+      pill_experimental: `Experimental`,
+      ver34_note: `EPUB 3.4 is a draft spec with new <b>AVIF</b> / <b>JPEG XL</b> image formats. Experimental — for trying out; not all reading systems support it yet.`,
+      imgfmt_h: `Image format`,
+      imgfmt_avif_sub: `Smallest on photos`,
+      imgfmt_jxl_sub: `Newest codec`,
+      imgfmt_keep: `Keep original`,
+      imgfmt_keep_sub: `No re-encode`,
     },
 
     es: {
@@ -192,6 +199,13 @@
       sub_archive: `{c} entradas comprimidas · {s} guardadas sin cambios`,
       sub_restore_exact: `{n} entradas · {size} · idéntico al contenido`,
       sub_restore_modernized: `{n} imágenes recodificadas · {size}`,
+      pill_experimental: `Experimental`,
+      ver34_note: `EPUB 3.4 es un borrador con nuevos formatos de imagen <b>AVIF</b> / <b>JPEG XL</b>. Experimental — para probar; aún no todos los lectores lo admiten.`,
+      imgfmt_h: `Formato de imagen`,
+      imgfmt_avif_sub: `Más pequeño en fotos`,
+      imgfmt_jxl_sub: `Códec más nuevo`,
+      imgfmt_keep: `Conservar original`,
+      imgfmt_keep_sub: `Sin recodificar`,
     },
 
     tr: {
@@ -275,6 +289,13 @@
       sub_archive: `{c} öğe sıkıştırıldı · {s} olduğu gibi saklandı`,
       sub_restore_exact: `{n} öğe · {size} · içerik birebir`,
       sub_restore_modernized: `{n} görsel yeniden kodlandı · {size}`,
+      pill_experimental: `Deneysel`,
+      ver34_note: `EPUB 3.4 yeni <b>AVIF</b> / <b>JPEG XL</b> görsel formatları içeren bir taslak spec. Deneysel — denemek için; tüm okuyucular henüz desteklemiyor.`,
+      imgfmt_h: `Görsel formatı`,
+      imgfmt_avif_sub: `Fotoğrafta en küçük`,
+      imgfmt_jxl_sub: `En yeni codec`,
+      imgfmt_keep: `Orijinali koru`,
+      imgfmt_keep_sub: `Yeniden kodlama yok`,
     },
 
     de: {
@@ -358,6 +379,13 @@
       sub_archive: `{c} Einträge komprimiert · {s} unverändert gespeichert`,
       sub_restore_exact: `{n} Einträge · {size} · inhaltsgenau`,
       sub_restore_modernized: `{n} Bilder neu kodiert · {size}`,
+      pill_experimental: `Experimentell`,
+      ver34_note: `EPUB 3.4 ist ein Entwurf mit neuen Bildformaten <b>AVIF</b> / <b>JPEG XL</b>. Experimentell — zum Ausprobieren; noch nicht alle Reader unterstützen es.`,
+      imgfmt_h: `Bildformat`,
+      imgfmt_avif_sub: `Am kleinsten bei Fotos`,
+      imgfmt_jxl_sub: `Neuester Codec`,
+      imgfmt_keep: `Original behalten`,
+      imgfmt_keep_sub: `Keine Neukodierung`,
     },
 
     fr: {
@@ -441,6 +469,13 @@
       sub_archive: `{c} entrées compressées · {s} conservées telles quelles`,
       sub_restore_exact: `{n} entrées · {size} · identique au contenu`,
       sub_restore_modernized: `{n} images réencodées · {size}`,
+      pill_experimental: `Expérimental`,
+      ver34_note: `EPUB 3.4 est un brouillon avec de nouveaux formats d'image <b>AVIF</b> / <b>JPEG XL</b>. Expérimental — pour essayer ; toutes les liseuses ne le prennent pas encore en charge.`,
+      imgfmt_h: `Format d'image`,
+      imgfmt_avif_sub: `Plus petit sur photos`,
+      imgfmt_jxl_sub: `Codec le plus récent`,
+      imgfmt_keep: `Garder l'original`,
+      imgfmt_keep_sub: `Pas de réencodage`,
     },
 
     pt: {
@@ -524,6 +559,13 @@
       sub_archive: `{c} entradas comprimidas · {s} guardadas sem alteração`,
       sub_restore_exact: `{n} entradas · {size} · idêntico ao conteúdo`,
       sub_restore_modernized: `{n} imagens recodificadas · {size}`,
+      pill_experimental: `Experimental`,
+      ver34_note: `EPUB 3.4 é um rascunho com novos formatos de imagem <b>AVIF</b> / <b>JPEG XL</b>. Experimental — para testar; nem todos os leitores suportam ainda.`,
+      imgfmt_h: `Formato de imagem`,
+      imgfmt_avif_sub: `Menor em fotos`,
+      imgfmt_jxl_sub: `Codec mais recente`,
+      imgfmt_keep: `Manter original`,
+      imgfmt_keep_sub: `Sem recodificar`,
     },
 
     it: {
@@ -607,6 +649,13 @@
       sub_archive: `{c} voci compresse · {s} memorizzate invariate`,
       sub_restore_exact: `{n} voci · {size} · identico nel contenuto`,
       sub_restore_modernized: `{n} immagini ricodificate · {size}`,
+      pill_experimental: `Sperimentale`,
+      ver34_note: `EPUB 3.4 è una bozza con nuovi formati immagine <b>AVIF</b> / <b>JPEG XL</b>. Sperimentale — da provare; non tutti i lettori lo supportano ancora.`,
+      imgfmt_h: `Formato immagine`,
+      imgfmt_avif_sub: `Più piccolo sulle foto`,
+      imgfmt_jxl_sub: `Codec più recente`,
+      imgfmt_keep: `Mantieni originale`,
+      imgfmt_keep_sub: `Nessuna ricodifica`,
     },
 
     nl: {
@@ -690,6 +739,13 @@
       sub_archive: `{c} items gecomprimeerd · {s} ongewijzigd opgeslagen`,
       sub_restore_exact: `{n} items · {size} · inhoudsgetrouw`,
       sub_restore_modernized: `{n} afbeeldingen hergecodeerd · {size}`,
+      pill_experimental: `Experimenteel`,
+      ver34_note: `EPUB 3.4 is een concept met nieuwe beeldformaten <b>AVIF</b> / <b>JPEG XL</b>. Experimenteel — om uit te proberen; nog niet alle readers ondersteunen het.`,
+      imgfmt_h: `Beeldformaat`,
+      imgfmt_avif_sub: `Kleinst bij foto's`,
+      imgfmt_jxl_sub: `Nieuwste codec`,
+      imgfmt_keep: `Origineel behouden`,
+      imgfmt_keep_sub: `Geen hercodering`,
     },
 
     pl: {
@@ -773,6 +829,13 @@
       sub_archive: `{c} wpisów skompresowanych · {s} zapisanych bez zmian`,
       sub_restore_exact: `{n} wpisów · {size} · zgodne z treścią`,
       sub_restore_modernized: `{n} obrazów przekodowanych · {size}`,
+      pill_experimental: `Eksperymentalne`,
+      ver34_note: `EPUB 3.4 to projekt z nowymi formatami obrazów <b>AVIF</b> / <b>JPEG XL</b>. Eksperymentalne — do wypróbowania; nie wszystkie czytniki jeszcze je obsługują.`,
+      imgfmt_h: `Format obrazu`,
+      imgfmt_avif_sub: `Najmniejszy na zdjęciach`,
+      imgfmt_jxl_sub: `Najnowszy kodek`,
+      imgfmt_keep: `Zachowaj oryginał`,
+      imgfmt_keep_sub: `Bez przekodowania`,
     },
 
     ru: {
@@ -856,6 +919,13 @@
       sub_archive: `{c} записей сжато · {s} сохранено без изменений`,
       sub_restore_exact: `{n} записей · {size} · точно по содержимому`,
       sub_restore_modernized: `{n} изображений перекодировано · {size}`,
+      pill_experimental: `Экспериментально`,
+      ver34_note: `EPUB 3.4 — черновик спецификации с новыми форматами изображений <b>AVIF</b> / <b>JPEG XL</b>. Экспериментально — для пробы; пока не все читалки его поддерживают.`,
+      imgfmt_h: `Формат изображений`,
+      imgfmt_avif_sub: `Меньше всего на фото`,
+      imgfmt_jxl_sub: `Новейший кодек`,
+      imgfmt_keep: `Оставить оригинал`,
+      imgfmt_keep_sub: `Без перекодирования`,
     },
 
     ja: {
@@ -939,6 +1009,13 @@
       sub_archive: `{c} 件を圧縮 · {s} 件をそのまま保存`,
       sub_restore_exact: `{n} 件 · {size} · 内容そのまま`,
       sub_restore_modernized: `{n} 枚の画像を再エンコード · {size}`,
+      pill_experimental: `実験的`,
+      ver34_note: `EPUB 3.4 は新しい画像形式 <b>AVIF</b> / <b>JPEG XL</b> を含むドラフト仕様です。実験的 — お試し用で、まだ全リーダーが対応しているわけではありません。`,
+      imgfmt_h: `画像形式`,
+      imgfmt_avif_sub: `写真で最小`,
+      imgfmt_jxl_sub: `最新コーデック`,
+      imgfmt_keep: `元のまま`,
+      imgfmt_keep_sub: `再エンコードなし`,
     },
 
     ko: {
@@ -1022,6 +1099,13 @@
       sub_archive: `{c}개 항목 압축 · {s}개 그대로 저장`,
       sub_restore_exact: `{n}개 항목 · {size} · 내용 동일`,
       sub_restore_modernized: `{n}개 이미지 재인코딩 · {size}`,
+      pill_experimental: `실험적`,
+      ver34_note: `EPUB 3.4는 새로운 이미지 형식 <b>AVIF</b> / <b>JPEG XL</b>을 포함한 초안 사양입니다. 실험적 — 시험용이며 아직 모든 리더가 지원하지는 않습니다.`,
+      imgfmt_h: `이미지 형식`,
+      imgfmt_avif_sub: `사진에서 가장 작음`,
+      imgfmt_jxl_sub: `최신 코덱`,
+      imgfmt_keep: `원본 유지`,
+      imgfmt_keep_sub: `재인코딩 없음`,
     },
 
     zh: {
@@ -1105,6 +1189,13 @@
       sub_archive: `{c} 个条目已压缩 · {s} 个原样保存`,
       sub_restore_exact: `{n} 个条目 · {size} · 内容一致`,
       sub_restore_modernized: `{n} 张图片已重新编码 · {size}`,
+      pill_experimental: `实验性`,
+      ver34_note: `EPUB 3.4 是草案规范，带来新的图片格式 <b>AVIF</b> / <b>JPEG XL</b>。实验性 — 用于尝鲜；并非所有阅读器都已支持。`,
+      imgfmt_h: `图片格式`,
+      imgfmt_avif_sub: `照片体积最小`,
+      imgfmt_jxl_sub: `最新编解码`,
+      imgfmt_keep: `保留原图`,
+      imgfmt_keep_sub: `不重新编码`,
     },
   };
 
