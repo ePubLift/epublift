@@ -10,6 +10,16 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+### Added (experimental)
+- **EPUB 3.4 image codecs — AVIF & JPEG XL (`epub34` feature).** Behind a new
+  opt-in build feature, `epublift -i book.epub --target 3.4` re-encodes images to
+  **AVIF** (or `--image-format jxl` for **JPEG XL**), the two formats that become
+  core media types in EPUB 3.4. Pure-Rust imazen codecs (`zenavif`, `zenjxl`)
+  alongside the existing `zenwebp`; the image pipeline is now format-parameterised
+  and the size-safe "never grow a book" guard applies to all formats. The default
+  build is unchanged (EPUB 3.3 / WebP). Spec tracking + plan in
+  [`docs/epub-3.4.md`](docs/epub-3.4.md).
+
 ## [web-v1.5.0] - 2026-06-19
 
 ### Added (web)

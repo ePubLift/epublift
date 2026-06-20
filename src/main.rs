@@ -90,6 +90,18 @@ struct Args {
     #[arg(long)]
     keep_images: bool,
 
+    /// [EXPERIMENTAL] Target EPUB version: "3.3" (default) or "3.4". 3.4 re-encodes
+    /// images to AVIF (or JPEG XL), which become core media types in EPUB 3.4.
+    /// Requires the `epub34` build feature. See docs/epub-3.4.md.
+    #[cfg(feature = "epub34")]
+    #[arg(long, default_value = "3.3", value_name = "3.3|3.4")]
+    target: String,
+
+    /// [EXPERIMENTAL] Image format for --target 3.4: "avif" (default) or "jxl".
+    #[cfg(feature = "epub34")]
+    #[arg(long, value_name = "avif|jxl")]
+    image_format: Option<String>,
+
     /// [EXPERIMENTAL] Package the container with Zstandard (ZIP method 93)
     /// instead of Deflate, to measure the size delta. The result is
     /// NON-CONFORMANT and will NOT open in current reading systems — research
@@ -247,15 +259,38 @@ fn run_convert(args: Args) -> Result<()> {
     #[cfg(not(feature = "zstd-experimental"))]
     let packaging = epublift::Packaging::Deflate;
 
+    // Target version + image format. 3.4 (AVIF/JXL) is experimental and only
+    // available under the `epub34` feature; the default build is 3.3/WebP.
+    #[cfg(feature = "epub34")]
+    let target_version = match args.target.trim() {
+        "3.3" => EpubVersion::V3_3,
+        "3.4" => EpubVersion::V3_4,
+        other => anyhow::bail!("unknown --target '{other}'. Supported: 3.3, 3.4."),
+    };
+    #[cfg(not(feature = "epub34"))]
+    let target_version = EpubVersion::LATEST;
+    #[cfg(feature = "epub34")]
+    let image_format = match args.image_format.as_deref() {
+        None => None,
+        Some("avif") => Some(epublift::ImageFormat::Avif),
+        Some("jxl") => Some(epublift::ImageFormat::Jxl),
+        Some(other) => {
+            anyhow::bail!("unknown --image-format '{other}'. Supported: avif, jxl.")
+        }
+    };
+    #[cfg(not(feature = "epub34"))]
+    let image_format = None;
+
     let mut options = Options {
         quality: args.quality.clamp(1, 100) as u8,
         ascii: args.ascii,
-        target_version: EpubVersion::LATEST,
+        target_version,
         image_strategy: if args.keep_images {
             ImageStrategy::KeepOriginal
         } else {
             ImageStrategy::WebP
         },
+        image_format,
         kepub: args.kepub,
         packaging,
         output: args.output.clone(),
@@ -408,6 +443,7 @@ fn run_restore(args: &RestoreArgs) -> Result<()> {
             } else {
                 ImageStrategy::WebP
             },
+            image_format: None,
             kepub: args.kepub,
             packaging: epublift::Packaging::Deflate,
             output: None,

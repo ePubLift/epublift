@@ -42,7 +42,7 @@ use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
 use opf::RewriteParams;
 
-pub use images::ImageMetric;
+pub use images::{ImageFormat, ImageMetric};
 
 /// Target EPUB specification version for the converted output.
 ///
@@ -53,16 +53,30 @@ pub enum EpubVersion {
     /// EPUB 3.3 — the current target: WebP images and a hybrid nav document.
     #[default]
     V3_3,
+    /// EPUB 3.4 — experimental: AVIF / JPEG XL images become core media types.
+    /// Requires the `epub34` build feature to emit AVIF/JXL. See docs/epub-3.4.md.
+    V3_4,
 }
 
 impl EpubVersion {
-    /// The newest supported target version; the default for new conversions.
+    /// The newest *stable* target version; the default for new conversions.
+    /// 3.4 is experimental and opted into explicitly, so LATEST stays 3.3.
     pub const LATEST: EpubVersion = EpubVersion::V3_3;
 
     /// Filename tag for version-stamped output, e.g. `"3.3"` → `name_v3.3.epub`.
     pub fn tag(self) -> &'static str {
         match self {
             EpubVersion::V3_3 => "3.3",
+            EpubVersion::V3_4 => "3.4",
+        }
+    }
+
+    /// The default output image format for this version: WebP for 3.3, AVIF for
+    /// the experimental 3.4 target.
+    pub fn default_image_format(self) -> ImageFormat {
+        match self {
+            EpubVersion::V3_3 => ImageFormat::WebP,
+            EpubVersion::V3_4 => ImageFormat::Avif,
         }
     }
 }
@@ -143,6 +157,10 @@ pub struct Options {
     /// documents and name the output `<stem>.kepub.epub`. The result is still a
     /// valid EPUB 3 on top of the normal upgrades.
     pub kepub: bool,
+    /// Output raster image format. `None` uses the target version's default
+    /// ([`EpubVersion::default_image_format`]: WebP for 3.3, AVIF for 3.4).
+    /// `Some(..)` forces a specific format (AVIF/JXL need the `epub34` feature).
+    pub image_format: Option<ImageFormat>,
     /// Container packaging. Defaults to conformant [`Packaging::Deflate`];
     /// [`Packaging::Zstd`] is the experimental measurement mode and requires the
     /// `zstd-experimental` build feature.
@@ -158,6 +176,7 @@ impl Default for Options {
             ascii: false,
             target_version: EpubVersion::LATEST,
             image_strategy: ImageStrategy::default(),
+            image_format: None,
             kepub: false,
             packaging: Packaging::default(),
             output: None,
@@ -303,12 +322,21 @@ pub fn convert(input: &Path, options: &Options, progress: impl Fn(&str)) -> Resu
     };
     let opt = match image_strategy {
         ImageStrategy::WebP => {
-            progress("[*] Converting and compressing images to WebP...");
+            // Output format: explicit override, else the target version's default
+            // (WebP for 3.3, AVIF for the experimental 3.4).
+            let format = options
+                .image_format
+                .unwrap_or_else(|| options.target_version.default_image_format());
+            progress(&format!(
+                "[*] Converting and compressing images to {}...",
+                format.label()
+            ));
             let opt = images::optimize_images(
                 &package_dir,
                 &info.items,
                 info.cover_id.as_deref(),
                 quality,
+                format,
                 &progress,
             )?;
             images::update_document_references(temp_path, &opt.ref_pairs, &progress);

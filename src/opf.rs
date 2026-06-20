@@ -44,6 +44,9 @@ pub struct OpfInfo {
 #[derive(Debug, Clone)]
 pub struct ImageChange {
     pub new_href_encoded: String,
+    /// The output media type for the rewritten item (e.g. `image/webp`,
+    /// `image/avif`, `image/jxl`).
+    pub media_type: String,
     pub is_cover: bool,
 }
 
@@ -377,7 +380,7 @@ fn rewrite_item(e: &BytesStart, params: &RewriteParams) -> BytesStart<'static> {
         Some(change) => {
             let mut overrides = vec![
                 ("href".to_string(), change.new_href_encoded.clone()),
-                ("media-type".to_string(), "image/webp".to_string()),
+                ("media-type".to_string(), change.media_type.clone()),
             ];
             if change.is_cover {
                 overrides.push(("properties".to_string(), "cover-image".to_string()));

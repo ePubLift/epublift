@@ -127,6 +127,35 @@ compound" insight into a 3.4-native pipeline.
   lossy AVIF/JXL masters are forbidden as a default (generation loss). Lossless
   re-pack (JXL-lossless-JPEG, pixel-exact PNG) is the faithful path.
 
+## Implementation status
+
+**CLI experiment working (2026-06-20), behind the opt-in `epub34` feature.**
+
+- Image codecs: pure-Rust **imazen** family — **`zenavif`** (rav1e/rav1d) for AVIF,
+  **`zenjxl`** for JPEG XL — alongside the **`zenwebp`** we already ship, sharing
+  the `zencodec` design. No C / FFI.
+- New `EpubVersion::V3_4`; `LATEST` stays 3.3 (3.4 is opt-in, not the default).
+- The image pipeline is now format-parameterised (`ImageFormat::{WebP,Avif,Jxl}`):
+  per-format extension, manifest `media-type`, and encoder dispatch. The
+  **size-safe** guard is unchanged — a re-encode is only kept when it's actually
+  smaller, so a book never grows; otherwise the original is kept.
+- CLI: `epublift -i book.epub --target 3.4` emits **AVIF**;
+  `--target 3.4 --image-format jxl` emits **JPEG XL**. Default build is unchanged
+  (3.3/WebP); `--target 3.4` without the feature errors cleanly.
+
+```bash
+# build with the experimental codecs
+cargo build --release --features epub34
+epublift -i book.epub --target 3.4                    # AVIF images
+epublift -i book.epub --target 3.4 --image-format jxl # JPEG XL images
+```
+
+First validation (synthetic book): JPEG cover re-encoded to a valid AVIF
+(`ftypavif`) and JPEG XL (`ff0a` codestream) with correct manifest media types;
+a tiny PNG was left untouched by the size-safe guard. Next: measure AVIF/JXL vs
+WebP on a **photo-heavy** corpus (the synthetic solid-colour images aren't
+representative), tune quality mapping, and wire `--target 3.4` into `restore`.
+
 ## Related
 
 - Image-codec direction: see the project's notes on the imazen pure-Rust codecs.

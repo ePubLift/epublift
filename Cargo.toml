@@ -82,6 +82,18 @@ crc32fast = { version = "1", optional = true }
 sha2 = { version = "0.10", optional = true }
 serde = { version = "1", features = ["derive"], optional = true }
 serde_json = { version = "1", optional = true }
+# Experimental EPUB 3.4 image codecs (opt-in, `epub34` feature). Pure Rust, no
+# FFI — part of the imazen `zen*` codec family we already use for WebP (zenwebp),
+# unified by the `zencodec` traits. AVIF via zenavif, JPEG XL via zenjxl. Gated
+# so the default shipped binary stays lean and 3.3-only; see docs/epub-3.4.md.
+zenavif = { version = "0.1", optional = true, features = ["encode"] }
+zenjxl = { version = "0.2", optional = true, features = ["encode"] }
+# Shared pixel types for the zen* encoders' convenience entry points
+# (`encode_rgb8(ImgRef<Rgb<u8>>, …)`); almost-enough provides the AVIF encoder's
+# cooperative-cancellation StopToken.
+rgb = { version = "0.8", optional = true }
+imgref = { version = "1", optional = true }
+almost-enough = { version = "0.4", optional = true }
 # Bench-only reference backend: the C libzstd. NEVER part of a shipped artifact —
 # gated behind `zstd-c-bench`, used only by the local benchmark to report the
 # pure-Rust floor vs the C ceiling. Keeps Guiding Principle #1 (pure Rust, no C).
@@ -103,6 +115,10 @@ xz2 = { version = "0.1", optional = true }
 # docs/design/eparc-format.md.
 default = ["archival"]
 archival = ["dep:structured-zstd", "dep:crc32fast", "dep:sha2", "dep:serde", "dep:serde_json"]
+# Experimental EPUB 3.4 output: emit AVIF / JPEG XL images under `--target 3.4`.
+# Pure Rust imazen codecs (zenavif + zenjxl, unified by zencodec); opt-in so the
+# default build stays 3.3.
+epub34 = ["dep:zenavif", "dep:zenjxl", "dep:rgb", "dep:imgref", "dep:almost-enough"]
 # Compile in the experimental `--zstd` packaging + decoder (pure Rust).
 zstd-experimental = ["dep:structured-zstd", "dep:crc32fast"]
 # Additionally compile the C libzstd reference backend for the benchmark only.

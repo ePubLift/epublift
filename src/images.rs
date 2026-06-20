@@ -2,7 +2,7 @@
 //! update every reference to them across the package.
 
 use crate::opf::{ImageChange, ManifestItem};
-use crate::util::{basename, quote, unquote, with_webp_ext};
+use crate::util::{basename, quote, unquote, with_ext};
 use anyhow::Result;
 use image::{ColorType, DynamicImage};
 use std::collections::HashMap;
@@ -11,6 +11,46 @@ use std::io::Cursor;
 use std::path::Path;
 use walkdir::WalkDir;
 use zenwebp::{EncodeRequest, LossyConfig, PixelLayout};
+
+/// Output image format the optimizer re-encodes raster images to. WebP is the
+/// EPUB 3.3 target; AVIF and JPEG XL become core media types in EPUB 3.4 and are
+/// emitted under `--target 3.4` (experimental, behind the `epub34` feature).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ImageFormat {
+    #[default]
+    WebP,
+    Avif,
+    Jxl,
+}
+
+impl ImageFormat {
+    /// File extension (no dot) for this format's output files.
+    pub fn extension(self) -> &'static str {
+        match self {
+            ImageFormat::WebP => "webp",
+            ImageFormat::Avif => "avif",
+            ImageFormat::Jxl => "jxl",
+        }
+    }
+
+    /// OPF manifest media type for this format.
+    pub fn media_type(self) -> &'static str {
+        match self {
+            ImageFormat::WebP => "image/webp",
+            ImageFormat::Avif => "image/avif",
+            ImageFormat::Jxl => "image/jxl",
+        }
+    }
+
+    /// Short label for progress/log lines.
+    pub fn label(self) -> &'static str {
+        match self {
+            ImageFormat::WebP => "WebP",
+            ImageFormat::Avif => "AVIF",
+            ImageFormat::Jxl => "JPEG XL",
+        }
+    }
+}
 
 /// Per-image size statistics, used by the report.
 #[derive(Debug, Clone)]
@@ -44,6 +84,7 @@ pub fn optimize_images(
     items: &[ManifestItem],
     cover_id: Option<&str>,
     quality: u8,
+    format: ImageFormat,
     progress: &dyn Fn(&str),
 ) -> Result<OptimizeResult> {
     let mut result = OptimizeResult {
@@ -69,7 +110,7 @@ pub fn optimize_images(
             continue;
         }
 
-        let new_href = with_webp_ext(&decoded_href);
+        let new_href = with_ext(&decoded_href, format.extension());
         let new_img_path = package_dir.join(&new_href);
         let old_name = basename(&decoded_href).to_string();
 
@@ -106,21 +147,22 @@ pub fn optimize_images(
 
         // (3) Encode grayscale as grayscale so we never pay for empty colour
         // channels. Encode to memory first so we can compare sizes.
-        let webp = match encode_webp(&dynimg, eff_quality) {
+        let encoded = match encode_image(&dynimg, eff_quality, format) {
             Ok(b) => b,
             Err(e) => {
                 progress(&format!("  [!] Failed to convert image {old_name}: {e}"));
                 continue;
             }
         };
-        let new_size = webp.len() as u64;
+        let new_size = encoded.len() as u64;
 
-        // (1) Keep whichever is smaller. If WebP isn't actually smaller, leave
-        // the original untouched — no rewrite, no manifest/reference change —
+        // (1) Keep whichever is smaller. If the re-encode isn't actually smaller,
+        // leave the original untouched — no rewrite, no manifest/reference change —
         // so the output can never grow.
         if new_size >= orig_size {
             progress(&format!(
-                "  [=] Kept original (WebP not smaller): {} ({:.1}KB <= {:.1}KB)",
+                "  [=] Kept original ({} not smaller): {} ({:.1}KB <= {:.1}KB)",
+                format.label(),
                 old_name,
                 orig_size as f64 / 1024.0,
                 new_size as f64 / 1024.0
@@ -135,7 +177,7 @@ pub fn optimize_images(
             continue;
         }
 
-        if let Err(e) = fs::write(&new_img_path, &webp) {
+        if let Err(e) = fs::write(&new_img_path, &encoded) {
             progress(&format!(
                 "  [!] Failed to write {}: {e}",
                 basename(&new_href)
@@ -175,6 +217,7 @@ pub fn optimize_images(
             item.href.clone(),
             ImageChange {
                 new_href_encoded: quote(&new_href),
+                media_type: format.media_type().to_string(),
                 is_cover,
             },
         );
@@ -213,6 +256,23 @@ fn decode_image(bytes: &[u8]) -> Result<DynamicImage> {
     Ok(reader.decode()?)
 }
 
+/// Encode a decoded image to the requested output `format` at `quality` (1-100).
+/// AVIF / JPEG XL require the experimental `epub34` build feature.
+fn encode_image(dynimg: &DynamicImage, quality: u8, format: ImageFormat) -> Result<Vec<u8>> {
+    match format {
+        ImageFormat::WebP => encode_webp(dynimg, quality),
+        #[cfg(feature = "epub34")]
+        ImageFormat::Avif => encode_avif(dynimg, quality),
+        #[cfg(feature = "epub34")]
+        ImageFormat::Jxl => encode_jxl(dynimg, quality),
+        #[cfg(not(feature = "epub34"))]
+        ImageFormat::Avif | ImageFormat::Jxl => anyhow::bail!(
+            "{} output requires building epublift with the `epub34` feature",
+            format.label()
+        ),
+    }
+}
+
 /// Encode a decoded image to WebP bytes at `quality` (1-100), choosing the
 /// pixel layout that matches the image: grayscale images stay grayscale (L8 /
 /// La8) so we never spend bits on empty colour channels.
@@ -247,6 +307,49 @@ fn encode_webp(dynimg: &DynamicImage, quality: u8) -> Result<Vec<u8>> {
         }
     };
     Ok(memory)
+}
+
+/// Encode to AVIF via the pure-Rust imazen `zenavif` (rav1e) encoder, `quality`
+/// 1-100. Grayscale is expanded to RGB (zenavif encodes RGB/RGBA only). Behind
+/// the experimental `epub34` feature. See docs/epub-3.4.md.
+#[cfg(feature = "epub34")]
+fn encode_avif(dynimg: &DynamicImage, quality: u8) -> Result<Vec<u8>> {
+    use rgb::FromSlice;
+    let cfg = zenavif::EncoderConfig::new().quality(quality as f32);
+    let stop = almost_enough::StopToken::new(zenavif::Unstoppable);
+    let encoded = if dynimg.color().has_alpha() {
+        let rgba = dynimg.to_rgba8();
+        let (w, h) = (rgba.width() as usize, rgba.height() as usize);
+        let img = imgref::Img::new(rgba.as_raw().as_rgba(), w, h);
+        zenavif::encode_rgba8(img, &cfg, stop)?
+    } else {
+        let rgb = dynimg.to_rgb8();
+        let (w, h) = (rgb.width() as usize, rgb.height() as usize);
+        let img = imgref::Img::new(rgb.as_raw().as_rgb(), w, h);
+        zenavif::encode_rgb8(img, &cfg, stop)?
+    };
+    Ok(encoded.avif_file)
+}
+
+/// Encode to JPEG XL via the pure-Rust imazen `zenjxl` encoder, lossy at the
+/// distance mapped from `quality` 1-100. Grayscale is expanded to RGB. Behind
+/// the experimental `epub34` feature. See docs/epub-3.4.md.
+#[cfg(feature = "epub34")]
+fn encode_jxl(dynimg: &DynamicImage, quality: u8) -> Result<Vec<u8>> {
+    use rgb::FromSlice;
+    let cfg = zenjxl::LossyConfig::new(zenjxl::quality_to_distance(quality as f32));
+    let encoded = if dynimg.color().has_alpha() {
+        let rgba = dynimg.to_rgba8();
+        let (w, h) = (rgba.width() as usize, rgba.height() as usize);
+        let img = imgref::Img::new(rgba.as_raw().as_rgba(), w, h);
+        zenjxl::encode_rgba8(img, &cfg)?
+    } else {
+        let rgb = dynimg.to_rgb8();
+        let (w, h) = (rgb.width() as usize, rgb.height() as usize);
+        let img = imgref::Img::new(rgb.as_raw().as_rgb(), w, h);
+        zenjxl::encode_rgb8(img, &cfg)?
+    };
+    Ok(encoded)
 }
 
 /// The standard JPEG Annex-K luminance quantization table (quality 50 baseline).
