@@ -84,53 +84,45 @@ fn main() -> Result<()> {
         avif_speed
     );
 
-    // Sweep grids per format.
-    let webp_q = [80u8];
-    let avif_q = [55u8, 70, 85, 92, 97];
-    let jxl_d = [3.0f32, 2.0, 1.5, 1.0, 0.6];
+    // WebP is the reference quality scale (`--quality N` = "WebP quality N").
+    // AVIF/JXL grids are wide enough to bracket every WebP anchor's butteraugli.
+    let webp_anchors = [50u8, 60, 70, 80, 90];
+    let avif_q = [30u8, 40, 55, 70, 85, 92, 97];
+    let jxl_d = [4.0f32, 3.0, 2.0, 1.5, 1.0, 0.6];
 
+    // Per-format curves: (butteraugli score, knob, total KB).
+    let avif_curve: Vec<(f64, f64, f64)> = avif_q
+        .iter()
+        .map(|&q| {
+            let (s, kb) = run_point(&origs, |im| enc_avif(im, q, avif_speed));
+            (s, q as f64, kb)
+        })
+        .collect();
+    let jxl_curve: Vec<(f64, f64, f64)> = jxl_d
+        .iter()
+        .map(|&d| {
+            let (s, kb) = run_point(&origs, |im| enc_jxl(im, d));
+            (s, d as f64, kb)
+        })
+        .collect();
+
+    // Calibration table: for each WebP quality (the reference), the AVIF q and
+    // JXL distance that hit the SAME butteraugli, with size deltas vs WebP.
     println!(
-        "{:<8} {:>6} {:>14} {:>12}",
-        "format", "knob", "butteraugli", "total KB"
+        "{:>6} {:>11} {:>9} | {:>16} | {:>16}",
+        "webp_q", "butteraugli", "webp_KB", "avif (q / KB / Δ)", "jxl (d / KB / Δ)"
     );
-    println!("{}", "-".repeat(44));
-
-    let mut webp_target = 0.0;
-    for &q in &webp_q {
-        let (score, kb) = run_point(&origs, |im| enc_webp(im, q));
-        println!("{:<8} {:>6} {:>14.4} {:>12.1}", "webp", q, score, kb);
-        webp_target = score;
-    }
-    println!("  (anchor = WebP q80 mean butteraugli = {webp_target:.4})\n");
-
-    let mut avif_curve = Vec::new();
-    for &q in &avif_q {
-        let (score, kb) = run_point(&origs, |im| enc_avif(im, q, avif_speed));
-        println!("{:<8} {:>6} {:>14.4} {:>12.1}", "avif", q, score, kb);
-        avif_curve.push((score, kb));
-    }
-    println!();
-    let mut jxl_curve = Vec::new();
-    for &d in &jxl_d {
-        let (score, kb) = run_point(&origs, |im| enc_jxl(im, d));
-        println!("{:<8} {:>6.1} {:>14.4} {:>12.1}", "jxl", d, score, kb);
-        jxl_curve.push((score, kb));
-    }
-
-    // Interpolate each format's total KB at the WebP-q80 butteraugli.
-    println!("\n=== size at EQUAL perceptual quality (butteraugli {webp_target:.4}) ===");
-    let (_, webp_kb) = run_point(&origs, |im| enc_webp(im, 80));
-    println!("  webp : {webp_kb:>9.1} KB  (anchor)");
-    if let Some(kb) = interp(&avif_curve, webp_target) {
+    println!("{}", "-".repeat(70));
+    for &wq in &webp_anchors {
+        let (s, kb_w) = run_point(&origs, |im| enc_webp(im, wq));
+        let avk = interp_xy(&avif_curve, s, true).unwrap_or(f64::NAN);
+        let avkb = interp_xy(&avif_curve, s, false).unwrap_or(f64::NAN);
+        let jxk = interp_xy(&jxl_curve, s, true).unwrap_or(f64::NAN);
+        let jxkb = interp_xy(&jxl_curve, s, false).unwrap_or(f64::NAN);
         println!(
-            "  avif : {kb:>9.1} KB  ({:+.1}% vs webp)",
-            100.0 * (kb - webp_kb) / webp_kb
-        );
-    }
-    if let Some(kb) = interp(&jxl_curve, webp_target) {
-        println!(
-            "  jxl  : {kb:>9.1} KB  ({:+.1}% vs webp)",
-            100.0 * (kb - webp_kb) / webp_kb
+            "{wq:>6} {s:>11.4} {kb_w:>9.1} | q{avk:>4.0} {avkb:>6.1} {:>+5.0}% | d{jxk:>4.2} {jxkb:>6.1} {:>+5.0}%",
+            100.0 * (avkb - kb_w) / kb_w,
+            100.0 * (jxkb - kb_w) / kb_w
         );
     }
     Ok(())
@@ -175,24 +167,28 @@ fn run_point(origs: &[RgbImage], enc: impl Fn(&RgbImage) -> Vec<u8>) -> (f64, f6
     )
 }
 
-/// Linear-interpolate total-KB at `target` butteraugli from a (score, kb) curve.
-/// Curve scores need not be sorted; we find the bracketing pair around `target`.
-fn interp(curve: &[(f64, f64)], target: f64) -> Option<f64> {
-    let mut pts = curve.to_vec();
+/// Linear-interpolate, at `target` butteraugli, either the knob (`want_knob`) or
+/// the total KB, from a (score, knob, kb) curve. Returns `None` if `target` is
+/// outside the swept butteraugli range.
+fn interp_xy(curve: &[(f64, f64, f64)], target: f64, want_knob: bool) -> Option<f64> {
+    let mut pts: Vec<(f64, f64)> = curve
+        .iter()
+        .map(|&(s, k, kb)| (s, if want_knob { k } else { kb }))
+        .collect();
     pts.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
     for w in pts.windows(2) {
-        let (s0, k0) = w[0];
-        let (s1, k1) = w[1];
+        let (s0, v0) = w[0];
+        let (s1, v1) = w[1];
         if (s0..=s1).contains(&target) {
             let t = if (s1 - s0).abs() < 1e-9 {
                 0.0
             } else {
                 (target - s0) / (s1 - s0)
             };
-            return Some(k0 + t * (k1 - k0));
+            return Some(v0 + t * (v1 - v0));
         }
     }
-    None // target outside the swept range
+    None
 }
 
 // ---- encoders (RGB only; all imazen zen* codecs, pure Rust) -----------------

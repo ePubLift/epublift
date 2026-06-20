@@ -79,6 +79,42 @@ avif  q85   0.5886  1405.3 KB        jxl  d2.0  0.8775  1099.6 KB
 → avif @1.0593 = 888.4 KB (−13.8%)   → jxl @1.0593 = 976.7 KB (−5.2%)
 ```
 
+## Quality calibration (`--quality` → per-codec knob)
+
+`convert` takes one `--quality N` (default 80). The codecs' native knobs are *not*
+the same perceptual scale, so feeding N raw makes them disagree: AVIF q80
+over-delivers quality and comes out **larger** than WebP q80 even though AVIF is
+smaller *at equal quality*. We therefore treat **WebP quality as the reference
+scale** and map N → each codec's knob to hit the same butteraugli.
+
+Calibration table (`img-calib`, photo book — where AVIF/JXL are actually used):
+
+| webp_q | butteraugli | avif_q (match) | avif Δ | jxl_d (match) | jxl Δ |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 50 | 1.54 | 52 | −5% | — | |
+| 60 | 1.40 | 55 | −9% | 3.62 | +8% |
+| 70 | 1.27 | 59 | −8% | 3.21 | +4% |
+| 80 | 1.06 | 67 | −14% | 2.56 | −5% |
+| 90 | 0.77 | 78 | −25% | 1.71 | −25% |
+
+First-pass linear fits (in `src/images.rs`, `epub34`):
+
+```
+avif_q   ≈ 0.64 · webp_q + 17      (clamped 1..100)
+jxl_dist ≈ −0.064 · webp_q + 7.4   (clamped 0.4..15)
+```
+
+AVIF reaches WebP's quality at a *lower* knob, and its size advantage grows with
+quality. **Effect, end-to-end on the photo book** (`--target 3.4`, default
+quality): before calibration AVIF was **0.957 MB** (bigger than 3.3 WebP's
+0.822 MB, because q80-raw over-delivered quality); after calibration it is
+**0.789 MB (−4% vs 3.3 WebP)** at matched quality. (Less than the bench's −14%
+because of the size-safe guard, the real book vs the 16-image sample, the linear
+fit, and AVIF production speed 4 vs bench speed 6 — but the sign is now right.)
+
+> First pass: one photo book. Refine with more books, and consider a non-linear
+> fit and per-format speed tuning.
+
 ## Tooling caveats (important)
 
 - **`zenavif`'s pure-Rust decoder (rav1d-safe 0.5.7) is unreliable on Apple
@@ -109,17 +145,14 @@ avif  q85   0.5886  1405.3 KB        jxl  d2.0  0.8775  1099.6 KB
    `--image-format avif|jxl` forces one format for every image. This already
    delivers the unambiguous win — a diagram/line-art book no longer gets AVIF
    (which was +93% size *and* ~15× slower); it stays WebP, fast and small.
-2. **Quality mapping is the remaining half (not done).** `convert` uses a fixed
-   `--quality` (e.g. 80) mapped naïvely per codec, so AVIF q80 and WebP q80 are
-   *different* perceptual qualities — AVIF q80 over-delivers quality and can come
-   out **larger** than WebP q80 on a photo book (measured 0.96 MB vs 0.82 MB),
-   even though AVIF is −14% **at equal quality**. The photo size win is only
-   realized once `--quality N` means the same butteraugli across codecs. Until
-   then, 3.4 on a photo book is *higher quality* but not smaller than 3.3.
-3. **Next:** calibrate the per-format quality knobs (map `--quality` → each
-   codec's knob so equal N = equal perceptual quality), re-measure on more books
-   per content type, and consider a per-image "keep smallest at matched quality"
-   mode. JXL stays available via `--image-format jxl`.
+2. **Quality mapping is calibrated (done).** `--quality N` is the WebP reference
+   scale; AVIF/JXL knobs are derived from N (see "Quality calibration" above) so
+   equal N ≈ equal butteraugli. This realizes the photo win: `--target 3.4` on the
+   photo book went from 0.96 MB (raw, bigger than 3.3) to **0.789 MB (−4% vs 3.3
+   WebP)** at matched quality.
+3. **Next:** refine the calibration (more books, non-linear fit, per-format speed),
+   extend `--target 3.4` to `restore` / web, and consider a per-image "keep
+   smallest at matched quality" mode. JXL stays available via `--image-format jxl`.
 
 ## Related
 

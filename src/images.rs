@@ -348,13 +348,32 @@ fn encode_webp(dynimg: &DynamicImage, quality: u8) -> Result<Vec<u8>> {
     Ok(memory)
 }
 
+/// Map a WebP-scale `--quality` (1-100, the reference) to the AVIF quality knob
+/// that yields the *same* perceptual quality (butteraugli) — so `--quality N`
+/// means the same thing across codecs. First-pass linear calibration on a
+/// photographic (JPEG-source) book; AVIF reaches WebP's quality at a lower knob,
+/// and its size advantage grows with quality. See
+/// docs/design/epub-3.4-image-codec-choice.md.
+#[cfg(feature = "epub34")]
+fn calibrated_avif_quality(webp_quality: u8) -> f32 {
+    (0.64 * webp_quality as f32 + 17.0).clamp(1.0, 100.0)
+}
+
+/// Map a WebP-scale `--quality` (1-100) to the JPEG XL butteraugli *distance*
+/// that matches WebP's perceptual quality (lower distance = higher quality).
+/// First-pass linear calibration on photographic content (see above).
+#[cfg(feature = "epub34")]
+fn calibrated_jxl_distance(webp_quality: u8) -> f32 {
+    (-0.064 * webp_quality as f32 + 7.4).clamp(0.4, 15.0)
+}
+
 /// Encode to AVIF via the pure-Rust imazen `zenavif` (rav1e) encoder, `quality`
-/// 1-100. Grayscale is expanded to RGB (zenavif encodes RGB/RGBA only). Behind
-/// the experimental `epub34` feature. See docs/epub-3.4.md.
+/// 1-100 (calibrated to the WebP scale). Grayscale is expanded to RGB (zenavif
+/// encodes RGB/RGBA only). Behind the experimental `epub34` feature.
 #[cfg(feature = "epub34")]
 fn encode_avif(dynimg: &DynamicImage, quality: u8) -> Result<Vec<u8>> {
     use rgb::FromSlice;
-    let cfg = zenavif::EncoderConfig::new().quality(quality as f32);
+    let cfg = zenavif::EncoderConfig::new().quality(calibrated_avif_quality(quality));
     let stop = almost_enough::StopToken::new(zenavif::Unstoppable);
     let encoded = if dynimg.color().has_alpha() {
         let rgba = dynimg.to_rgba8();
@@ -376,7 +395,7 @@ fn encode_avif(dynimg: &DynamicImage, quality: u8) -> Result<Vec<u8>> {
 #[cfg(feature = "epub34")]
 fn encode_jxl(dynimg: &DynamicImage, quality: u8) -> Result<Vec<u8>> {
     use rgb::FromSlice;
-    let cfg = zenjxl::LossyConfig::new(zenjxl::quality_to_distance(quality as f32));
+    let cfg = zenjxl::LossyConfig::new(calibrated_jxl_distance(quality));
     let encoded = if dynimg.color().has_alpha() {
         let rgba = dynimg.to_rgba8();
         let (w, h) = (rgba.width() as usize, rgba.height() as usize);

@@ -164,10 +164,13 @@ two-book data, and the `img-calib` bench are in
 **Source-format heuristic wired (done):** `--target 3.4` now picks per image —
 **JPEG → AVIF, PNG → WebP** (`--image-format avif|jxl` forces one format). This
 already avoids the line-art→AVIF disaster (a diagram book stays WebP: 20.5 MB /
-16 s vs forced AVIF 23.3 MB / 4 min). The photo *size* win still needs the
-per-format **quality-mapping calibration** (AVIF q80 over-delivers quality, so it
-can be larger than WebP q80 until equal-quality mapping lands). Next: that
-calibration, then `restore` / web.
+16 s vs forced AVIF 23.3 MB / 4 min).
+
+**Quality calibration wired (done):** `--quality N` is the WebP reference scale,
+mapped per codec so equal N ≈ equal perceptual quality (butteraugli). This
+realizes the photo win: `--target 3.4` on the photo book went from 0.96 MB (raw
+q80, *bigger* than 3.3) to **0.789 MB (−4% vs 3.3 WebP)** at matched quality.
+Next: refine the calibration (more books), then `restore` / web.
 
 ## Related
 
