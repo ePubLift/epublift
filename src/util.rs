@@ -145,9 +145,79 @@ pub fn standardize_xhtml_files(root: &Path, progress: &dyn Fn(&str)) -> Result<(
     Ok(())
 }
 
+/// Detect content documents that use **HTML syntax** rather than XHTML, which
+/// EPUB 3.4 removed. The reliable signal is an HTML *void* element that isn't
+/// self-closed (valid XHTML always self-closes them: `<br/>`, `<img .../>`).
+/// Returns one human-readable warning per offending file. A heuristic for the
+/// lint — we report it; converting HTML→XHTML is out of scope.
+pub fn detect_html_syntax(root: &Path) -> Vec<String> {
+    let void_re = Regex::new(
+        r"(?is)<(?:br|hr|wbr|img|input|link|meta|area|base|col|embed|source|track|param)\b[^>]*>",
+    )
+    .unwrap();
+    let mut warnings = Vec::new();
+
+    for entry in WalkDir::new(root).into_iter().filter_map(|e| e.ok()) {
+        if !entry.file_type().is_file() {
+            continue;
+        }
+        let path = entry.path();
+        let is_html = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| matches!(e.to_ascii_lowercase().as_str(), "html" | "xhtml" | "htm"))
+            .unwrap_or(false);
+        if !is_html {
+            continue;
+        }
+        let Ok(content) = fs::read_to_string(path) else {
+            continue;
+        };
+        // HTML syntax = a void element tag that doesn't self-close (`...>` not `.../>`).
+        let html_syntax = void_re
+            .find_iter(&content)
+            .any(|m| !m.as_str().trim_end().ends_with("/>"));
+        if html_syntax {
+            let name = path
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .into_owned();
+            warnings.push(format!(
+                "content document `{name}` uses HTML syntax (EPUB 3.4 requires XHTML)"
+            ));
+        }
+    }
+    warnings
+}
+
 #[cfg(test)]
 mod tests {
-    use super::slugify_ascii;
+    use super::{detect_html_syntax, slugify_ascii};
+    use std::fs;
+
+    #[test]
+    fn flags_html_syntax_but_not_xhtml() {
+        let dir = tempfile::tempdir().unwrap();
+        // HTML syntax: bare void elements.
+        fs::write(
+            dir.path().join("html.xhtml"),
+            "<html><body><p>Hi<br>there<img src=\"a.jpg\"></p></body></html>",
+        )
+        .unwrap();
+        // Valid XHTML: self-closed voids.
+        fs::write(
+            dir.path().join("xhtml.xhtml"),
+            "<html><body><p>Hi<br/>there<img src=\"a.jpg\"/></p></body></html>",
+        )
+        .unwrap();
+        // Non-content file: ignored.
+        fs::write(dir.path().join("styles.css"), "br { color: red; }").unwrap();
+
+        let w = detect_html_syntax(dir.path());
+        assert_eq!(w.len(), 1, "exactly one offending file: {w:?}");
+        assert!(w[0].contains("html.xhtml"));
+    }
 
     #[test]
     fn slugifies_turkish_title() {

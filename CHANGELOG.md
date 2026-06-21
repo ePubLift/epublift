@@ -18,6 +18,12 @@ are tagged with the component they belong to.
   (a 3.3 conformance fix, not 3.4-only); already-core types are left untouched.
 
 ### Added (experimental)
+- **EPUB 3.4 XHTML-only guard.** EPUB 3.4 removed HTML syntax (content must be
+  XHTML). Since the pipeline rewrites content as text, a `--target 3.4` run now
+  **detects** content documents still in HTML syntax (the reliable signal: an HTML
+  void element that isn't self-closed, e.g. a bare `<br>` or `<img>`) and flags
+  them in the report and progress output. It does not auto-convert HTML→XHTML.
+  3.3 still allows HTML syntax, so the check is 3.4-only.
 - **EPUB 3.4 outdated-features report.** The audit report now lists EPUB 3.4
   "outdated"/deprecated features found in the source — manifest content
   `fallback` attributes, the outdated `rendition:flow`/`orientation`/`spread`/

@@ -166,10 +166,9 @@ pub fn write_report(report_path: &Path, report: &Report) -> Result<()> {
         r.push("OUTDATED / DEPRECATED FEATURES (EPUB 3.4)".to_string());
         r.push(dash.clone());
         r.push(
-            "These still work, but EPUB 3.4 marks them outdated/deprecated. Kept as-is;"
-                .to_string(),
+            "EPUB 3.4 marks these outdated/deprecated (or, for HTML syntax, removed).".to_string(),
         );
-        r.push("consider replacing them in the source for future-proofing.".to_string());
+        r.push("Kept as-is; review them in the source for future-proofing.".to_string());
         for f in outdated_features {
             r.push(format!("[!] {f}"));
         }

@@ -388,6 +388,18 @@ pub fn convert(input: &Path, options: &Options, progress: impl Fn(&str)) -> Resu
     // Standardize content DOCTYPEs and namespaces.
     util::standardize_xhtml_files(temp_path, &progress)?;
 
+    // Outdated/deprecated features for the audit report: the OPF-level ones
+    // always; plus, for a 3.4 target, content documents still in HTML syntax
+    // (EPUB 3.4 is XHTML-only — we flag, we don't rewrite them).
+    let mut outdated = info.outdated_features.clone();
+    if options.target_version == EpubVersion::V3_4 {
+        let html = util::detect_html_syntax(temp_path);
+        for w in &html {
+            progress(&format!("  [!] {w}"));
+        }
+        outdated.extend(html);
+    }
+
     // Rewrite the OPF with all upgrades and write it back.
     let params = RewriteParams {
         modified_ts: Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string(),
@@ -451,7 +463,7 @@ pub fn convert(input: &Path, options: &Options, progress: impl Fn(&str)) -> Resu
         final_size,
         image_metrics: opt.metrics,
         target_version: options.target_version,
-        outdated_features: info.outdated_features,
+        outdated_features: outdated,
     })
 }
 
