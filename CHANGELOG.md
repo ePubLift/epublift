@@ -10,6 +10,13 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+### Changed
+- **TTF font media-type hygiene.** A `.ttf` manifest item with a legacy/non-core
+  or missing media type (e.g. `application/x-font-ttf` — which was non-core before
+  EPUB 3.4 — or `application/octet-stream`) is normalized to **`font/ttf`**, the
+  modern core type valid in EPUB 3.3 *and* 3.4. Applied during all modernization
+  (a 3.3 conformance fix, not 3.4-only); already-core types are left untouched.
+
 ### Added (experimental)
 - **EPUB 3.4 `pageBreakSource` modernization.** When emitting `--target 3.4`,
   derive the new `<meta property="pageBreakSource">` from a legacy

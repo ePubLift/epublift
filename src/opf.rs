@@ -456,7 +456,44 @@ fn rewrite_item(e: &BytesStart, params: &RewriteParams) -> BytesStart<'static> {
             }
             transform_start(e, &overrides, &[])
         }
-        None => transform_start(e, &[], &[]),
+        None => {
+            // Font media-type hygiene: a `.ttf` item carrying a legacy/non-core
+            // media type (or none) gets `font/ttf` — the modern core type valid
+            // in EPUB 3.3 *and* 3.4. (`application/x-font-ttf`, common in older
+            // EPUBs, was non-core before 3.4; normalizing fixes 3.3 conformance
+            // and is clean under 3.4.) Set both the type and, if it was missing,
+            // add it.
+            if href_is_ttf(&href) && needs_ttf_media_type(get_attr(e, "media-type").as_deref()) {
+                let mt = ("media-type".to_string(), "font/ttf".to_string());
+                transform_start(e, std::slice::from_ref(&mt), std::slice::from_ref(&mt))
+            } else {
+                transform_start(e, &[], &[])
+            }
+        }
+    }
+}
+
+/// Whether an href points to a TrueType font (by `.ttf` extension).
+fn href_is_ttf(href: &str) -> bool {
+    href.rsplit('.')
+        .next()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("ttf"))
+}
+
+/// Whether a `.ttf` item's current media type should be normalized to `font/ttf`.
+/// Leaves the already-core TTF types (`font/ttf`, `application/font-sfnt`) alone;
+/// rewrites the known legacy/wrong/missing ones.
+fn needs_ttf_media_type(media_type: Option<&str>) -> bool {
+    match media_type.map(str::trim) {
+        None | Some("") => true,
+        Some("font/ttf") | Some("application/font-sfnt") => false,
+        Some(other) => matches!(
+            other,
+            "application/x-font-ttf"
+                | "application/x-font-truetype"
+                | "application/x-truetype-font"
+                | "application/octet-stream"
+        ),
     }
 }
 
@@ -532,5 +569,47 @@ mod tests {
         );
         let info = parse_opf_info(&opf).unwrap();
         assert_eq!(info.page_break_source, None);
+    }
+
+    #[test]
+    fn ttf_media_type_decision() {
+        assert!(needs_ttf_media_type(Some("application/x-font-ttf")));
+        assert!(needs_ttf_media_type(Some("application/octet-stream")));
+        assert!(needs_ttf_media_type(None));
+        assert!(needs_ttf_media_type(Some("")));
+        // Already-core types are left alone.
+        assert!(!needs_ttf_media_type(Some("font/ttf")));
+        assert!(!needs_ttf_media_type(Some("application/font-sfnt")));
+    }
+
+    #[test]
+    fn href_ttf_detection() {
+        assert!(href_is_ttf("fonts/Foo.ttf"));
+        assert!(href_is_ttf("Foo.TTF"));
+        assert!(!href_is_ttf("fonts/Foo.otf"));
+        assert!(!href_is_ttf("Foo.woff2"));
+    }
+
+    #[test]
+    fn rewrite_normalizes_legacy_ttf_media_type() {
+        let opf = OPF_PAGEBREAK.replace(
+            r#"<item id="c" href="c.xhtml" media-type="application/xhtml+xml"/>"#,
+            r#"<item id="c" href="c.xhtml" media-type="application/xhtml+xml"/><item id="f" href="fonts/F.ttf" media-type="application/x-font-ttf"/>"#,
+        );
+        let out = rewrite_opf(&opf, &params(None)).unwrap();
+        assert!(out.contains(r#"href="fonts/F.ttf" media-type="font/ttf""#));
+        assert!(!out.contains("application/x-font-ttf"));
+    }
+
+    #[test]
+    fn rewrite_leaves_core_and_non_ttf_fonts_alone() {
+        let opf = OPF_PAGEBREAK.replace(
+            r#"<item id="c" href="c.xhtml" media-type="application/xhtml+xml"/>"#,
+            r#"<item id="t" href="F.ttf" media-type="font/ttf"/><item id="o" href="F.otf" media-type="application/x-font-otf"/>"#,
+        );
+        let out = rewrite_opf(&opf, &params(None)).unwrap();
+        assert!(out.contains(r#"href="F.ttf" media-type="font/ttf""#));
+        // OTF is out of scope — left untouched.
+        assert!(out.contains(r#"href="F.otf" media-type="application/x-font-otf""#));
     }
 }
