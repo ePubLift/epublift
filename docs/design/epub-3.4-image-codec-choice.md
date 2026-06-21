@@ -98,12 +98,18 @@ content AVIF/JXL are actually applied to: real photos *and* JPEG-saved charts):
 | 80 | 0.90 | 68 | −11% | 2.08 | −9% |
 | 90 | 0.60 | 79 | −19% | 1.24 | −19% |
 
-Least-squares linear fits (in `src/images.rs`, `epub34`):
+**Quadratic** least-squares fits over a finer grid (40 JPEG-source images / 11
+books). The `avif_q` relationship curves up steeply at high quality — a line
+under-shoots there (linear SSE 305→180; **quadratic SSE 16**, ~20× better):
 
 ```
-avif_q   ≈ 0.60 · webp_q + 22      (clamped 1..100)
-jxl_dist ≈ −0.051 · webp_q + 6.0   (clamped 0.4..15)
+avif_q   ≈ 0.017529·q² − 1.70862·q + 95.783   (input clamped to 45..95, output 1..100)
+jxl_dist ≈ −0.000494·q² + 0.01808·q + 3.639    (input clamped to 45..95, output 0.4..15)
 ```
+
+The fit is valid in the photographic-quality range; the input is clamped to it so
+the parabola never turns back up on out-of-range inputs (AVIF is only applied to
+JPEG-source content anyway).
 
 AVIF reaches WebP's quality at a *lower* knob, and its size advantage grows with
 quality. **End-to-end verification** (`--target 3.4` vs `--target 3.3` at default
@@ -111,10 +117,12 @@ quality, AVIF at matched quality):
 
 | Book | 3.3 WebP | 3.4 AVIF | Δ |
 | :--- | ---: | ---: | ---: |
-| Üç Kıtada Osmanlılar (historical photos) | 1952 KB | 1737 KB | **−11%** |
-| Sapiens | 1953 KB | 1874 KB | −4% |
-| Küçük Prens | 1251 KB | 1205 KB | −4% |
-| Senin Kovan | 842 KB | 847 KB | +0.6% |
+| Üç Kıtada Osmanlılar (historical photos) | 1952 KB | 1690 KB | **−13.4%** |
+| Sapiens | 1953 KB | 1836 KB | −6.0% |
+| Küçük Prens | 1251 KB | 1248 KB | −0.2% |
+| Senin Kovan | 842 KB | 810 KB | −3.8% |
+
+(Quadratic calibration; the earlier linear fit gave −11% / −4% / −4% / +0.6%.)
 
 So AVIF's advantage on JPEG-source content is real but **content-dependent and
 modest** (≈0–11%; historical photos benefit most). Before calibration the same
