@@ -38,6 +38,10 @@ pub struct OpfInfo {
     pub ncx_href: Option<String>,
     pub has_guide: bool,
     pub guide_refs: Vec<GuideRef>,
+    /// The value for an EPUB 3.4 `pageBreakSource` meta property, derived from a
+    /// legacy `source-of`/`pagebreak` meta that refines a `dc:source`. `None` if
+    /// there is no such legacy meta, or a `pageBreakSource` already exists.
+    pub page_break_source: Option<String>,
 }
 
 /// Describes how a single manifest image item should be rewritten.
@@ -57,6 +61,9 @@ pub struct RewriteParams {
     pub manifest_changes: HashMap<String, ImageChange>,
     pub add_nav: bool,
     pub remove_guide: bool,
+    /// When `Some`, inject an EPUB 3.4 `<meta property="pageBreakSource">` with
+    /// this value (set only for a 3.4 target; see [`OpfInfo::page_break_source`]).
+    pub page_break_source: Option<String>,
 }
 
 /// Local (namespace-stripped) name of an XML element.
@@ -153,6 +160,10 @@ pub fn parse_opf_info(xml: &str) -> Result<OpfInfo> {
         }
     }
 
+    // EPUB 3.4 `pageBreakSource`: derive it from a legacy `source-of`/`pagebreak`
+    // meta that refines a `dc:source`. Skip if a `pageBreakSource` already exists.
+    let page_break_source = derive_page_break_source(&doc);
+
     Ok(OpfInfo {
         items,
         cover_id,
@@ -160,7 +171,48 @@ pub fn parse_opf_info(xml: &str) -> Result<OpfInfo> {
         ncx_href,
         has_guide,
         guide_refs,
+        page_break_source,
     })
+}
+
+/// Resolve the value for an EPUB 3.4 `pageBreakSource` meta from a legacy
+/// `<meta refines="#id" property="source-of">pagebreak</meta>` whose `refines`
+/// target is a `dc:source`. Returns `None` if absent, unresolvable, or if a
+/// `pageBreakSource` meta is already present (don't duplicate).
+fn derive_page_break_source(doc: &roxmltree::Document) -> Option<String> {
+    let is_meta = |n: &roxmltree::Node| n.is_element() && n.tag_name().name() == "meta";
+
+    // Already modernized? Then there's nothing to add.
+    if doc
+        .descendants()
+        .any(|n| is_meta(&n) && n.attribute("property") == Some("pageBreakSource"))
+    {
+        return None;
+    }
+
+    // Find the source-of/pagebreak meta and its refines target id.
+    let refines_id = doc.descendants().find_map(|n| {
+        if is_meta(&n)
+            && n.attribute("property") == Some("source-of")
+            && n.text().map(|t| t.trim().eq_ignore_ascii_case("pagebreak")) == Some(true)
+        {
+            n.attribute("refines")
+                .map(|r| r.trim_start_matches('#').to_string())
+        } else {
+            None
+        }
+    })?;
+
+    // Resolve it to a dc:source element and read its value.
+    doc.descendants()
+        .find(|n| {
+            n.is_element()
+                && n.tag_name().name() == "source"
+                && n.attribute("id") == Some(refines_id.as_str())
+        })
+        .and_then(|n| n.text())
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
 }
 
 /// Capitalize the first character and lowercase the rest (Python `str.capitalize`).
@@ -219,6 +271,20 @@ fn write_modified_meta<W: std::io::Write>(writer: &mut Writer<W>, ts: &str) -> R
     m.push_attribute(("property", "dcterms:modified"));
     writer.write_event(Event::Start(m))?;
     writer.write_event(Event::Text(BytesText::new(ts)))?;
+    writer.write_event(Event::End(BytesEnd::new("meta")))?;
+    Ok(())
+}
+
+/// Write an EPUB 3.4 `<meta property="pageBreakSource">value</meta>` element.
+fn write_page_break_source_meta<W: std::io::Write>(
+    writer: &mut Writer<W>,
+    value: &str,
+) -> Result<()> {
+    writer.write_event(Event::Text(BytesText::from_escaped("\n    ")))?;
+    let mut m = BytesStart::new("meta");
+    m.push_attribute(("property", "pageBreakSource"));
+    writer.write_event(Event::Start(m))?;
+    writer.write_event(Event::Text(BytesText::new(value)))?;
     writer.write_event(Event::End(BytesEnd::new("meta")))?;
     Ok(())
 }
@@ -325,6 +391,9 @@ pub fn rewrite_opf(xml: &str, params: &RewriteParams) -> Result<String> {
                 match ln.as_str() {
                     "metadata" => {
                         write_modified_meta(&mut writer, &params.modified_ts)?;
+                        if let Some(src) = &params.page_break_source {
+                            write_page_break_source_meta(&mut writer, src)?;
+                        }
                         writer.write_event(Event::Text(BytesText::from_escaped("\n  ")))?;
                         in_metadata = false;
                         writer.write_event(Event::End(e))?;
@@ -388,5 +457,80 @@ fn rewrite_item(e: &BytesStart, params: &RewriteParams) -> BytesStart<'static> {
             transform_start(e, &overrides, &[])
         }
         None => transform_start(e, &[], &[]),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const OPF_PAGEBREAK: &str = r##"<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="id">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:identifier id="id">urn:uuid:1</dc:identifier>
+    <dc:title>T</dc:title>
+    <dc:language>en</dc:language>
+    <dc:source id="src">urn:isbn:9780375704024</dc:source>
+    <meta refines="#src" property="source-of">pagebreak</meta>
+  </metadata>
+  <manifest><item id="c" href="c.xhtml" media-type="application/xhtml+xml"/></manifest>
+  <spine><itemref idref="c"/></spine>
+</package>"##;
+
+    fn params(pbs: Option<String>) -> RewriteParams {
+        RewriteParams {
+            modified_ts: "2026-01-01T00:00:00Z".into(),
+            manifest_changes: HashMap::new(),
+            add_nav: false,
+            remove_guide: false,
+            page_break_source: pbs,
+        }
+    }
+
+    #[test]
+    fn derives_page_break_source_from_legacy_meta() {
+        let info = parse_opf_info(OPF_PAGEBREAK).unwrap();
+        assert_eq!(
+            info.page_break_source.as_deref(),
+            Some("urn:isbn:9780375704024")
+        );
+    }
+
+    #[test]
+    fn rewrite_injects_page_break_source_and_keeps_legacy() {
+        let info = parse_opf_info(OPF_PAGEBREAK).unwrap();
+        let out = rewrite_opf(OPF_PAGEBREAK, &params(info.page_break_source)).unwrap();
+        assert!(out.contains(r#"property="pageBreakSource""#));
+        assert!(out.contains("urn:isbn:9780375704024"));
+        // Legacy source-of is kept for backward compatibility.
+        assert!(out.contains(r#"property="source-of""#));
+    }
+
+    #[test]
+    fn no_injection_when_target_is_not_34() {
+        // Simulates a 3.3 target: page_break_source is None, so nothing is added.
+        let out = rewrite_opf(OPF_PAGEBREAK, &params(None)).unwrap();
+        assert!(!out.contains("pageBreakSource"));
+    }
+
+    #[test]
+    fn skips_derivation_when_already_present() {
+        let opf = OPF_PAGEBREAK.replace(
+            "</metadata>",
+            r#"  <meta property="pageBreakSource">urn:isbn:9780375704024</meta>
+  </metadata>"#,
+        );
+        let info = parse_opf_info(&opf).unwrap();
+        assert_eq!(info.page_break_source, None);
+    }
+
+    #[test]
+    fn none_when_no_legacy_meta() {
+        let opf = OPF_PAGEBREAK.replace(
+            r##"<meta refines="#src" property="source-of">pagebreak</meta>"##,
+            "",
+        );
+        let info = parse_opf_info(&opf).unwrap();
+        assert_eq!(info.page_break_source, None);
     }
 }

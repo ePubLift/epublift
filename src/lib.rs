@@ -399,6 +399,12 @@ pub fn convert(input: &Path, options: &Options, progress: impl Fn(&str)) -> Resu
         manifest_changes: opt.manifest_changes.into_iter().collect::<HashMap<_, _>>(),
         add_nav,
         remove_guide: info.has_guide,
+        // `pageBreakSource` is an EPUB 3.4 meta property — only modernize to it
+        // when targeting 3.4 (it would be out-of-vocabulary in a 3.3 package).
+        page_break_source: match options.target_version {
+            EpubVersion::V3_4 => info.page_break_source.clone(),
+            _ => None,
+        },
     };
     let new_opf = opf::rewrite_opf(&opf_xml, &params)?;
     fs::write(&opf_path, new_opf)?;

@@ -10,6 +10,14 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+### Added (experimental)
+- **EPUB 3.4 `pageBreakSource` modernization.** When emitting `--target 3.4`,
+  derive the new `<meta property="pageBreakSource">` from a legacy
+  `<meta refines="#id" property="source-of">pagebreak</meta>` (resolving the
+  `refines` to its `dc:source` value). The legacy `source-of` is kept for
+  backward compatibility; nothing is added for a 3.3 target or when a
+  `pageBreakSource` already exists.
+
 ### Added (web)
 - **Build version in the footer.** The page footer now shows the running
   `epublift-web` version (linking to its GitHub release) and the short commit it
