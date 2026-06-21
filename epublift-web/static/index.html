@@ -313,6 +313,10 @@
 
   footer.legal { padding: 0 0 50px; color: var(--muted); font-size:13px; display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap; }
   footer.legal b { color: var(--ink-soft); }
+  .ver a { font-family:"JetBrains Mono",monospace; font-size:12px; color: var(--muted);
+    text-decoration:none; margin-left:8px; }
+  .ver a:hover { color: var(--ink-soft); text-decoration:underline; }
+  .ver a:empty { display:none; }
 
   /* language switcher */
   .lang { position: relative; }
@@ -584,7 +588,9 @@
   </div>
 
   <footer class="legal">
-    <span data-i18n-html="footer_1">© 2026 <b>ePubLift</b> · A pure-Rust EPUB modernizer</span>
+    <span>
+      <span data-i18n-html="footer_1">© 2026 <b>ePubLift</b> · A pure-Rust EPUB modernizer</span><span class="ver"><a id="verlink" target="_blank" rel="noopener"></a><a id="commitlink" target="_blank" rel="noopener"></a></span>
+    </span>
     <span data-i18n-html="footer_2">Converts on <b>epublift.itpax.net</b> · no files stored</span>
   </footer>
 

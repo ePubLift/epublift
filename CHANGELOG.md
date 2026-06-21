@@ -10,6 +10,15 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+### Added (web)
+- **Build version in the footer.** The page footer now shows the running
+  `epublift-web` version (linking to its GitHub release) and the short commit it
+  was built from (linking to the commit) — handy for bug reports, self-hosters,
+  and confirming a deploy. A machine-readable `GET /version` endpoint
+  (`{"version","commit"}`) backs it and doubles as a deploy/monitoring check.
+  No new attack surface: the source is already public (AGPL) and the real
+  defenses don't rely on hiding the version.
+
 ## [cli-v1.5.1] - 2026-06-21
 
 ### Changed (experimental)

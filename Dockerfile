@@ -14,6 +14,12 @@ ENV RUSTFLAGS="-C strip=symbols"
 
 WORKDIR /app
 
+# Git commit the image is built from (the build context has no `.git`, so the
+# web crate's build.rs reads it from this env). Passed by the release workflow;
+# empty for a plain local build (the footer then shows just the version).
+ARG GIT_SHA=""
+ENV GIT_SHA=$GIT_SHA
+
 # Only the sources needed to build the web binary (see .dockerignore).
 COPY Cargo.toml Cargo.lock ./
 COPY src ./src

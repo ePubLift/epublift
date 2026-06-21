@@ -313,5 +313,21 @@ document.addEventListener('i18n:change', () => {
   if (result.classList.contains('show') && mode === 'optimize') fillReportLabels();
 });
 
+// Footer build info: link the version to its GitHub release, and (when known)
+// the commit to its GitHub commit. Cheap deploy-verification signal.
+fetch('/version').then(r => r.json()).then(d => {
+  const repo = 'https://github.com/ePubLift/epublift';
+  if (d && d.version) {
+    const v = document.getElementById('verlink');
+    v.textContent = 'v' + d.version;
+    v.href = repo + '/releases/tag/web-v' + d.version;
+  }
+  if (d && d.commit) {
+    const c = document.getElementById('commitlink');
+    c.textContent = '@' + d.commit;
+    c.href = repo + '/commit/' + d.commit;
+  }
+}).catch(() => { /* version is non-essential; ignore */ });
+
 // Initialize the default mode (also sets the per-mode option visibility).
 applyMode('optimize');

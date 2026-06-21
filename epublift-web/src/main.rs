@@ -156,6 +156,7 @@ async fn main() {
         .route("/app.js", get(app_js))
         .route("/i18n.js", get(i18n_js))
         .route("/healthz", get(|| async { "ok" }))
+        .route("/version", get(version))
         .route("/convert", post(convert))
         .route("/archive", post(archive))
         .route("/restore", post(restore))
@@ -244,6 +245,24 @@ async fn shutdown_signal() {
 /// Serve the single-page front-end.
 async fn index() -> Html<&'static str> {
     Html(include_str!("../static/index.html"))
+}
+
+/// Report the running build: the `epublift-web` version and the short git commit
+/// it was built from (`commit` is empty if unavailable). Cheap, machine-readable
+/// deploy verification, and the source for the footer's version link.
+async fn version() -> impl IntoResponse {
+    let body = format!(
+        r#"{{"version":"{}","commit":"{}"}}"#,
+        env!("CARGO_PKG_VERSION"),
+        env!("GIT_SHA"),
+    );
+    (
+        [(
+            header::CONTENT_TYPE,
+            header::HeaderValue::from_static("application/json"),
+        )],
+        body,
+    )
 }
 
 /// Serve the front-end script as a same-origin file (so the CSP can use
