@@ -219,6 +219,7 @@ impl Report {
             self.original_size,
             self.final_size,
             &self.image_metrics,
+            self.target_version.tag(),
         )
     }
 }

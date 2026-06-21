@@ -102,8 +102,10 @@ pub struct ImageMetric {
     pub original_size: u64,
     pub new_size: u64,
     pub percentage: f64,
-    /// True when the original was kept because the WebP came out no smaller.
+    /// True when the original was kept because the re-encode came out no smaller.
     pub kept: bool,
+    /// The output format the image was re-encoded to (`None` when kept as-is).
+    pub format: Option<ImageFormat>,
 }
 
 /// Result of the optimization pass.
@@ -230,6 +232,7 @@ pub fn optimize_images(
                 new_size: orig_size,
                 percentage: 0.0,
                 kept: true,
+                format: None,
             });
             continue;
         }
@@ -256,6 +259,7 @@ pub fn optimize_images(
             new_size,
             percentage: pct,
             kept: false,
+            format: Some(format),
         });
 
         progress(&format!(
