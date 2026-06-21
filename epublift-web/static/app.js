@@ -234,8 +234,22 @@ function renderResult(m, data){
   result.scrollIntoView({ behavior:'smooth', block:'center' });
 }
 
+// Human format name for the report header, from the current 3.3/3.4 selection.
+function reportFmtName(){
+  if (ver === '3.3') return 'WebP';
+  if (imgfmt === 'avif') return 'AVIF';
+  if (imgfmt === 'jxl') return 'JPEG XL';
+  return 'WebP';
+}
+// Fill the two version/format-specific report headers (re-callable on lang change).
+function fillReportLabels(){
+  document.getElementById('rcolModernized').textContent = fill('rcol_modernized', { ver });
+  document.getElementById('rcolImages').textContent = fill('rcol_images', { fmt: reportFmtName() });
+}
+
 // The convert-only image audit table + downloadable text report.
 function renderImageReport(data){
+  fillReportLabels();
   document.getElementById('imgCount').textContent = data.images.length;
   const tb = document.getElementById('itbody');
   tb.replaceChildren();
@@ -292,9 +306,11 @@ rtoggle.addEventListener('click', () => {
   rtxt.textContent = open ? T('report_hide') : T('report_view');
 });
 
-// Keep the report toggle label correct when the language changes mid-view.
+// Keep the report toggle label + the version/format headers correct when the
+// language changes mid-view (applyStatic would otherwise show raw placeholders).
 document.addEventListener('i18n:change', () => {
   rtxt.textContent = report.classList.contains('open') ? T('report_hide') : T('report_view');
+  if (result.classList.contains('show') && mode === 'optimize') fillReportLabels();
 });
 
 // Initialize the default mode (also sets the per-mode option visibility).
