@@ -10,6 +10,8 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+## [cli-v1.5.2] - 2026-06-21
+
 ### Changed
 - **TTF font media-type hygiene.** A `.ttf` manifest item with a legacy/non-core
   or missing media type (e.g. `application/x-font-ttf` — which was non-core before
@@ -36,6 +38,10 @@ are tagged with the component they belong to.
   `refines` to its `dc:source` value). The legacy `source-of` is kept for
   backward compatibility; nothing is added for a 3.3 target or when a
   `pageBreakSource` already exists.
+
+## [web-v1.6.2] - 2026-06-21
+
+Inherits the cli-v1.5.2 core changes (shared `convert()` engine).
 
 ### Added (web)
 - **Build version in the footer.** The page footer now shows the running

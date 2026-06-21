@@ -4,8 +4,9 @@ name = "epublift-web"
 # 1.3.0 (the GHCR image was at :1.3.0); 1.4.0 adds the multi-language UI; 1.5.0
 # adds in-browser archive/restore (.eparc); 1.6.0 adds experimental EPUB 3.4
 # (AVIF / JPEG XL) and builds with the `epub34` feature; 1.6.1 encodes AVIF at a
-# faster speed to stay under the request timeout.
-version = "1.6.1"
+# faster speed to stay under the request timeout; 1.6.2 shows the build version
+# + commit in the footer.
+version = "1.6.2"
 edition = "2024"
 license = "AGPL-3.0-or-later"
 description = "Web front-end for epublift: convert, archive & restore EPUBs in the browser"
