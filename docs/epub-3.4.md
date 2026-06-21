@@ -12,6 +12,7 @@ in-progress W3C Working Draft; we track it here, and as items firm up we aim to 
 | Last checked | Spec status | Notes |
 | :--- | :--- | :--- |
 | 2026-06-20 | EPUB 3.4 — **W3C Working Draft, 06 May 2026** | First capture. Full substantive `#change-log` transcribed verbatim below; latest substantive change dated **04-May-2026**. Headlines for us: **AVIF + JPEG XL** core image types; HTML syntax **removed** (XHTML-only); `application/x-font-ttf` added; SHA-1 phase-out caution. |
+| 2026-06-21 | EPUB 3.4 — **W3C Working Draft, 06 May 2026** (unchanged) | Re-checked: same publication date, **no new published substantive changes** since 04-May-2026. Reviewed the full list for actionable engine work beyond AVIF/JXL (done) — found `source-of` → `pageBreakSource` was missing from our per-item plan; added below. |
 
 **How to re-check** (do this periodically):
 
@@ -105,7 +106,8 @@ engine's job.
 | **HTML syntax removed → XHTML-only** | We already emit XHTML; this *validates* current output. Ensure `--target 3.4` never produces HTML-syntax docs and our validation rejects them. | No change (content-exact preserves whatever the source had). | Low (already compliant; add a guard/test) |
 | **`application/x-font-ttf`** (TTF core type) | Recognise TTF as a core font type in manifest handling. | Fonts already fold into the compressed stream; just classify TTF correctly. | Low |
 | **SHA-1 phase-out / font obfuscation → "obsolete but conforming"** | We add no font obfuscation / DRM, so nothing to remove. | `.eparc` already uses **SHA-256** for fixity — aligned; no SHA-1 anywhere. | Low (already aligned) |
-| **Deprecated / "outdated" features** (manifest fallbacks, several `rendition:*`, `collection`, legacy package features, prefixed CSS) | When emitting `--target 3.4`, prefer current forms; don't introduce outdated ones; optionally *flag* them on input. | Preserved verbatim on archive; only the re-targeted restore output avoids them. | Medium (modernise-correctness) |
+| **`pageBreakSource` replaces `source-of`** (meta property) | A concrete OPF-metadata rewrite, exactly our wheelhouse: when emitting `--target 3.4`, rename a legacy `source-of` meta property to `pageBreakSource`. | No change (content-exact). | **Medium — actionable**, small, clean. |
+| **Deprecated / "outdated" features** (manifest fallbacks, several `rendition:*`, `collection`, legacy package features, prefixed CSS, `xsd`/`msv`/`prism` prefixes) | When emitting `--target 3.4`, prefer current forms; don't introduce outdated ones; optionally *flag* them on input. | Preserved verbatim on archive; only the re-targeted restore output avoids them. | Medium (modernise-correctness) |
 | **Roll layout** (webtoons / continuous scroll) | Structural pass-through + validation; do not break FXL/roll metadata when modernising. | Stored faithfully; restore is content-exact. | Medium (test corpus) |
 | **Opus-in-MP4 + AAC LC** (audio) | Pass through; we don't transcode audio. | Stored **verbatim** (already-compressed media). | Low |
 | **Annotation exchange** *(separate deliverable, not core 3.4)* | **Not the engine's job** — annotations are a separate overlay referencing the immutable book. We only ensure we never clobber an annotations sidecar. | Preserve any annotation sidecar verbatim. | Low (awareness only) |
