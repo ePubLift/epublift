@@ -219,6 +219,27 @@ Tracked separately from the shipping product.
 
 ---
 
+## 📋 Backlog — small, unprioritized
+
+The shipping product is in a complete place. What remains is a pool of
+**nice-to-haves with no urgency and no priority** — none is scheduled. They get
+pulled in **opportunistically**: when a larger piece of work needs one, we do
+whichever of these we want. (The desktop GUI above stays demand-gated under the
+same logic — the web app already serves the no-install case.)
+
+- **`.eparc` P2 image re-pack** — lossless JPEG → JXL-lossless, PNG → pixel-exact
+  (codecs now shipped).
+- **`.eparc` deepening** — library-level dedup + corpus shared-dictionary;
+  bit-exact `--exact` (byte-identical original).
+- **EPUB 3.4 refinement** — more calibration books / per-format speed tuning;
+  `--image-format best` in the web UI; re-check the W3C change log toward the 2027
+  spec release.
+- **Kobo** — optional parity comparison vs Calibre's KePub output.
+- **Web build-info footer** — version + commit link (built, on a branch; ship it
+  bundled with the next web change).
+
+---
+
 ## Guiding principles
 
 1. **Pure Rust, no C.** Every dependency stays C-free.
