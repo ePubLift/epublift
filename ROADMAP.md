@@ -29,7 +29,7 @@ First stable release.
 
 ---
 
-## 🔜 Near term — v1.1: Distribution & foundation
+## ✅ Shipped — v1.1: Distribution & foundation
 
 Goal: make ePubLift easy to *get* and easy to *build on*, without changing
 behavior.
@@ -50,7 +50,7 @@ behavior.
 
 ---
 
-## 🌐 Near term — v1.2: Hosted web service (`epublift-web`)
+## ✅ Shipped — v1.2: Hosted web service (`epublift-web`)
 
 Goal: serve the non-technical users asking "how do I use the CLI?" *now*, with
 zero install — a browser page that converts EPUBs — while the desktop GUI is
@@ -129,9 +129,16 @@ prioritised ahead of the desktop GUI.
 
 Deferred from v1.3. The hosted web service already covers the no-install case,
 and a desktop GUI carries a **recurring per-platform cost** (three OSes,
-installers, code signing). Rather than build it speculatively, we'll prioritise
-it on real demand signals — GitHub stars, feature requests/issues, and community
+installers, code signing). Rather than build it speculatively, we prioritise it
+on real demand signals — GitHub stars, feature requests/issues, community
 feedback on the web launch.
+
+> **Demand so far points elsewhere.** Early requests cluster around
+> **library-scale batch** work and **pipeline pre-processing** (bulk
+> optimize/archive, cover/image stripping, metadata repair, clean text/metadata
+> extraction for downstream tools) — not a prettier single-file converter, which
+> the web app already is. So the GUI stays demand-gated; the more likely next
+> front-end work is batch/library-oriented.
 
 - [ ] **`epublift-gui`** — a native, drag-and-drop desktop app built on `egui`,
       consuming the core library directly (stays pure-Rust, single small binary,
@@ -142,44 +149,73 @@ feedback on the web launch.
 
 ---
 
-## 🧬 Longer term — v2.0: EPUB 3.4 & next-gen codecs
+## ✅ Shipped — Archival mode (`.eparc`) — cli-v1.4.0 → 1.4.1, web-v1.5.0
 
-Goal: support the formats EPUB 3.4 (draft) unlocks, without breaking older
-readers.
+Goal: shrink a personal EPUB library to save disk, and get any book back on
+demand — **losslessly**. Not originally on this roadmap; it emerged from the
+Zstandard research + a W3C-philosophy discussion (the archival case *removes* the
+container-conformance constraint, since we control both ends).
 
-- [ ] **AVIF and JPEG XL** image conversion via the imazen codec ecosystem
-      (keeping the all-pure-Rust, single-vendor codec strategy started with
-      `zenwebp`).
-- [ ] **Target-version selection** (`--target-version`, short `-t`): default to
-      the newest supported EPUB version, and let users opt into an older one for
-      maximum reader compatibility — e.g. EPUB 3.3 (WebP) vs. EPUB 3.4 (AVIF/JXL,
-      smaller but newer-reader-only), with output named accordingly
-      (`_v3.3` / `_v3.4`). The selected version governs the per-version
-      feature/codec set. Use `--target-version`, **not** `-v`/`--version`, which
-      conventionally prints the program's own version.
-- [ ] Per-image **codec auto-selection** based on content (photographic vs.
-      flat/graphic) for best size at a given quality.
+- [x] **`archive` / `restore` subcommands** → a compact `.eparc` (stored ZIP of
+      `manifest.json` + one solid Zstandard stream of the text + fonts, with
+      already-compressed media stored verbatim, so an archive **never grows a
+      book**). Whole-file SHA-256 + per-entry CRC32 for integrity.
+- [x] **Content-exact restore by default** (the original book, byte-for-byte per
+      entry); the archive is a canonical master you can **re-target** on the way
+      out (`restore --target 3.3`/`3.4`, `--keep-images`, `--kepub`).
+- [x] **Distro reach** *(cli-v1.4.1)*: an ARM64 Linux (Raspberry Pi / NAS) static
+      binary plus `.deb` (amd64/arm64) and `.rpm` (x86_64/aarch64) packages.
+- [x] **In the browser** *(web-v1.5.0)*: Archive / Restore modes in `epublift-web`
+      (stateless, in-memory), with a content-exact or Modernize restore.
+- [ ] *(Later)* Library-level dedup + a corpus-trained shared dictionary;
+      bit-exact `--exact` (byte-identical original `.epub`); P2 image re-pack
+      (JPEG → JXL-lossless, see below).
+
+---
+
+## ✅ Shipped — EPUB 3.4 (experimental) — cli-v1.5.0 → 1.5.1, web-v1.6.0 → 1.6.1
+
+Goal: support the formats EPUB 3.4 (W3C Working Draft) unlocks, without breaking
+older readers. Behind the opt-in `epub34` build feature; tracked in
+[`docs/epub-3.4.md`](docs/epub-3.4.md) for the 2027 spec release.
+
+- [x] **AVIF and JPEG XL** image conversion via the imazen codec ecosystem
+      (`zenavif`, `zenjxl` alongside `zenwebp` — all pure-Rust, single-vendor).
+- [x] **Target-version selection** (`--target 3.3|3.4`, output named
+      `_v3.3` / `_v3.4`); `restore --target 3.4` and a web **Target version**
+      selector (3.3 / 3.4 experimental) too.
+- [x] **Per-image content-adaptive codec selection** — the source format is a free
+      content-type signal: **JPEG → AVIF, PNG → WebP** (measured at equal
+      perceptual quality; AVIF wins on photos, WebP on line-art). Plus
+      `--image-format best` (encode all candidates, keep the smallest) and a
+      **butteraugli-calibrated** quality scale so `--quality N` means the same
+      across codecs. Full data: [`docs/design/epub-3.4-image-codec-choice.md`](docs/design/epub-3.4-image-codec-choice.md).
+- [ ] *(Later)* More calibration books / per-format speed tuning; `best` mode in
+      the web; re-check the W3C change log as 3.4 firms up toward its 2027 release.
 
 ---
 
 ## 🔬 Experimental / research
 
-Tracked but not committed to a release.
+Tracked separately from the shipping product.
 
-- [ ] **Experimental Zstandard OCF packaging.** Following an inquiry to the W3C
-      about allowing Zstandard (ZIP method 93) alongside Deflate for EPUB
-      packaging, add an opt-in `--zstd` mode that produces a reversible
-      `_zstd-experimental.epub` and measures the size delta vs the Deflate output
-      and the original — both *per-entry* and with a *shared dictionary* (the
-      cross-chapter win). Pure-Rust by default; a dev-only benchmark compares the
-      pure-Rust encoder against reference C `libzstd` for ratio and speed. Tracked
-      on two independent axes — *measurement-maturity* (`preliminary → validated`,
-      moves with our data) and *conformance* (`non-conformant → conformant`, moves
-      only when the spec registers Zstd **and** readers implement it). Starts
-      after v1.3; full design in
+- [x] **Experimental Zstandard OCF packaging** *(merged; research track).* An
+      opt-in `--zstd` mode (ZIP method 93) that produces a reversible
+      `_zstd-experimental.epub` and measures the size delta vs Deflate — both
+      *per-entry* and with a *shared dictionary* (the cross-chapter win). Pure-Rust
+      by default; a dev-only benchmark compares it against reference C `libzstd`.
+      The measurements seeded a **live W3C discussion** ([epub-specs#3025]) and the
+      `.eparc` archival format above. Design:
       [`docs/design/zstd-ocf-experimental.md`](docs/design/zstd-ocf-experimental.md).
-- [ ] Optional lossless re-optimization pass for images already in a modern
-      format.
+      Conformance axis stays `non-conformant` until the spec registers Zstd **and**
+      readers implement it.
+- [ ] **P2 archival image re-pack** — for `.eparc`, losslessly re-pack media for
+      density without generation loss: JPEG → **JXL-lossless-JPEG** (~20% smaller,
+      bit-exact JPEG reconstructable), PNG → pixel-exact oxipng/JXL. Faithful
+      default; opt-in `--lossy-images` compact mode. (Needs the v3.4 codecs, now
+      shipped.)
+
+[epub-specs#3025]: https://github.com/w3c/epub-specs/discussions/3025
 
 ---
 
