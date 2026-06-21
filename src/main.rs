@@ -307,6 +307,7 @@ fn run_convert(args: Args) -> Result<()> {
             ImageStrategy::WebP
         },
         image_policy,
+        avif_speed: 4,
         kepub: args.kepub,
         packaging,
         output: args.output.clone(),
@@ -482,6 +483,7 @@ fn run_restore(args: &RestoreArgs) -> Result<()> {
                 ImageStrategy::WebP
             },
             image_policy,
+            avif_speed: 4,
             kepub: args.kepub,
             packaging: epublift::Packaging::Deflate,
             output: None,

@@ -130,6 +130,7 @@ pub fn optimize_images(
     cover_id: Option<&str>,
     quality: u8,
     policy: FormatPolicy,
+    avif_speed: u8,
     progress: &dyn Fn(&str),
 ) -> Result<OptimizeResult> {
     let mut result = OptimizeResult {
@@ -200,7 +201,7 @@ pub fn optimize_images(
         };
         let mut best: Option<(ImageFormat, Vec<u8>)> = None;
         for cand in candidates {
-            if let Ok(bytes) = encode_image(&dynimg, eff_quality, cand)
+            if let Ok(bytes) = encode_image(&dynimg, eff_quality, cand, avif_speed)
                 && best.as_ref().is_none_or(|(_, b)| bytes.len() < b.len())
             {
                 best = Some((cand, bytes));
@@ -323,11 +324,18 @@ fn decode_image(bytes: &[u8]) -> Result<DynamicImage> {
 
 /// Encode a decoded image to the requested output `format` at `quality` (1-100).
 /// AVIF / JPEG XL require the experimental `epub34` build feature.
-fn encode_image(dynimg: &DynamicImage, quality: u8, format: ImageFormat) -> Result<Vec<u8>> {
+fn encode_image(
+    dynimg: &DynamicImage,
+    quality: u8,
+    format: ImageFormat,
+    avif_speed: u8,
+) -> Result<Vec<u8>> {
+    #[cfg(not(feature = "epub34"))]
+    let _ = avif_speed;
     match format {
         ImageFormat::WebP => encode_webp(dynimg, quality),
         #[cfg(feature = "epub34")]
-        ImageFormat::Avif => encode_avif(dynimg, quality),
+        ImageFormat::Avif => encode_avif(dynimg, quality, avif_speed),
         #[cfg(feature = "epub34")]
         ImageFormat::Jxl => encode_jxl(dynimg, quality),
         #[cfg(not(feature = "epub34"))]
@@ -401,9 +409,11 @@ fn calibrated_jxl_distance(webp_quality: u8) -> f32 {
 /// 1-100 (calibrated to the WebP scale). Grayscale is expanded to RGB (zenavif
 /// encodes RGB/RGBA only). Behind the experimental `epub34` feature.
 #[cfg(feature = "epub34")]
-fn encode_avif(dynimg: &DynamicImage, quality: u8) -> Result<Vec<u8>> {
+fn encode_avif(dynimg: &DynamicImage, quality: u8, speed: u8) -> Result<Vec<u8>> {
     use rgb::FromSlice;
-    let cfg = zenavif::EncoderConfig::new().quality(calibrated_avif_quality(quality));
+    let cfg = zenavif::EncoderConfig::new()
+        .quality(calibrated_avif_quality(quality))
+        .speed(speed.clamp(1, 10));
     let stop = almost_enough::StopToken::new(zenavif::Unstoppable);
     let encoded = if dynimg.color().has_alpha() {
         let rgba = dynimg.to_rgba8();

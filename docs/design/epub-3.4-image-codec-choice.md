@@ -128,10 +128,27 @@ So AVIF's advantage on JPEG-source content is real but **content-dependent and
 modest** (≈0–11%; historical photos benefit most). Before calibration the same
 photo book was *larger* under 3.4 (q80-raw over-delivers quality).
 
-> Calibrated on 48 images / 11 books. The earlier single-book fit (0.64·q+17)
-> was slightly overfit to one book; the multi-book fit is less aggressive and
-> more representative. Could refine further with a non-linear fit and per-format
-> speed tuning.
+> Calibrated on the 40-image / 11-book corpus at AVIF **speed 6**.
+
+### Encoder speed ↔ size ↔ latency
+
+AVIF's size advantage **depends on slow encoding**: rav1e at a low speed spends
+more effort and wins; at a high speed it gives up size. Measured on one photo book
+(Uyku, 5.5 MB), AVIF vs the 3.3 WebP baseline (1069 KB):
+
+| AVIF speed | time | size | vs WebP |
+| ---: | ---: | ---: | ---: |
+| 4 (CLI default) | 36.8 s | 904 KB | **−15%** |
+| 6 (web default) | 8.0 s | 1102 KB | +3% |
+| 8 | 5.3 s | 1140 KB | +7% |
+
+So the **CLI uses speed 4** (favor size; encode time doesn't matter for a local
+batch tool), while the **web service uses speed 6** (`WEB_AVIF_SPEED`) to stay
+responsive under its request timeout — a 50 MB upload extrapolates to ~70 s at
+speed 6 vs ~6 min at speed 4. The trade is real: on the web, AVIF is "for trying
+out 3.4" and may not beat WebP on every book; the CLI gives the best size. The
+quality calibration above was fit at speed 6, so it holds for the web; the CLI at
+speed 4 over-delivers (even smaller).
 
 ## Tooling caveats (important)
 

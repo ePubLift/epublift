@@ -28,6 +28,10 @@ use tower_http::timeout::TimeoutLayer;
 /// real defense — not obscurity.
 const MAX_UPLOAD_BYTES: usize = 50 * 1024 * 1024; // 50 MiB
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(120);
+/// AVIF encoder speed for the experimental 3.4 path. Faster than the CLI default
+/// (4) so an interactive request stays well under [`REQUEST_TIMEOUT`] even on a
+/// photo-heavy book — AVIF (rav1e) is slow at low speeds. Costs a little size.
+const WEB_AVIF_SPEED: u8 = 6;
 /// How long a converted file waits in memory for its one download before it is
 /// evicted. Files live only in RAM and are never written to disk or logged.
 const DOWNLOAD_TTL: Duration = Duration::from_secs(120);
@@ -371,6 +375,7 @@ async fn convert(
                     ImageStrategy::WebP
                 },
                 image_policy,
+                avif_speed: WEB_AVIF_SPEED,
                 kepub,
                 // The hosted service only ever emits conformant EPUBs; the
                 // experimental Zstd packaging is CLI/research-only.
@@ -661,6 +666,7 @@ async fn restore(
                     ImageStrategy::WebP
                 },
                 image_policy: None,
+                avif_speed: WEB_AVIF_SPEED,
                 kepub,
                 packaging: epublift::Packaging::Deflate,
                 output: None,
