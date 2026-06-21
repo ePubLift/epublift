@@ -10,20 +10,28 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+## [cli-v1.5.1] - 2026-06-21
+
 ### Changed (experimental)
 - **Non-linear (quadratic) AVIF/JXL quality calibration.** The WebP→AVIF quality
   mapping curves up steeply at high quality; refitting as a quadratic over a finer
   grid (40 JPEG-source images / 11 books) cuts the fit error ~20× and improves the
   matched-quality photo savings (e.g. a historical-photo book −11% → −13.4%).
-- **Web AVIF speed.** The web service now encodes AVIF at speed 6 (vs the CLI's
-  speed 4) so an interactive request stays well under the 120 s timeout on
-  photo-heavy books (~8 s vs ~37 s on a 5.5 MB book). The CLI keeps speed 4 for
-  best size; see [`docs/design/epub-3.4-image-codec-choice.md`](docs/design/epub-3.4-image-codec-choice.md).
 
 ### Fixed (experimental)
 - The downloadable `.txt` audit report is now version/format-aware for EPUB 3.4
   ("EPUB 3.4 COMPLIANCE ACTIONS" / "re-encoded to AVIF", or a mix like "AVIF/WebP"
   for content-adaptive runs) instead of always saying 3.3 / WebP.
+
+## [web-v1.6.1] - 2026-06-21
+
+### Changed (experimental)
+- **AVIF encoder speed.** The web service now encodes AVIF at speed 6 (vs the CLI's
+  speed 4) so an interactive request stays well under the 120 s timeout on
+  photo-heavy books (~8 s vs ~37 s on a 5.5 MB book). The CLI keeps speed 4 for
+  best size; see [`docs/design/epub-3.4-image-codec-choice.md`](docs/design/epub-3.4-image-codec-choice.md).
+  Inherits the quadratic quality calibration and the version/format-aware report
+  from cli-v1.5.1 (shared core).
 
 ## [cli-v1.5.0] - 2026-06-21
 
