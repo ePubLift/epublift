@@ -1,5 +1,6 @@
 //! Generation of the human-readable optimization audit report.
 
+use crate::Report;
 use crate::images::ImageMetric;
 use anyhow::Result;
 use chrono::Local;
@@ -56,19 +57,16 @@ fn format_label(metrics: &[ImageMetric]) -> String {
     }
 }
 
-/// Write the optimization report to `report_path`. `version_tag` is the target
-/// EPUB version (e.g. `"3.3"`, `"3.4"`) for the compliance-section heading.
-pub fn write_report(
-    report_path: &Path,
-    input_name: &str,
-    output_name: &str,
-    original_size: u64,
-    final_size: u64,
-    metrics: &[ImageMetric],
-    version_tag: &str,
-) -> Result<()> {
-    let original = original_size as i64;
-    let final_s = final_size as i64;
+/// Write the human-readable audit report for `report` to `report_path`.
+pub fn write_report(report_path: &Path, report: &Report) -> Result<()> {
+    let input_name = &report.input_name;
+    let output_name = &report.output_name;
+    let metrics = &report.image_metrics;
+    let version_tag = report.target_version.tag();
+    let outdated_features = &report.outdated_features;
+
+    let original = report.original_size as i64;
+    let final_s = report.final_size as i64;
     let saved = original - final_s;
     let pct = if original > 0 {
         saved as f64 / original as f64 * 100.0
@@ -160,6 +158,20 @@ pub fn write_report(
                     m.percentage
                 ));
             }
+        }
+    }
+
+    if !outdated_features.is_empty() {
+        r.push(dash.clone());
+        r.push("OUTDATED / DEPRECATED FEATURES (EPUB 3.4)".to_string());
+        r.push(dash.clone());
+        r.push(
+            "These still work, but EPUB 3.4 marks them outdated/deprecated. Kept as-is;"
+                .to_string(),
+        );
+        r.push("consider replacing them in the source for future-proofing.".to_string());
+        for f in outdated_features {
+            r.push(format!("[!] {f}"));
         }
     }
 

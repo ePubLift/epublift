@@ -42,6 +42,10 @@ pub struct OpfInfo {
     /// legacy `source-of`/`pagebreak` meta that refines a `dc:source`. `None` if
     /// there is no such legacy meta, or a `pageBreakSource` already exists.
     pub page_break_source: Option<String>,
+    /// Human-readable descriptions of EPUB 3.4 "outdated"/deprecated features found
+    /// in the package (informational — we report them, but don't strip author
+    /// content). See [`detect_outdated_features`].
+    pub outdated_features: Vec<String>,
 }
 
 /// Describes how a single manifest image item should be rewritten.
@@ -164,6 +168,8 @@ pub fn parse_opf_info(xml: &str) -> Result<OpfInfo> {
     // meta that refines a `dc:source`. Skip if a `pageBreakSource` already exists.
     let page_break_source = derive_page_break_source(&doc);
 
+    let outdated_features = detect_outdated_features(&doc);
+
     Ok(OpfInfo {
         items,
         cover_id,
@@ -172,7 +178,65 @@ pub fn parse_opf_info(xml: &str) -> Result<OpfInfo> {
         has_guide,
         guide_refs,
         page_break_source,
+        outdated_features,
     })
+}
+
+/// Detect EPUB 3.4 "outdated"/deprecated features present in the package document
+/// (a lint — we report them, we don't strip author content). Covers the reliably
+/// OPF-detectable signals: manifest content fallbacks, the outdated `rendition:*`
+/// properties, the `collection` element, and the deprecated reserved prefixes
+/// (`xsd`/`msv`/`prism`).
+fn detect_outdated_features(doc: &roxmltree::Document) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    let mut push = |s: String| {
+        if !out.contains(&s) {
+            out.push(s);
+        }
+    };
+
+    for n in doc.descendants().filter(|n| n.is_element()) {
+        match n.tag_name().name() {
+            // Manifest item with a content `fallback` (outdated in 3.4).
+            "item" if n.has_attribute("fallback") => {
+                push("manifest content fallback (`fallback` attribute)".into());
+            }
+            // Outdated rendition properties on <meta property="...">.
+            "meta" => {
+                if let Some(p) = n.attribute("property")
+                    && matches!(
+                        p,
+                        "rendition:flow"
+                            | "rendition:orientation"
+                            | "rendition:spread"
+                            | "rendition:align-x-center"
+                    )
+                {
+                    push(format!("outdated rendition property `{p}`"));
+                }
+            }
+            // The <collection> element (obsolete but conforming).
+            "collection" => push("`collection` element".into()),
+            _ => {}
+        }
+    }
+
+    // Deprecated reserved prefixes declared on <package prefix="name: uri ...">.
+    if let Some(pkg) = doc
+        .descendants()
+        .find(|n| n.is_element() && n.tag_name().name() == "package")
+        && let Some(prefix) = pkg.attribute("prefix")
+    {
+        for tok in prefix.split_whitespace() {
+            if let Some(name) = tok.strip_suffix(':')
+                && matches!(name, "xsd" | "msv" | "prism")
+            {
+                push(format!("deprecated reserved prefix `{name}`"));
+            }
+        }
+    }
+
+    out
 }
 
 /// Resolve the value for an EPUB 3.4 `pageBreakSource` meta from a legacy
@@ -599,6 +663,43 @@ mod tests {
         let out = rewrite_opf(&opf, &params(None)).unwrap();
         assert!(out.contains(r#"href="fonts/F.ttf" media-type="font/ttf""#));
         assert!(!out.contains("application/x-font-ttf"));
+    }
+
+    #[test]
+    fn detects_outdated_features() {
+        let opf = r##"<?xml version="1.0"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="id"
+         prefix="xsd: http://www.w3.org/2001/XMLSchema# foo: http://example.org/">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:identifier id="id">x</dc:identifier>
+    <dc:title>t</dc:title>
+    <dc:language>en</dc:language>
+    <meta property="rendition:flow">scrolled-continuous</meta>
+    <meta property="rendition:layout">pre-paginated</meta>
+  </metadata>
+  <manifest>
+    <item id="c" href="c.xhtml" media-type="application/xhtml+xml"/>
+    <item id="legacy" href="old.xml" media-type="application/x-foo" fallback="c"/>
+  </manifest>
+  <spine><itemref idref="c"/></spine>
+  <collection role="index"><link href="i.xhtml"/></collection>
+</package>"##;
+        let info = parse_opf_info(opf).unwrap();
+        let f = info.outdated_features.join(" | ");
+        assert!(f.contains("fallback"), "fallback: {f}");
+        assert!(f.contains("rendition:flow"), "rendition:flow: {f}");
+        assert!(f.contains("collection"), "collection: {f}");
+        assert!(f.contains("xsd"), "xsd prefix: {f}");
+        // rendition:layout is NOT outdated — must not be flagged.
+        assert!(!f.contains("rendition:layout"));
+        // non-deprecated prefix not flagged.
+        assert!(!f.contains("foo"));
+    }
+
+    #[test]
+    fn no_outdated_features_in_clean_opf() {
+        let info = parse_opf_info(OPF_PAGEBREAK).unwrap();
+        assert!(info.outdated_features.is_empty());
     }
 
     #[test]

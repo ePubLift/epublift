@@ -198,6 +198,9 @@ pub struct Report {
     pub image_metrics: Vec<ImageMetric>,
     /// The EPUB version that was targeted.
     pub target_version: EpubVersion,
+    /// EPUB 3.4 "outdated"/deprecated features found in the source (informational;
+    /// the content is preserved, not stripped). Empty when none were detected.
+    pub outdated_features: Vec<String>,
 }
 
 impl Report {
@@ -217,15 +220,7 @@ impl Report {
 
     /// Write the human-readable text audit report to `path`.
     pub fn write_text_report(&self, path: &Path) -> Result<()> {
-        report::write_report(
-            path,
-            &self.input_name,
-            &self.output_name,
-            self.original_size,
-            self.final_size,
-            &self.image_metrics,
-            self.target_version.tag(),
-        )
+        report::write_report(path, self)
     }
 }
 
@@ -456,6 +451,7 @@ pub fn convert(input: &Path, options: &Options, progress: impl Fn(&str)) -> Resu
         final_size,
         image_metrics: opt.metrics,
         target_version: options.target_version,
+        outdated_features: info.outdated_features,
     })
 }
 

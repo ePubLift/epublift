@@ -18,6 +18,12 @@ are tagged with the component they belong to.
   (a 3.3 conformance fix, not 3.4-only); already-core types are left untouched.
 
 ### Added (experimental)
+- **EPUB 3.4 outdated-features report.** The audit report now lists EPUB 3.4
+  "outdated"/deprecated features found in the source — manifest content
+  `fallback` attributes, the outdated `rendition:flow`/`orientation`/`spread`/
+  `align-x-center` properties, the `collection` element, and deprecated reserved
+  prefixes (`xsd`/`msv`/`prism`) — in an "OUTDATED / DEPRECATED FEATURES" section.
+  Informational only: the content is preserved, not stripped.
 - **EPUB 3.4 `pageBreakSource` modernization.** When emitting `--target 3.4`,
   derive the new `<meta property="pageBreakSource">` from a legacy
   `<meta refines="#id" property="source-of">pagebreak</meta>` (resolving the
