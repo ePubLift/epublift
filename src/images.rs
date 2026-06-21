@@ -102,8 +102,10 @@ pub struct ImageMetric {
     pub original_size: u64,
     pub new_size: u64,
     pub percentage: f64,
-    /// True when the original was kept because the WebP came out no smaller.
+    /// True when the original was kept because the re-encode came out no smaller.
     pub kept: bool,
+    /// The output format the image was re-encoded to (`None` when kept as-is).
+    pub format: Option<ImageFormat>,
 }
 
 /// Result of the optimization pass.
@@ -128,6 +130,7 @@ pub fn optimize_images(
     cover_id: Option<&str>,
     quality: u8,
     policy: FormatPolicy,
+    avif_speed: u8,
     progress: &dyn Fn(&str),
 ) -> Result<OptimizeResult> {
     let mut result = OptimizeResult {
@@ -198,7 +201,7 @@ pub fn optimize_images(
         };
         let mut best: Option<(ImageFormat, Vec<u8>)> = None;
         for cand in candidates {
-            if let Ok(bytes) = encode_image(&dynimg, eff_quality, cand)
+            if let Ok(bytes) = encode_image(&dynimg, eff_quality, cand, avif_speed)
                 && best.as_ref().is_none_or(|(_, b)| bytes.len() < b.len())
             {
                 best = Some((cand, bytes));
@@ -230,6 +233,7 @@ pub fn optimize_images(
                 new_size: orig_size,
                 percentage: 0.0,
                 kept: true,
+                format: None,
             });
             continue;
         }
@@ -256,6 +260,7 @@ pub fn optimize_images(
             new_size,
             percentage: pct,
             kept: false,
+            format: Some(format),
         });
 
         progress(&format!(
@@ -319,11 +324,18 @@ fn decode_image(bytes: &[u8]) -> Result<DynamicImage> {
 
 /// Encode a decoded image to the requested output `format` at `quality` (1-100).
 /// AVIF / JPEG XL require the experimental `epub34` build feature.
-fn encode_image(dynimg: &DynamicImage, quality: u8, format: ImageFormat) -> Result<Vec<u8>> {
+fn encode_image(
+    dynimg: &DynamicImage,
+    quality: u8,
+    format: ImageFormat,
+    avif_speed: u8,
+) -> Result<Vec<u8>> {
+    #[cfg(not(feature = "epub34"))]
+    let _ = avif_speed;
     match format {
         ImageFormat::WebP => encode_webp(dynimg, quality),
         #[cfg(feature = "epub34")]
-        ImageFormat::Avif => encode_avif(dynimg, quality),
+        ImageFormat::Avif => encode_avif(dynimg, quality, avif_speed),
         #[cfg(feature = "epub34")]
         ImageFormat::Jxl => encode_jxl(dynimg, quality),
         #[cfg(not(feature = "epub34"))]
@@ -372,30 +384,36 @@ fn encode_webp(dynimg: &DynamicImage, quality: u8) -> Result<Vec<u8>> {
 
 /// Map a WebP-scale `--quality` (1-100, the reference) to the AVIF quality knob
 /// that yields the *same* perceptual quality (butteraugli) — so `--quality N`
-/// means the same thing across codecs. Linear calibration over 48 JPEG-source
-/// images from 11 books; AVIF reaches WebP's quality at a lower knob, and its
-/// size advantage grows with quality. See
-/// docs/design/epub-3.4-image-codec-choice.md.
+/// means the same thing across codecs. **Quadratic** fit over 40 JPEG-source
+/// images from 11 books (the relationship curves up steeply at high quality;
+/// a line under-shoots there). AVIF is only used for photographic (JPEG) content,
+/// where this is calibrated. The input is clamped to the fitted range so the
+/// parabola never turns back up on out-of-range inputs.
+/// See docs/design/epub-3.4-image-codec-choice.md.
 #[cfg(feature = "epub34")]
 fn calibrated_avif_quality(webp_quality: u8) -> f32 {
-    (0.60 * webp_quality as f32 + 22.0).clamp(1.0, 100.0)
+    let q = (webp_quality as f32).clamp(45.0, 95.0);
+    (0.017529 * q * q - 1.70862 * q + 95.783).clamp(1.0, 100.0)
 }
 
 /// Map a WebP-scale `--quality` (1-100) to the JPEG XL butteraugli *distance*
 /// that matches WebP's perceptual quality (lower distance = higher quality).
-/// Same 48-image / 11-book calibration as above.
+/// Same quadratic 40-image / 11-book calibration as above.
 #[cfg(feature = "epub34")]
 fn calibrated_jxl_distance(webp_quality: u8) -> f32 {
-    (-0.051 * webp_quality as f32 + 6.0).clamp(0.4, 15.0)
+    let q = (webp_quality as f32).clamp(45.0, 95.0);
+    (-0.000494 * q * q + 0.01808 * q + 3.639).clamp(0.4, 15.0)
 }
 
 /// Encode to AVIF via the pure-Rust imazen `zenavif` (rav1e) encoder, `quality`
 /// 1-100 (calibrated to the WebP scale). Grayscale is expanded to RGB (zenavif
 /// encodes RGB/RGBA only). Behind the experimental `epub34` feature.
 #[cfg(feature = "epub34")]
-fn encode_avif(dynimg: &DynamicImage, quality: u8) -> Result<Vec<u8>> {
+fn encode_avif(dynimg: &DynamicImage, quality: u8, speed: u8) -> Result<Vec<u8>> {
     use rgb::FromSlice;
-    let cfg = zenavif::EncoderConfig::new().quality(calibrated_avif_quality(quality));
+    let cfg = zenavif::EncoderConfig::new()
+        .quality(calibrated_avif_quality(quality))
+        .speed(speed.clamp(1, 10));
     let stop = almost_enough::StopToken::new(zenavif::Unstoppable);
     let encoded = if dynimg.color().has_alpha() {
         let rgba = dynimg.to_rgba8();

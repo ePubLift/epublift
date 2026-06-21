@@ -154,6 +154,10 @@ pub struct Options {
     /// `Fixed(f)` forces one format, `Best` keeps the smallest per image. AVIF /
     /// JXL (incl. `Auto`/`Best` emitting them) need the `epub34` feature.
     pub image_policy: Option<FormatPolicy>,
+    /// AVIF encoder speed, 1 (slowest/best) to 10 (fastest). The default (`4`)
+    /// favors size; an interactive caller (e.g. the web service) can raise it to
+    /// stay responsive. Only affects AVIF output (the `epub34` feature).
+    pub avif_speed: u8,
     /// Container packaging. Defaults to conformant [`Packaging::Deflate`];
     /// [`Packaging::Zstd`] is the experimental measurement mode and requires the
     /// `zstd-experimental` build feature.
@@ -170,6 +174,7 @@ impl Default for Options {
             target_version: EpubVersion::LATEST,
             image_strategy: ImageStrategy::default(),
             image_policy: None,
+            avif_speed: 4,
             kepub: false,
             packaging: Packaging::default(),
             output: None,
@@ -219,6 +224,7 @@ impl Report {
             self.original_size,
             self.final_size,
             &self.image_metrics,
+            self.target_version.tag(),
         )
     }
 }
@@ -334,6 +340,7 @@ pub fn convert(input: &Path, options: &Options, progress: impl Fn(&str)) -> Resu
                 info.cover_id.as_deref(),
                 quality,
                 policy,
+                options.avif_speed,
                 &progress,
             )?;
             images::update_document_references(temp_path, &opt.ref_pairs, &progress);

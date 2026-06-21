@@ -86,9 +86,9 @@ fn main() -> Result<()> {
 
     // WebP is the reference quality scale (`--quality N` = "WebP quality N").
     // AVIF/JXL grids are wide enough to bracket every WebP anchor's butteraugli.
-    let webp_anchors = [50u8, 60, 70, 80, 90];
-    let avif_q = [30u8, 40, 55, 70, 85, 92, 97];
-    let jxl_d = [4.0f32, 3.0, 2.0, 1.5, 1.0, 0.6];
+    let webp_anchors = [45u8, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95];
+    let avif_q = [25u8, 35, 45, 55, 65, 72, 80, 88, 94, 98];
+    let jxl_d = [5.0f32, 4.0, 3.0, 2.4, 1.8, 1.4, 1.0, 0.7, 0.5];
 
     // Per-format curves: (butteraugli score, knob, total KB).
     let avif_curve: Vec<(f64, f64, f64)> = avif_q

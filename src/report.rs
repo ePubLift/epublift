@@ -36,7 +36,28 @@ fn mb(bytes: i64) -> f64 {
     bytes as f64 / 1024.0 / 1024.0
 }
 
-/// Write the optimization report to `report_path`.
+/// The distinct output formats across the converted images, as a label like
+/// `"AVIF"` or `"AVIF/WebP"` (content-adaptive runs can mix). Falls back to
+/// `"WebP"` when nothing was converted.
+fn format_label(metrics: &[ImageMetric]) -> String {
+    let mut seen: Vec<&'static str> = Vec::new();
+    for m in metrics {
+        if let Some(f) = m.format {
+            let l = f.label();
+            if !seen.contains(&l) {
+                seen.push(l);
+            }
+        }
+    }
+    if seen.is_empty() {
+        "WebP".to_string()
+    } else {
+        seen.join("/")
+    }
+}
+
+/// Write the optimization report to `report_path`. `version_tag` is the target
+/// EPUB version (e.g. `"3.3"`, `"3.4"`) for the compliance-section heading.
 pub fn write_report(
     report_path: &Path,
     input_name: &str,
@@ -44,6 +65,7 @@ pub fn write_report(
     original_size: u64,
     final_size: u64,
     metrics: &[ImageMetric],
+    version_tag: &str,
 ) -> Result<()> {
     let original = original_size as i64;
     let final_s = final_size as i64;
@@ -87,7 +109,7 @@ pub fn write_report(
     ));
     r.push(format!("Percentage Saved:     {:>13.1}%", pct));
     r.push(dash.clone());
-    r.push("EPUB 3.3 COMPLIANCE ACTIONS".to_string());
+    r.push(format!("EPUB {version_tag} COMPLIANCE ACTIONS"));
     r.push(dash.clone());
     r.push("[x] Upgraded root <package> element to version='3.0'".to_string());
     r.push("[x] Added required 'dcterms:modified' UTC timestamp metadata".to_string());
@@ -109,9 +131,9 @@ pub fn write_report(
     } else {
         let converted = metrics.iter().filter(|m| !m.kept).count();
         let kept = metrics.len() - converted;
+        let fmt = format_label(metrics);
         r.push(format!(
-            "{} image(s) re-encoded to WebP, {} kept as-is (WebP was no smaller).",
-            converted, kept
+            "{converted} image(s) re-encoded to {fmt}, {kept} kept as-is (re-encode was no smaller)."
         ));
         r.push(dash.clone());
         r.push(format!(
