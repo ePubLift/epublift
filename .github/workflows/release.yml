@@ -151,6 +151,30 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      # Check out first (clean), so the artifact download below isn't wiped, and
+      # so CHANGELOG.md is available to build the release notes.
+      - name: Check out the tag
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      # Pull this version's section out of CHANGELOG.md (from its `## [<tag>]`
+      # heading up to the next `## [` heading) as the curated release body. The
+      # action still appends the auto-generated "Full Changelog" notes below it.
+      - name: Build release notes from CHANGELOG
+        shell: bash
+        run: |
+          tag="${{ inputs.tag || github.ref_name }}"
+          awk -v t="[$tag]" '
+            /^## / { if (seen) exit; if (index($0, t)) { seen = 1; next } }
+            seen { print }
+          ' CHANGELOG.md | sed '/./,$!d' > RELEASE_NOTES.md
+          if [ ! -s RELEASE_NOTES.md ]; then
+            echo "No CHANGELOG entry found for $tag — see CHANGELOG.md." > RELEASE_NOTES.md
+          fi
+          echo "----- release notes for $tag -----"
+          cat RELEASE_NOTES.md
+
       - name: Download all artifacts
         uses: actions/download-artifact@v5
         with:
@@ -162,5 +186,6 @@ jobs:
         with:
           tag_name: ${{ inputs.tag || github.ref_name }}
           name: ${{ inputs.tag || github.ref_name }}
+          body_path: RELEASE_NOTES.md
           generate_release_notes: true
           files: dist/*
