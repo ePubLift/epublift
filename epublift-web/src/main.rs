@@ -160,6 +160,9 @@ async fn main() {
         .route("/convert", post(convert))
         .route("/archive", post(archive))
         .route("/restore", post(restore))
+        .route("/meta/read", post(meta_read))
+        .route("/meta/enrich", post(meta_enrich))
+        .route("/meta/write", post(meta_write))
         .route("/download/{token}", get(download))
         .layer(DefaultBodyLimit::max(MAX_UPLOAD_BYTES))
         .layer(TimeoutLayer::with_status_code(
@@ -715,6 +718,295 @@ async fn restore(
     let (mut resp, out_bytes) =
         result.map_err(|e| bad_request(format!("could not restore this .eparc: {e}")))?;
 
+    resp.download_token = stash(
+        &state,
+        resp.output_name.clone(),
+        out_bytes,
+        "application/epub+zip",
+    );
+    Ok(Json(resp))
+}
+
+// ---------------------------------------------------------------------------
+// Metadata editor (read / enrich-by-ISBN / write)
+// ---------------------------------------------------------------------------
+
+/// A trimmed multipart field, or `None` if missing/blank.
+fn nonempty(fields: &HashMap<String, String>, key: &str) -> Option<String> {
+    fields
+        .get(key)
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
+/// Parse a newline-separated multivalue field (authors, subjects) into a list.
+fn parse_lines(fields: &HashMap<String, String>, key: &str) -> Option<Vec<String>> {
+    let items: Vec<String> = fields
+        .get(key)
+        .map(|s| {
+            s.lines()
+                .map(str::trim)
+                .filter(|l| !l.is_empty())
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default();
+    (!items.is_empty()).then_some(items)
+}
+
+/// `Name` or `Name:position` → a `Series`.
+fn parse_series(s: &str) -> epublift::meta::Series {
+    if let Some((name, pos)) = s.rsplit_once(':')
+        && !pos.is_empty()
+        && pos.chars().all(|c| c.is_ascii_digit() || c == '.')
+    {
+        return epublift::meta::Series {
+            name: name.to_string(),
+            position: Some(pos.to_string()),
+        };
+    }
+    epublift::meta::Series {
+        name: s.to_string(),
+        position: None,
+    }
+}
+
+fn too_many_requests() -> ApiError {
+    ApiError(
+        StatusCode::TOO_MANY_REQUESTS,
+        "Too many requests — please wait a moment and try again.".into(),
+    )
+}
+
+/// The form-facing JSON view of a book's metadata.
+fn metadata_json(md: &epublift::meta::Metadata) -> serde_json::Value {
+    let main_title = md
+        .titles
+        .iter()
+        .find(|t| t.title_type.as_deref() != Some("subtitle"))
+        .map(|t| t.value.clone());
+    let subtitle = md
+        .titles
+        .iter()
+        .find(|t| t.title_type.as_deref() == Some("subtitle"))
+        .map(|t| t.value.clone());
+    let isbn = md
+        .identifiers
+        .iter()
+        .find_map(|i| {
+            if i.scheme
+                .as_deref()
+                .is_some_and(|s| s.eq_ignore_ascii_case("isbn"))
+            {
+                Some(i.value.clone())
+            } else {
+                i.value.strip_prefix("urn:isbn:").map(str::to_string)
+            }
+        })
+        .or_else(|| {
+            md.source
+                .as_ref()
+                .and_then(|s| s.strip_prefix("urn:isbn:").map(str::to_string))
+        });
+    serde_json::json!({
+        "epub_version": md.epub_version,
+        "title": main_title,
+        "subtitle": subtitle,
+        "authors": md.creators.iter().map(|c| c.name.clone()).collect::<Vec<_>>(),
+        "language": md.languages.first().cloned(),
+        "publisher": md.publisher,
+        "date": md.date,
+        "description": md.description,
+        "subjects": md.subjects,
+        "series": md.series.as_ref().map(|s| serde_json::json!({"name": s.name, "position": s.position})),
+        "isbn": isbn,
+    })
+}
+
+/// Write an uploaded EPUB's bytes to a temp file and read its current metadata.
+fn read_metadata_from_bytes(name: &str, bytes: &[u8]) -> anyhow::Result<epublift::meta::Metadata> {
+    let tmp = tempfile::Builder::new().prefix("epublift_web_").tempdir()?;
+    let safe = if name.trim().is_empty() {
+        "book.epub"
+    } else {
+        name
+    };
+    let path = tmp.path().join(safe);
+    std::fs::write(&path, bytes)?;
+    epublift::read_metadata(&path)
+}
+
+/// Read the current metadata of an uploaded EPUB (to populate the editor form).
+async fn meta_read(
+    State(state): State<Arc<AppState>>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    mut multipart: Multipart,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    if !state.limiter.allow(client_ip(&headers, peer)) {
+        return Err(too_many_requests());
+    }
+    let (file_bytes, name, _fields) = read_upload(&mut multipart).await?;
+    let md = tokio::task::spawn_blocking(move || read_metadata_from_bytes(&name, &file_bytes))
+        .await
+        .map_err(|_| ApiError(StatusCode::INTERNAL_SERVER_ERROR, "crashed".into()))?
+        .map_err(|e| bad_request(format!("could not read this EPUB: {e}")))?;
+    Ok(Json(metadata_json(&md)))
+}
+
+/// Look up an ISBN on Open Library and return the language-aware suggestion.
+async fn meta_enrich(
+    State(state): State<Arc<AppState>>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    mut multipart: Multipart,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    if !state.limiter.allow(client_ip(&headers, peer)) {
+        return Err(too_many_requests());
+    }
+    let (file_bytes, name, fields) = read_upload(&mut multipart).await?;
+    let isbn = nonempty(&fields, "isbn").ok_or_else(|| bad_request("please enter an ISBN"))?;
+    let opts = epublift::enrich::EnrichOptions {
+        lang_override: nonempty(&fields, "lang"),
+        overwrite: field_on(&fields, "overwrite"),
+        allow_foreign_meta: field_on(&fields, "allow_foreign_meta"),
+        include_description: field_on(&fields, "include_description"),
+    };
+
+    let _permit = state
+        .convert_slots
+        .acquire()
+        .await
+        .map_err(|_| ApiError(StatusCode::SERVICE_UNAVAILABLE, "server busy".into()))?;
+
+    let plan =
+        tokio::task::spawn_blocking(move || -> anyhow::Result<epublift::enrich::EnrichPlan> {
+            let existing = read_metadata_from_bytes(&name, &file_bytes)?;
+            let http = epublift::http::RustlsHttp::new()?;
+            let fetched =
+                epublift::enrich::OpenLibrary.fetch(&isbn, &http, opts.include_description)?;
+            epublift::enrich::plan_enrich(&existing, &fetched, &opts)
+        })
+        .await
+        .map_err(|_| ApiError(StatusCode::INTERNAL_SERVER_ERROR, "crashed".into()))?
+        .map_err(|e| bad_request(format!("Open Library lookup failed: {e}")))?;
+
+    // Structured applied/skipped/warnings so the front-end localizes the field
+    // names and reasons (see app.js `applyEnrich`).
+    use epublift::enrich::{SkipReason, Warning};
+    let applied: Vec<_> = plan
+        .applied
+        .iter()
+        .map(|a| serde_json::json!({"field": a.field, "value": a.value}))
+        .collect();
+    let skipped: Vec<_> = plan
+        .skipped
+        .iter()
+        .map(|s| {
+            let reason = match s.reason {
+                SkipReason::AlreadySet => "present",
+                SkipReason::LanguageMismatch => "lang",
+                SkipReason::DescriptionOmitted => "omitted",
+            };
+            serde_json::json!({"field": s.field, "reason": reason})
+        })
+        .collect();
+    let warnings: Vec<_> = plan
+        .warnings
+        .iter()
+        .map(|w| match w {
+            Warning::EditionLanguageMismatch { edition, book } => {
+                serde_json::json!({"type": "edition_lang", "edition": edition, "book": book})
+            }
+        })
+        .collect();
+
+    let u = &plan.update;
+    Ok(Json(serde_json::json!({
+        "book_lang": plan.book_lang,
+        "applied": applied,
+        "skipped": skipped,
+        "warnings": warnings,
+        "fields": {
+            "title": u.title,
+            "subtitle": u.subtitle,
+            "authors": u.authors,
+            "publisher": u.publisher,
+            "date": u.date,
+            "description": u.description,
+            "subjects": u.subjects,
+            "series": u.series.as_ref().map(|s| serde_json::json!({"name": s.name, "position": s.position})),
+            "isbn": u.isbn,
+        }
+    })))
+}
+
+#[derive(Serialize)]
+struct MetaWriteResponse {
+    output_name: String,
+    metadata: serde_json::Value,
+    download_token: String,
+}
+
+/// Write the edited metadata into the uploaded EPUB and stash it for download.
+async fn meta_write(
+    State(state): State<Arc<AppState>>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    mut multipart: Multipart,
+) -> Result<Json<MetaWriteResponse>, ApiError> {
+    if !state.limiter.allow(client_ip(&headers, peer)) {
+        return Err(too_many_requests());
+    }
+    let (file_bytes, raw_name, fields) = read_upload(&mut multipart).await?;
+    let file_name = if raw_name.trim().is_empty() {
+        "book.epub".to_string()
+    } else {
+        raw_name
+    };
+
+    let update = epublift::meta::MetadataUpdate {
+        title: nonempty(&fields, "title"),
+        subtitle: nonempty(&fields, "subtitle"),
+        authors: parse_lines(&fields, "authors"),
+        language: nonempty(&fields, "language"),
+        publisher: nonempty(&fields, "publisher"),
+        date: nonempty(&fields, "date"),
+        description: nonempty(&fields, "description"),
+        subjects: parse_lines(&fields, "subjects"),
+        series: nonempty(&fields, "series").map(|s| parse_series(&s)),
+        isbn: nonempty(&fields, "isbn"),
+    };
+    if update.is_empty() {
+        return Err(bad_request("nothing to save — fill in at least one field"));
+    }
+
+    let _permit = state
+        .convert_slots
+        .acquire()
+        .await
+        .map_err(|_| ApiError(StatusCode::SERVICE_UNAVAILABLE, "server busy".into()))?;
+
+    let result =
+        tokio::task::spawn_blocking(move || -> anyhow::Result<(MetaWriteResponse, Vec<u8>)> {
+            let tmp = tempfile::Builder::new().prefix("epublift_web_").tempdir()?;
+            let input = tmp.path().join(&file_name);
+            std::fs::write(&input, &file_bytes)?;
+            let output = tmp.path().join("output.epub");
+            let md = epublift::write_metadata(&input, &update, &output)?;
+            let bytes = std::fs::read(&output)?;
+            let resp = MetaWriteResponse {
+                output_name: format!("{}_meta.epub", file_stem_or(&file_name, "book")),
+                metadata: metadata_json(&md),
+                download_token: String::new(),
+            };
+            Ok((resp, bytes))
+        })
+        .await
+        .map_err(|_| ApiError(StatusCode::INTERNAL_SERVER_ERROR, "crashed".into()))?
+        .map_err(|e| bad_request(format!("could not save metadata: {e}")))?;
+
+    let (mut resp, out_bytes) = result;
     resp.download_token = stash(
         &state,
         resp.output_name.clone(),

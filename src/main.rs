@@ -52,7 +52,6 @@ impl From<ZstdModeArg> for epublift::ZstdMode {
 )]
 struct Args {
     #[command(subcommand)]
-    #[cfg(feature = "archival")]
     command: Option<Command>,
 
     // ----- default (optimize) options; used when no subcommand is given -----
@@ -139,14 +138,123 @@ struct Args {
     zstd_decode: bool,
 }
 
-/// `.eparc` archive subcommands (see docs/design/eparc-format.md).
-#[cfg(feature = "archival")]
+/// Top-level subcommands. `meta` is always available; the `.eparc` archive
+/// commands need the `archival` feature (default). See docs/.
+// clap subcommand args are constructed once per invocation, so the size spread
+// between variants doesn't matter (and boxing breaks the derive).
+#[allow(clippy::large_enum_variant)]
 #[derive(clap::Subcommand, Debug)]
 enum Command {
+    /// Read or edit the book's metadata (title, authors, identifiers, …).
+    Meta(MetaArgs),
     /// Shrink EPUB(s) into compact `.eparc` archives to save disk space.
+    #[cfg(feature = "archival")]
     Archive(ArchiveArgs),
     /// Restore `.eparc` archive(s) back to a content-exact `.epub`.
+    #[cfg(feature = "archival")]
     Restore(RestoreArgs),
+}
+
+/// `epublift meta …` — read or edit a book's metadata. See docs/metadata.md.
+#[derive(clap::Args, Debug)]
+struct MetaArgs {
+    #[command(subcommand)]
+    action: MetaAction,
+}
+
+#[allow(clippy::large_enum_variant)]
+#[derive(clap::Subcommand, Debug)]
+enum MetaAction {
+    /// Print the book's current metadata.
+    Show(MetaShowArgs),
+    /// Edit the book's metadata by hand (writes a new EPUB; input untouched).
+    Set(MetaSetArgs),
+    /// Fill missing metadata from an online catalogue by ISBN (needs the
+    /// `metadata` build feature).
+    #[cfg(feature = "metadata")]
+    Enrich(MetaEnrichArgs),
+}
+
+#[derive(clap::Args, Debug)]
+struct MetaShowArgs {
+    /// EPUB file to read.
+    #[arg(value_name = "EPUB")]
+    input: PathBuf,
+    /// Emit machine-readable JSON instead of a human-readable table.
+    #[arg(long)]
+    json: bool,
+}
+
+#[derive(clap::Args, Debug)]
+struct MetaSetArgs {
+    /// EPUB file to edit (never modified; a new file is written).
+    #[arg(value_name = "EPUB")]
+    input: PathBuf,
+    /// Set the main title.
+    #[arg(long)]
+    title: Option<String>,
+    /// Set the subtitle.
+    #[arg(long)]
+    subtitle: Option<String>,
+    /// Set an author (repeatable, in order). Replaces all existing authors.
+    #[arg(long = "author", value_name = "NAME")]
+    authors: Vec<String>,
+    /// Set the language (BCP-47, e.g. `tr`, `en`, `ko`).
+    #[arg(long)]
+    language: Option<String>,
+    /// Set the publisher.
+    #[arg(long)]
+    publisher: Option<String>,
+    /// Set the publication date (ISO 8601, e.g. `2024-03-15`).
+    #[arg(long)]
+    date: Option<String>,
+    /// Set the description.
+    #[arg(long)]
+    description: Option<String>,
+    /// Set a subject/tag (repeatable). Replaces all existing subjects.
+    #[arg(long = "subject", value_name = "TERM")]
+    subjects: Vec<String>,
+    /// Set the series, as `Name` or `Name:position` (e.g. `Dune:2`).
+    #[arg(long, value_name = "NAME[:POS]")]
+    series: Option<String>,
+    /// Set the print ISBN (written as `dc:source` `urn:isbn:…`).
+    #[arg(long)]
+    isbn: Option<String>,
+    /// Output path (default: `<name>_meta.epub` next to the input).
+    #[arg(short, long)]
+    output: Option<PathBuf>,
+}
+
+#[cfg(feature = "metadata")]
+#[derive(clap::Args, Debug)]
+struct MetaEnrichArgs {
+    /// EPUB file to enrich (never modified; a new file is written).
+    #[arg(value_name = "EPUB")]
+    input: PathBuf,
+    /// ISBN to look up (ISBN-13 recommended; hyphens allowed).
+    #[arg(long)]
+    isbn: String,
+    /// Override the book's language (BCP-47) when the OPF has no `dc:language`.
+    #[arg(long)]
+    lang: Option<String>,
+    /// Metadata provider.
+    #[arg(long, default_value = "openlibrary")]
+    provider: String,
+    /// Preview the changes without writing anything.
+    #[arg(long)]
+    dry_run: bool,
+    /// Replace fields that already have a value (default: fill gaps only).
+    #[arg(long)]
+    overwrite: bool,
+    /// Keep fields whose language doesn't match the book's (default: skip them).
+    #[arg(long)]
+    allow_foreign_meta: bool,
+    /// Also fetch and write the description (often publisher-authored).
+    #[arg(long)]
+    include_description: bool,
+    /// Output path (default: `<name>_meta.epub` next to the input).
+    #[arg(short, long)]
+    output: Option<PathBuf>,
 }
 
 #[cfg(feature = "archival")]
@@ -214,13 +322,147 @@ fn main() -> ExitCode {
 }
 
 fn run(args: Args) -> Result<()> {
-    #[cfg(feature = "archival")]
     match &args.command {
+        Some(Command::Meta(m)) => return run_meta(m),
+        #[cfg(feature = "archival")]
         Some(Command::Archive(a)) => return run_archive(a),
+        #[cfg(feature = "archival")]
         Some(Command::Restore(r)) => return run_restore(r),
         None => {}
     }
     run_convert(args)
+}
+
+/// `epublift meta …` — read or edit a book's metadata.
+fn run_meta(args: &MetaArgs) -> Result<()> {
+    match &args.action {
+        MetaAction::Show(s) => {
+            let input = s
+                .input
+                .canonicalize()
+                .with_context(|| format!("Input file not found: {}", s.input.display()))?;
+            let md = epublift::read_metadata(&input)?;
+            if s.json {
+                println!("{}", md.to_json());
+            } else {
+                print!("{}", md.to_text());
+            }
+            Ok(())
+        }
+        MetaAction::Set(s) => run_meta_set(s),
+        #[cfg(feature = "metadata")]
+        MetaAction::Enrich(e) => run_meta_enrich(e),
+    }
+}
+
+/// Default output for a metadata edit: `<name>_meta.epub` next to the input.
+fn default_meta_output(input: &Path) -> PathBuf {
+    let stem = epublift::output_stem(input, false);
+    input
+        .parent()
+        .unwrap_or_else(|| Path::new("."))
+        .join(format!("{stem}_meta.epub"))
+}
+
+/// `epublift meta set …` — apply manual metadata edits.
+fn run_meta_set(s: &MetaSetArgs) -> Result<()> {
+    let input = s
+        .input
+        .canonicalize()
+        .with_context(|| format!("Input file not found: {}", s.input.display()))?;
+
+    let update = epublift::meta::MetadataUpdate {
+        title: s.title.clone(),
+        subtitle: s.subtitle.clone(),
+        authors: (!s.authors.is_empty()).then(|| s.authors.clone()),
+        language: s.language.clone(),
+        publisher: s.publisher.clone(),
+        date: s.date.clone(),
+        description: s.description.clone(),
+        subjects: (!s.subjects.is_empty()).then(|| s.subjects.clone()),
+        series: s.series.as_deref().map(parse_series),
+        isbn: s.isbn.clone(),
+    };
+    if update.is_empty() {
+        anyhow::bail!(
+            "nothing to set — pass at least one field (e.g. --title). See `epublift meta set --help`."
+        );
+    }
+
+    let output = s
+        .output
+        .clone()
+        .unwrap_or_else(|| default_meta_output(&input));
+
+    let md = epublift::write_metadata(&input, &update, &output)?;
+    println!("[+] Wrote updated metadata to: {}", output.display());
+    print!("{}", md.to_text());
+    Ok(())
+}
+
+/// `epublift meta enrich …` — fill missing metadata from an online catalogue.
+#[cfg(feature = "metadata")]
+fn run_meta_enrich(e: &MetaEnrichArgs) -> Result<()> {
+    use epublift::enrich::{self, EnrichOptions, OpenLibrary};
+
+    if e.provider != "openlibrary" {
+        anyhow::bail!("unknown provider '{}'. Supported: openlibrary.", e.provider);
+    }
+    let input = e
+        .input
+        .canonicalize()
+        .with_context(|| format!("Input file not found: {}", e.input.display()))?;
+    let existing = epublift::read_metadata(&input)?;
+
+    let opts = EnrichOptions {
+        lang_override: e.lang.clone(),
+        overwrite: e.overwrite,
+        allow_foreign_meta: e.allow_foreign_meta,
+        include_description: e.include_description,
+    };
+
+    println!("[*] Looking up ISBN {} on Open Library…", e.isbn);
+    let http = epublift::http::RustlsHttp::new()?;
+    let fetched = OpenLibrary.fetch(&e.isbn, &http, opts.include_description)?;
+    let plan = enrich::plan_enrich(&existing, &fetched, &opts)?;
+
+    print!("{}", plan.to_text());
+
+    if e.dry_run {
+        println!("[i] Dry run — no changes written.");
+        return Ok(());
+    }
+    if plan.update.is_empty() {
+        return Ok(());
+    }
+
+    let output = e
+        .output
+        .clone()
+        .unwrap_or_else(|| default_meta_output(&input));
+    let md = epublift::write_metadata(&input, &plan.update, &output)?;
+    println!("[+] Wrote enriched metadata to: {}", output.display());
+    print!("{}", md.to_text());
+    Ok(())
+}
+
+/// Parse a `--series` argument: `Name` or `Name:position` (the position is taken
+/// only when the text after the last `:` looks numeric, so colons in names are
+/// safe).
+fn parse_series(s: &str) -> epublift::meta::Series {
+    if let Some((name, pos)) = s.rsplit_once(':')
+        && !pos.is_empty()
+        && pos.chars().all(|c| c.is_ascii_digit() || c == '.')
+    {
+        return epublift::meta::Series {
+            name: name.to_string(),
+            position: Some(pos.to_string()),
+        };
+    }
+    epublift::meta::Series {
+        name: s.to_string(),
+        position: None,
+    }
 }
 
 /// The default (no-subcommand) optimize path — the original CLI behavior.

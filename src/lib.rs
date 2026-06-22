@@ -19,10 +19,15 @@
 //! The CLI (`src/main.rs`) is a thin front-end over [`convert`]. Library callers
 //! build [`Options`], call [`convert`], and inspect the returned [`Report`].
 
+#[cfg(feature = "metadata")]
+pub mod enrich;
 #[cfg(feature = "archival")]
 pub mod eparc;
+#[cfg(feature = "metadata")]
+pub mod http;
 mod images;
 mod kepub;
+pub mod meta;
 mod nav;
 mod opf;
 mod report;
@@ -260,6 +265,111 @@ pub fn default_output_path(input: &Path, options: &Options) -> PathBuf {
     } else {
         parent.join(format!("{}.epub", base))
     }
+}
+
+/// The OPF package document's entry name inside an open EPUB archive (from
+/// `META-INF/container.xml`).
+fn opf_entry_name(zip: &mut ZipArchive<File>) -> Result<String> {
+    let container = {
+        let mut e = zip
+            .by_name("META-INF/container.xml")
+            .context("Invalid EPUB: META-INF/container.xml is missing")?;
+        let mut s = String::new();
+        e.read_to_string(&mut s)?;
+        s
+    };
+    let doc = roxmltree::Document::parse(&container).context("Failed to parse container.xml")?;
+    doc.descendants()
+        .find(|n| {
+            n.is_element()
+                && n.tag_name().name() == "rootfile"
+                && n.attribute("full-path").is_some()
+        })
+        .and_then(|n| n.attribute("full-path"))
+        .map(str::to_string)
+        .context("Could not find rootfile element in container.xml")
+}
+
+/// Read the OPF package document's text from an EPUB without extracting the
+/// archive (used by the read-only `meta show` path). The input is never modified.
+pub fn read_opf_text(epub: &Path) -> Result<String> {
+    let file = File::open(epub).with_context(|| format!("EPUB not found: {}", epub.display()))?;
+    let mut zip = ZipArchive::new(file).context("Input is not a valid EPUB (zip) archive")?;
+    let name = opf_entry_name(&mut zip)?;
+    let mut opf = String::new();
+    zip.by_name(&name)
+        .with_context(|| format!("OPF package document not found in EPUB: {name}"))?
+        .read_to_string(&mut opf)?;
+    Ok(opf)
+}
+
+/// Read the book's bibliographic metadata from `epub`. The input is never
+/// modified.
+pub fn read_metadata(epub: &Path) -> Result<meta::Metadata> {
+    let xml = read_opf_text(epub)?;
+    meta::parse_metadata(&xml)
+}
+
+/// Apply a metadata `update` to `input`, writing the result to `output` (the
+/// input is never modified). Only the OPF entry is rewritten; every other entry
+/// is copied through. Returns the resulting metadata for display.
+pub fn write_metadata(
+    input: &Path,
+    update: &meta::MetadataUpdate,
+    output: &Path,
+) -> Result<meta::Metadata> {
+    let file = File::open(input).with_context(|| format!("EPUB not found: {}", input.display()))?;
+    let mut zip = ZipArchive::new(file).context("Input is not a valid EPUB (zip) archive")?;
+    let opf_name = opf_entry_name(&mut zip)?;
+
+    let opf_xml = {
+        let mut s = String::new();
+        zip.by_name(&opf_name)
+            .with_context(|| format!("OPF package document not found in EPUB: {opf_name}"))?
+            .read_to_string(&mut s)?;
+        s
+    };
+    let modified_ts = Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
+    let new_opf = meta::apply_update(&opf_xml, update, &modified_ts)?;
+
+    let out =
+        File::create(output).with_context(|| format!("Failed to create {}", output.display()))?;
+    let mut writer = ZipWriter::new(out);
+    let stored = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
+    let deflated = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
+
+    // mimetype first, stored.
+    let mimetype = match zip.by_name("mimetype") {
+        Ok(mut e) => {
+            let mut b = Vec::new();
+            e.read_to_end(&mut b)?;
+            b
+        }
+        Err(_) => b"application/epub+zip".to_vec(),
+    };
+    writer.start_file("mimetype", stored)?;
+    io::Write::write_all(&mut writer, &mimetype)?;
+
+    // Everything else deflated, with the OPF entry swapped for the rewritten XML.
+    for i in 0..zip.len() {
+        let mut entry = zip.by_index(i)?;
+        let name = entry.name().to_string();
+        if name == "mimetype" || entry.is_dir() {
+            continue;
+        }
+        let data = if name == opf_name {
+            new_opf.clone().into_bytes()
+        } else {
+            let mut b = Vec::new();
+            entry.read_to_end(&mut b)?;
+            b
+        };
+        writer.start_file(name, deflated)?;
+        io::Write::write_all(&mut writer, &data)?;
+    }
+    writer.finish()?;
+
+    meta::parse_metadata(&new_opf)
 }
 
 /// Modernize `input` and write an optimized EPUB.

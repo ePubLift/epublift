@@ -115,6 +115,9 @@ brotli = { version = "8", optional = true }
 # gated behind `ceiling-bench`, keeps Guiding Principle #1 (pure Rust, no C).
 xz2 = { version = "0.1", optional = true }
 butteraugli = { version = "0.9", optional = true }
+rustls = { version = "0.23.40", default-features = false, features = ["std", "tls12", "logging"], optional = true }
+rustls-rustcrypto = { version = "0.0.2-alpha", optional = true }
+webpki-roots = { version = "1.0.8", optional = true }
 
 [features]
 # Archival mode (`epublift archive` / `restore` → `.eparc`) ships by default.
@@ -122,6 +125,17 @@ butteraugli = { version = "0.9", optional = true }
 # docs/design/eparc-format.md.
 default = ["archival"]
 archival = ["dep:structured-zstd", "dep:crc32fast", "dep:sha2", "dep:serde", "dep:serde_json"]
+# Metadata enrichment: `epublift meta enrich --isbn` fills missing fields from an
+# online catalogue (Open Library first). Opt-in so the default build stays
+# offline + C-free. The HTTPS client is 100% pure Rust: rustls with the RustCrypto
+# crypto provider (no ring/aws-lc, no C toolchain) + webpki-roots, over a small
+# hand-rolled HTTP/1.1 client (see src/http.rs).
+metadata = [
+    "dep:serde_json",
+    "dep:rustls",
+    "dep:rustls-rustcrypto",
+    "dep:webpki-roots",
+]
 # Experimental EPUB 3.4 output: emit AVIF / JPEG XL images under `--target 3.4`.
 # Pure Rust imazen codecs (zenavif + zenjxl, unified by zencodec); opt-in so the
 # default build stays 3.3.
@@ -143,6 +157,9 @@ butteraugli = ["dep:butteraugli"]
 # AVIF inputs (a loop-restoration SIMD bug). The bench catches those panics and
 # excludes the affected images from the comparison (see src/bin/img_calib.rs).
 img-calib = ["epub34", "dep:butteraugli", "zenjxl?/decode"]
+rustls = ["dep:rustls"]
+rustls-rustcrypto = ["dep:rustls-rustcrypto"]
+webpki-roots = ["dep:webpki-roots"]
 
 [dev-dependencies]
 # Used by the integration tests to assemble EPUB fixtures and inspect output.

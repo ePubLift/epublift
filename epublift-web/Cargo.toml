@@ -16,8 +16,10 @@ publish = false
 
 [dependencies]
 # `epub34` enables the experimental EPUB 3.4 image codecs (AVIF / JPEG XL) so the
-# web UI's "Target version: 3.4" option works. Pure Rust (zenavif/zenjxl).
-epublift = { path = "..", features = ["epub34"] }
+# web UI's "Target version: 3.4" option works. `metadata` adds ISBN enrichment
+# (Open Library) for the metadata editor. Both pure Rust (zenavif/zenjxl;
+# rustls + RustCrypto — no C).
+epublift = { path = "..", features = ["epub34", "metadata"] }
 axum = { version = "0.8", features = ["multipart"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal"] }
 tower = "0.5"

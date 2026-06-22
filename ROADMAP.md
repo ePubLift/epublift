@@ -195,6 +195,56 @@ older readers. Behind the opt-in `epub34` build feature; tracked in
 
 ---
 
+## 🚧 Planned — Metadata enrichment & editing — cli-v1.6.0 → web-v1.7.0
+
+Goal: let anyone fix a book's metadata — fill what's missing from an online
+catalogue by **ISBN**, or edit fields by hand — and write it back into the EPUB's
+OPF correctly. This serves the repeated "metadata repair" demand signal (see the
+GUI note above) and stays true to the product's character: a **stateless,
+single-file tool**, not a library/catalogue. CLI first, then the web form.
+
+Design & full field map: [`docs/metadata.md`](docs/metadata.md).
+
+- [x] **Core OPF metadata writer** *(`src/meta.rs`)* — a from-scratch, pure-Rust
+      writer that applies Dublin Core fields (title/subtitle, creators +
+      `role`/`file-as`, publisher, date, description, subjects, ISBN via
+      `dc:source`, series via `belongs-to-collection`) into the package document,
+      **filling gaps by default** (no overwrite without `--overwrite`), always
+      refreshing `dcterms:modified`. quick-xml streaming with a drop-plan: only the
+      replaced elements (and their `refines`) change; everything else (unique-id,
+      cover meta, unknown vocab) is preserved verbatim. UTF-8, no transliteration.
+- [x] **CLI: `meta` subcommand** — `meta show` (read; `--json`), `meta set` (manual
+      edit), `meta enrich --isbn` (auto-fill). Offline-first: `show`/`set` need no
+      network and ship in the default build; `enrich` is behind the opt-in
+      **`metadata`** feature. The input is never mutated (writes `<name>_meta.epub`).
+- [x] **Provider abstraction** (`Http` trait, network-agnostic + unit-tested with
+      fixtures) — **Open Library** done (`jscmd=data` + `/isbn/<isbn>.json` for
+      language/work-link + `/works/<id>.json` for description). Google Books
+      (`langRestrict`) and Amazon (regional TLD) slot in next.
+- [x] **Language-aware (critical)** — resolves the book's language
+      (`dc:language`/`--lang`), matches by ISBN-13, and **skips fields whose
+      language ≠ the book's** (edition mismatch warns; English work-level
+      subjects/description skipped on a non-English book) unless
+      `--allow-foreign-meta`. ISO 639-2/3 → BCP-47 mapping.
+- [x] **Pure-Rust TLS (no C)** *(`src/http.rs`)* — the HTTPS client is `rustls`
+      with the **RustCrypto** crypto provider (no `ring`/`aws-lc`, no C toolchain)
+      + `webpki-roots`, over a small hand-rolled HTTP/1.1 GET (redirects + chunked).
+      Default build stays offline and C-free; only `--features metadata` pulls it.
+- [x] **Web form** *(web-v1.7.0)* — a **Metadata** mode in `epublift-web`: drop an
+      `.epub` → `/meta/read` populates an editable form → optional **Fetch from
+      Open Library** by ISBN (`/meta/enrich`, language-aware suggestions) → **Save
+      & download** (`/meta/write`). Stateless/in-memory like the other modes;
+      reuses the core writer; the network call runs server-side on the pure-Rust
+      TLS client. (i18n: English strings for now; full translations are a follow-up.)
+- [ ] *(Later)* **Phase 2 fields** — classification (Dewey / LCC) and **EPUB
+      Accessibility 1.1** metadata (`schema:accessMode`, `accessibilityFeature`,
+      `accessibilityHazard`, `accessibilitySummary`, `dcterms:conformsTo`).
+- [ ] *(Long-term, optional)* **Upstream contribution** — feed the skip/coverage
+      reports back to **Open Library** to improve Turkish/Korean records over time
+      (a team effort, parallel to the tool — not a prerequisite for shipping).
+
+---
+
 ## 🔬 Experimental / research
 
 Tracked separately from the shipping product.
