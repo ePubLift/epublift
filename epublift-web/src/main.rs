@@ -318,7 +318,33 @@ struct ApiError(StatusCode, String);
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
-        (self.0, Json(serde_json::json!({ "error": self.1 }))).into_response()
+        // Attach a stable `code` so the front-end can localize the common cases;
+        // `error` keeps the English detail as a fallback / for unexpected errors.
+        let code = classify_error(&self.1, self.0);
+        (
+            self.0,
+            Json(serde_json::json!({ "error": self.1, "code": code })),
+        )
+            .into_response()
+    }
+}
+
+/// Classify an error message + status into a stable, translatable code.
+fn classify_error(msg: &str, status: StatusCode) -> &'static str {
+    let m = msg.to_ascii_lowercase();
+    if status == StatusCode::TOO_MANY_REQUESTS
+        || m.contains("too many requests")
+        || m.contains("server busy")
+    {
+        "busy"
+    } else if m.contains("429") || m.contains("rate limited") {
+        "rate_limited"
+    } else if m.contains("not found") {
+        "not_found"
+    } else if m.contains("enter an isbn") {
+        "no_isbn"
+    } else {
+        "failed"
     }
 }
 
@@ -866,6 +892,7 @@ async fn meta_enrich(
     }
     let (file_bytes, name, fields) = read_upload(&mut multipart).await?;
     let isbn = nonempty(&fields, "isbn").ok_or_else(|| bad_request("please enter an ISBN"))?;
+    let provider = nonempty(&fields, "provider").unwrap_or_else(|| "openlibrary".to_string());
     let opts = epublift::enrich::EnrichOptions {
         lang_override: nonempty(&fields, "lang"),
         overwrite: field_on(&fields, "overwrite"),
@@ -884,12 +911,13 @@ async fn meta_enrich(
             let existing = read_metadata_from_bytes(&name, &file_bytes)?;
             let http = epublift::http::RustlsHttp::new()?;
             let fetched =
-                epublift::enrich::OpenLibrary.fetch(&isbn, &http, opts.include_description)?;
+                epublift::enrich::fetch_isbn(&provider, &isbn, &http, opts.include_description)?;
             epublift::enrich::plan_enrich(&existing, &fetched, &opts)
         })
         .await
         .map_err(|_| ApiError(StatusCode::INTERNAL_SERVER_ERROR, "crashed".into()))?
-        .map_err(|e| bad_request(format!("Open Library lookup failed: {e}")))?;
+        // `{e:#}` includes the anyhow cause chain (e.g. "… rate limited (HTTP 429) …").
+        .map_err(|e| bad_request(format!("lookup failed: {e:#}")))?;
 
     // Structured applied/skipped/warnings so the front-end localizes the field
     // names and reasons (see app.js `applyEnrich`).

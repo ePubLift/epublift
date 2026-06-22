@@ -237,8 +237,8 @@ struct MetaEnrichArgs {
     /// Override the book's language (BCP-47) when the OPF has no `dc:language`.
     #[arg(long)]
     lang: Option<String>,
-    /// Metadata provider.
-    #[arg(long, default_value = "openlibrary")]
+    /// Metadata provider: `openlibrary` (default) or `google` (Google Books).
+    #[arg(long, default_value = "openlibrary", value_name = "openlibrary|google")]
     provider: String,
     /// Preview the changes without writing anything.
     #[arg(long)]
@@ -315,7 +315,9 @@ fn main() -> ExitCode {
     match run(args) {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
-            eprintln!("\n[!] Fatal Error: {}", e);
+            // `{:#}` prints the full anyhow context chain (e.g. "… failed:
+            // rate limited (HTTP 429) …") so the root cause is visible.
+            eprintln!("\n[!] Fatal Error: {:#}", e);
             ExitCode::FAILURE
         }
     }
@@ -403,11 +405,8 @@ fn run_meta_set(s: &MetaSetArgs) -> Result<()> {
 /// `epublift meta enrich …` — fill missing metadata from an online catalogue.
 #[cfg(feature = "metadata")]
 fn run_meta_enrich(e: &MetaEnrichArgs) -> Result<()> {
-    use epublift::enrich::{self, EnrichOptions, OpenLibrary};
+    use epublift::enrich::{self, EnrichOptions};
 
-    if e.provider != "openlibrary" {
-        anyhow::bail!("unknown provider '{}'. Supported: openlibrary.", e.provider);
-    }
     let input = e
         .input
         .canonicalize()
@@ -421,9 +420,13 @@ fn run_meta_enrich(e: &MetaEnrichArgs) -> Result<()> {
         include_description: e.include_description,
     };
 
-    println!("[*] Looking up ISBN {} on Open Library…", e.isbn);
+    let provider_label = match e.provider.as_str() {
+        "google" | "googlebooks" | "google-books" => "Google Books",
+        _ => "Open Library",
+    };
+    println!("[*] Looking up ISBN {} on {provider_label}…", e.isbn);
     let http = epublift::http::RustlsHttp::new()?;
-    let fetched = OpenLibrary.fetch(&e.isbn, &http, opts.include_description)?;
+    let fetched = enrich::fetch_isbn(&e.provider, &e.isbn, &http, opts.include_description)?;
     let plan = enrich::plan_enrich(&existing, &fetched, &opts)?;
 
     print!("{}", plan.to_text());

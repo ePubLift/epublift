@@ -17,6 +17,11 @@ Thumbs.db
 *.epub
 *_report.txt
 
+# Local environment (secrets like GOOGLE_BOOKS_API_KEY) — never commit your real
+# .env; the .env.example template IS committed.
+.env
+!.env.example
+
 # Editor / IDE
 .idea/
 .vscode/

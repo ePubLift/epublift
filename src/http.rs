@@ -111,6 +111,11 @@ impl Http for RustlsHttp {
                     current = resolve_redirect(&host, &loc);
                 }
                 404 => bail!("not found (HTTP 404)"),
+                429 => bail!(
+                    "rate limited (HTTP 429) — the provider's quota is exhausted; \
+                     try again later or set an API key"
+                ),
+                403 => bail!("access denied (HTTP 403)"),
                 other => bail!("unexpected HTTP status {other}"),
             }
         }

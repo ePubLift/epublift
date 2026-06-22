@@ -1,6 +1,6 @@
 //! Metadata enrichment: fill a book's missing OPF metadata from an online
-//! catalogue, keyed by ISBN. Open Library is the first provider; Google Books and
-//! Amazon slot in behind the same [`Http`] abstraction later.
+//! catalogue, keyed by ISBN. Open Library and Google Books are supported (see
+//! [`fetch_isbn`]); Amazon slots in behind the same [`Http`] abstraction later.
 //!
 //! **Language-aware (the core rule):** metadata is written only in the book's own
 //! language (`dc:language`). We match by ISBN-13 exactly so the edition record
@@ -110,7 +110,7 @@ impl EnrichPlan {
         for w in &self.warnings {
             let Warning::EditionLanguageMismatch { edition, book } = w;
             o.push_str(&format!(
-                "[!] Open Library edition language '{edition}' differs from the book's '{book}'; \
+                "[!] The matched edition's language '{edition}' differs from the book's '{book}'; \
                  edition fields skipped (use --allow-foreign-meta).\n"
             ));
         }
@@ -180,6 +180,99 @@ impl OpenLibrary {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Google Books provider
+// ---------------------------------------------------------------------------
+
+/// The Google Books provider. A single request returns everything we need —
+/// title, authors, publisher, date, categories, the ISBNs, and (critically for
+/// the language policy) the edition `language` — so there is no follow-up call.
+pub struct GoogleBooks;
+
+impl GoogleBooks {
+    /// Look up `isbn` via `volumes?q=isbn:<isbn>`.
+    ///
+    /// Anonymous Google Books requests share a small daily quota (HTTP 429 when
+    /// exhausted). Set `GOOGLE_BOOKS_API_KEY` to use your own key and raise it.
+    pub fn fetch(&self, isbn: &str, http: &dyn Http, want_description: bool) -> Result<Fetched> {
+        let isbn = normalize_isbn(isbn);
+        let mut url = format!("https://www.googleapis.com/books/v1/volumes?q=isbn:{isbn}");
+        if let Ok(key) = std::env::var("GOOGLE_BOOKS_API_KEY")
+            && !key.trim().is_empty()
+        {
+            url.push_str("&key=");
+            url.push_str(key.trim());
+        }
+        let body = http.get(&url).context("Google Books request failed")?;
+        let mut f = parse_google(&body, want_description)
+            .with_context(|| format!("ISBN {isbn} not found in Google Books"))?;
+        f.isbn13.get_or_insert(isbn);
+        Ok(f)
+    }
+}
+
+fn parse_google(json: &str, want_description: bool) -> Result<Fetched> {
+    let v: Value = serde_json::from_str(json).context("invalid JSON from Google Books")?;
+    let vi = v
+        .get("items")
+        .and_then(Value::as_array)
+        .and_then(|a| a.first())
+        .and_then(|item| item.get("volumeInfo"))
+        .context("book not found")?;
+
+    let isbn13 = vi
+        .get("industryIdentifiers")
+        .and_then(Value::as_array)
+        .and_then(|ids| {
+            ids.iter().find_map(|id| {
+                (id.get("type").and_then(Value::as_str) == Some("ISBN_13"))
+                    .then(|| id.get("identifier").and_then(Value::as_str))
+                    .flatten()
+                    .map(str::to_string)
+            })
+        });
+
+    Ok(Fetched {
+        title: get_str(vi, "title"),
+        subtitle: get_str(vi, "subtitle"),
+        authors: str_array(vi, "authors"),
+        publisher: get_str(vi, "publisher"),
+        date: get_str(vi, "publishedDate"),
+        subjects: str_array(vi, "categories"),
+        // Only surface the description when the caller asked for it, matching the
+        // Open Library provider (so the "description omitted" hint stays correct).
+        description: want_description
+            .then(|| get_str(vi, "description"))
+            .flatten(),
+        isbn13,
+        cover_url: vi
+            .get("imageLinks")
+            .and_then(|l| l.get("thumbnail").or_else(|| l.get("smallThumbnail")))
+            .and_then(Value::as_str)
+            .map(str::to_string),
+        // Google Books gives the edition language as a BCP-47 primary subtag
+        // (e.g. "en", "tr") — exactly what the language policy needs, no mapping.
+        edition_language: get_str(vi, "language"),
+    })
+}
+
+/// Look up `isbn` with the named provider. `openlibrary` (default) and `google`
+/// are supported; both return a normalized [`Fetched`] for [`plan_enrich`].
+pub fn fetch_isbn(
+    provider: &str,
+    isbn: &str,
+    http: &dyn Http,
+    want_description: bool,
+) -> Result<Fetched> {
+    match provider {
+        "openlibrary" | "ol" => OpenLibrary.fetch(isbn, http, want_description),
+        "google" | "googlebooks" | "google-books" => {
+            GoogleBooks.fetch(isbn, http, want_description)
+        }
+        other => anyhow::bail!("unknown provider '{other}'. Supported: openlibrary, google."),
+    }
+}
+
 /// Strip hyphens/spaces from an ISBN.
 fn normalize_isbn(isbn: &str) -> String {
     isbn.chars()
@@ -202,6 +295,20 @@ fn names(v: &Value, key: &str) -> Vec<String> {
             a.iter()
                 .filter_map(|o| o.get("name").and_then(Value::as_str))
                 .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Collect a JSON array of plain strings at `key` (trimmed, non-empty).
+fn str_array(v: &Value, key: &str) -> Vec<String> {
+    v.get(key)
+        .and_then(Value::as_array)
+        .map(|a| {
+            a.iter()
+                .filter_map(Value::as_str)
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
                 .collect()
         })
         .unwrap_or_default()
@@ -665,5 +772,40 @@ mod tests {
         };
         let plan = plan_enrich(&book, &fetched, &EnrichOptions::default()).unwrap();
         assert!(plan.update.isbn.is_none()); // already have an ISBN identifier
+    }
+
+    #[test]
+    fn google_books_fetch_parses_fixture() {
+        let mut m = HashMap::new();
+        m.insert(
+            "https://www.googleapis.com/books/v1/volumes?q=isbn:9780140328721".to_string(),
+            r#"{"items":[{"volumeInfo":{"title":"Fantastic Mr Fox","authors":["Roald Dahl"],"publisher":"Puffin","publishedDate":"1988","categories":["Juvenile Fiction"],"language":"en","industryIdentifiers":[{"type":"ISBN_10","identifier":"0140328726"},{"type":"ISBN_13","identifier":"9780140328721"}],"description":"A story about a clever fox."}}]}"#.to_string(),
+        );
+        // want_description = false → description must be omitted (parity with OL).
+        let f = fetch_isbn("google", "978-0-14-032872-1", &Mock(m), false).unwrap();
+        assert_eq!(f.title.as_deref(), Some("Fantastic Mr Fox"));
+        assert_eq!(f.authors, vec!["Roald Dahl"]);
+        assert_eq!(f.publisher.as_deref(), Some("Puffin"));
+        assert_eq!(f.edition_language.as_deref(), Some("en"));
+        assert_eq!(f.isbn13.as_deref(), Some("9780140328721"));
+        assert_eq!(f.subjects, vec!["Juvenile Fiction"]);
+        assert!(f.description.is_none());
+    }
+
+    #[test]
+    fn google_books_includes_description_when_asked() {
+        let mut m = HashMap::new();
+        m.insert(
+            "https://www.googleapis.com/books/v1/volumes?q=isbn:9780140328721".to_string(),
+            r#"{"items":[{"volumeInfo":{"title":"X","language":"en","description":"A story."}}]}"#
+                .to_string(),
+        );
+        let f = fetch_isbn("google", "9780140328721", &Mock(m), true).unwrap();
+        assert_eq!(f.description.as_deref(), Some("A story."));
+    }
+
+    #[test]
+    fn unknown_provider_errors() {
+        assert!(fetch_isbn("nope", "123", &Mock(HashMap::new()), false).is_err());
     }
 }

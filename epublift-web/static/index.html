@@ -551,6 +551,10 @@
           <p class="opt-h" style="margin:0" data-i18n="meta_isbn_h">Auto-fill by ISBN</p>
           <div class="meta-isbn-row">
             <input type="text" id="m_isbn" class="m-input" placeholder="978…" autocomplete="off" />
+            <select id="m_provider" class="m-input" style="flex:none;width:auto">
+              <option value="openlibrary">Open Library</option>
+              <option value="google">Google Books</option>
+            </select>
             <button type="button" class="btn-sm" id="m_fetch" data-i18n="meta_fetch">Fetch</button>
           </div>
           <label class="m-check"><input type="checkbox" id="m_allow_foreign" /> <span data-i18n="meta_allow_foreign">Keep foreign-language fields</span></label>

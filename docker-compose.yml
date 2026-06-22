@@ -13,6 +13,13 @@ services:
     ports:
       - "127.0.0.1:8080:8080"
 
+    # Optional: a Google Books API key for the Metadata editor's ISBN enrichment.
+    # Anonymous Google Books calls share a small daily quota (HTTP 429); set
+    # GOOGLE_BOOKS_API_KEY in your environment (or a .env file) to use your own.
+    # Leave it unset to use Open Library (the default provider) only.
+    environment:
+      - GOOGLE_BOOKS_API_KEY=${GOOGLE_BOOKS_API_KEY:-}
+
     # --- hardening ---
     read_only: true            # immutable root filesystem
     tmpfs:
@@ -25,12 +32,14 @@ services:
     pids_limit: 256
 
 # --- Optional: block egress (defense in depth) -------------------------------
-# The converter never makes outbound connections, so you can cut its internet
-# access entirely. A Docker `internal` network does this — but note it *also*
-# blocks published ports (that is by design: `internal` isolates the network
-# from everything outside it). So you cannot combine `internal:` with the
-# `ports:` above; instead the reverse proxy must join the network and reach the
-# service by name. To enable:
+# Conversion / archive / restore make no outbound connections — only the
+# Metadata editor's ISBN enrichment does (Open Library / Google Books over
+# HTTPS). If you don't use ISBN enrichment, you can cut the container's internet
+# access entirely with a Docker `internal` network (note it *also* blocks
+# published ports — that's by design: `internal` isolates the network from
+# everything outside it). So you cannot combine `internal:` with the `ports:`
+# above; instead the reverse proxy must join the network and reach the service by
+# name. (With egress blocked, ISBN enrichment will fail — that's expected.) To enable:
 #
 #   1. Remove the `ports:` block above.
 #   2. Add to the service:
