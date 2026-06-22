@@ -10,6 +10,13 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+## [web-v1.7.2] - 2026-06-22
+
+### Changed
+- Landing-page copy refreshed to reflect the **Metadata** editor — the hero kicker
+  and lede now mention fixing/auto-filling metadata alongside modernize and
+  archive, and the page title was updated. Translated across all 13 UI languages.
+
 ## [cli-v1.6.1] - 2026-06-22
 
 ### Added
