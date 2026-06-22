@@ -10,6 +10,34 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+## [cli-v1.6.1] - 2026-06-22
+
+### Added
+- **Google Books provider for `meta enrich`** — `--provider google` (alongside the
+  default `openlibrary`). One request returns title/authors/publisher/date/
+  categories, the ISBNs, and the edition language, so the same language-aware
+  policy applies with no follow-up call. Anonymous Google Books requests share a
+  small daily quota (HTTP 429 when exhausted); set `GOOGLE_BOOKS_API_KEY` to use
+  your own key.
+
+### Changed
+- CLI errors now print the full cause chain (`{:#}`), so the root cause is visible
+  (e.g. a provider's `rate limited (HTTP 429)`).
+
+## [web-v1.7.1] - 2026-06-22
+
+### Added
+- **Google Books** in the Metadata editor — a provider dropdown (Open Library /
+  Google Books) next to the ISBN field. The lookup runs server-side over the same
+  pure-Rust TLS client. Set `GOOGLE_BOOKS_API_KEY` (e.g. via a `.env` file — see
+  `.env.example`) for reliable Google Books use.
+
+### Changed
+- **Localized error messages.** Enrichment failures (rate-limited, ISBN not found,
+  missing ISBN, server busy) are now shown in the UI language across all 13
+  locales, instead of a raw English string; unexpected errors still show the
+  English detail. The edition-language-mismatch advisory is now provider-neutral.
+
 ## [cli-v1.6.0] - 2026-06-22
 
 ### Added
