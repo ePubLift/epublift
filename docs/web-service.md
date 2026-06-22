@@ -16,6 +16,11 @@ choose a mode from the switcher at the top of the panel:
   default** (the original book, byte-for-byte per entry); flip on **Modernize**
   to re-run the optimizer on the way out (EPUB 3.3, WebP, `--keep-images`,
   `.kepub`).
+- **Metadata** — fix a book's [metadata](metadata.md): drop an `.epub` to load an
+  editable form, optionally **Fetch from Open Library** by ISBN to fill the gaps
+  (**language-aware** — only the book's own language), then **Save & download**.
+  The ISBN is written as a `dc:identifier` so Calibre / Apple Books recognize it.
+  The Open Library lookup runs server-side over a pure-Rust TLS client (no C).
 
 It's powered by the same pure-Rust core, and every upload is processed **in memory
 and deleted immediately** — nothing is ever stored or logged, in any mode. The

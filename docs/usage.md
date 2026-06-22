@@ -83,7 +83,34 @@ epublift -i book.epub -o optimized_book.epub -q 85 -r stats_report.txt
 | | `--keep-images` | Keep original images (skip JPEG/PNG → WebP) for readers that don't render WebP | *off* |
 | | `--kepub` | Produce a Kobo `.kepub.epub` (inject `koboSpan` markup; implies `--keep-images`) | *off* |
 
-(For the `archive` / `restore` subcommands, see the [Archiving guide](archiving.md).)
+(For the `archive` / `restore` subcommands, see the [Archiving guide](archiving.md);
+for the `meta` subcommand, see [Metadata](metadata.md) and the summary below.)
+
+### Read & edit metadata (`meta`)
+
+The `meta` subcommand reads, hand-edits, or auto-fills a book's metadata. It never
+modifies the input; edits are written to `<name>_meta.epub` (or `-o <path>`).
+
+```bash
+# Print the current metadata (add --json for machine output)
+epublift meta show book.epub
+
+# Edit by hand (repeat --author / --subject for multiple values)
+epublift meta set book.epub --title "…" --author "…" --language tr --series "Dune:2"
+
+# Auto-fill missing fields from Open Library by ISBN (needs the `metadata` feature)
+epublift meta enrich book.epub --isbn 9780… --dry-run
+```
+
+`meta enrich` is **language-aware**: it fills only fields in the book's own
+language (`dc:language`, or `--lang`), matching by ISBN-13 — English work-level
+subjects/description are skipped on a non-English book unless `--allow-foreign-meta`.
+By default it fills only gaps (`--overwrite` replaces existing fields) and
+`--dry-run` previews without writing; `--include-description` opts the description
+in. The lookup uses a **pure-Rust** HTTPS client (rustls + RustCrypto, no C), so
+`enrich` is compiled only with the opt-in `metadata` feature
+(`cargo build --features metadata`); `show` and `set` are always available and
+need no network. Full details: [Metadata](metadata.md).
 
 ### Keep original images (`--keep-images`)
 

@@ -34,8 +34,9 @@ ePubLift began as a Rust port of an earlier Python implementation but has since 
     *   Converts outdated `<guide>` landmark reference lists into HTML5 `<nav epub:type="landmarks">` maps.
     *   Standardizes legacy XHTML DOCTYPEs (like XHTML 1.1) to modern HTML5 `<!DOCTYPE html>` structure.
 *   **📦 Archive your library (`.eparc`)**: `epublift archive` shrinks EPUB(s) into compact, **lossless** `.eparc` archives to save disk space; `epublift restore` brings any book back — content-exact by default, or re-targeted for a specific reader (`--target 3.3`, `--keep-images`, `--kepub`). Pure-Rust solid Zstandard on text + fonts, media stored verbatim, so it never grows a book. See [Archive your library](#-archive-your-library-eparc).
+*   **🏷️ Fix book metadata (`meta`)**: Read, hand-edit, or **auto-fill** a book's metadata from **Open Library** by ISBN — `epublift meta show` / `set` / `enrich`. **Language-aware**: fields are filled only in the book's own language. The lookup uses a **100% pure-Rust** HTTPS client (rustls + RustCrypto — no C), behind the opt-in `metadata` build feature. See the [Metadata guide](docs/metadata.md).
 *   **📊 Detailed Audit Reports**: Generates a detailed size comparison table and conversion metrics report in an easy-to-read text file.
-*   **🌐 Browser & Docker Ready**: A hardened [web service](#-hosted-web-service-epublift-web) does it all in the browser — **optimize** an EPUB, **archive** a book to a compact `.eparc`, or **restore** one back — with uploads processed in memory and deleted immediately. Ships as a multi-arch Docker image for one-command self-hosting.
+*   **🌐 Browser & Docker Ready**: A hardened [web service](#-hosted-web-service-epublift-web) does it all in the browser — **optimize** an EPUB, **archive** a book to a compact `.eparc`, **restore** one back, or fix its **metadata** — with uploads processed in memory and deleted immediately. Ships as a multi-arch Docker image for one-command self-hosting.
 
 ---
 
@@ -148,6 +149,8 @@ epublift -i book.epub            # modernize + shrink images → book_v3.3.epub
 | ASCII-only output filename | `epublift -i book.epub --ascii` |
 | Shrink a whole library to `.eparc` | `epublift archive ~/Books` |
 | Restore an archived book | `epublift restore book.eparc` |
+| See a book's metadata | `epublift meta show book.epub` |
+| Fill missing metadata by ISBN | `epublift meta enrich book.epub --isbn 9780…` |
 
 Every flag, per-situation recipes, and sandbox testing are in the **[Usage guide](docs/usage.md)**. epublift is also a Rust **library** — build `Options`, call `convert()`, inspect the `Report`.
 

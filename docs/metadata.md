@@ -2,11 +2,11 @@
 
 This document specifies ePubLift's metadata feature: editing an EPUB's Dublin
 Core metadata by hand, or auto-filling missing fields from an online catalogue by
-**ISBN**. It is the design contract for the CLI (`meta` subcommand) and the later
-web form.
+**ISBN**. It covers both the CLI (`meta` subcommand) and the web form.
 
-Status: **planned** (cli-v1.6.0 → web-v1.7.0). See the
-[roadmap](../ROADMAP.md#-planned--metadata-enrichment--editing--cli-v160--web-v170).
+Status: **shipped** — CLI in **cli-v1.6.0**, web Metadata mode in **web-v1.7.0**.
+Open Library is the first provider; Google Books and Amazon are planned as later
+minor releases.
 
 ## Principles
 
