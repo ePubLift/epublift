@@ -5,11 +5,12 @@ name = "epublift-web"
 # adds in-browser archive/restore (.eparc); 1.6.0 adds experimental EPUB 3.4
 # (AVIF / JPEG XL) and builds with the `epub34` feature; 1.6.1 encodes AVIF at a
 # faster speed to stay under the request timeout; 1.6.2 shows the build version
-# + commit in the footer.
-version = "1.6.2"
+# + commit in the footer; 1.7.0 adds the Metadata editor (read/edit + Open
+# Library ISBN enrichment, language-aware) and builds with the `metadata` feature.
+version = "1.7.0"
 edition = "2024"
 license = "AGPL-3.0-or-later"
-description = "Web front-end for epublift: convert, archive & restore EPUBs in the browser"
+description = "Web front-end for epublift: convert, archive, restore & edit EPUB metadata in the browser"
 repository = "https://github.com/ePubLift/epublift"
 rust-version = "1.94"
 publish = false

@@ -10,6 +10,41 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+## [cli-v1.6.0] - 2026-06-22
+
+### Added
+- **Metadata editing & enrichment (`meta` subcommand).** Read, hand-edit, or
+  auto-fill a book's Dublin Core metadata; the input is never modified (edits go
+  to `<name>_meta.epub`).
+  - `meta show` — print the current metadata (`--json` for machine output).
+  - `meta set` — edit by hand (`--title`/`--subtitle`/`--author`×N/`--language`/
+    `--publisher`/`--date`/`--description`/`--subject`×N/`--series Name:pos`/`--isbn`).
+  - `meta enrich --isbn` — fill missing fields from **Open Library**. It is
+    **language-aware**: it resolves the book's `dc:language` (or `--lang`), matches
+    by ISBN-13, and skips fields whose language differs (e.g. English work-level
+    subjects/description on a non-English book) unless `--allow-foreign-meta`.
+    Fills gaps by default (`--overwrite` to replace), `--dry-run` to preview,
+    `--include-description` to opt the description in.
+- **Pure-Rust HTTPS for `enrich`** — `rustls` with the **RustCrypto** crypto
+  provider + `webpki-roots` over a small hand-rolled HTTP/1.1 client. No
+  `ring`/`aws-lc`, **no C toolchain**. Behind the opt-in **`metadata`** build
+  feature, so the default build stays offline and C-free; `show`/`set` need no
+  network and are always available.
+- The ISBN is written as a **`dc:identifier`** (`urn:isbn:…`) so Calibre / Apple
+  Books recognize it as the book's ISBN.
+
+Design & full field map: [`docs/metadata.md`](docs/metadata.md).
+
+## [web-v1.7.0] - 2026-06-22
+
+### Added
+- **Metadata mode** in `epublift-web`: drop an `.epub` to load an editable form,
+  optionally **Fetch from Open Library** by ISBN (language-aware suggestions),
+  then **Save & download**. Stateless/in-memory like the other modes; the lookup
+  runs server-side over the pure-Rust TLS client. Fully translated in all **13**
+  UI languages. Author shown First-Last; publication date shown locale-aware while
+  stored as ISO 8601; the enrich status (field names + reasons) is localized.
+
 ## [cli-v1.5.2] - 2026-06-21
 
 ### Changed
