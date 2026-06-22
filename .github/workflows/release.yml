@@ -74,11 +74,15 @@ jobs:
         with:
           key: ${{ matrix.target }}
 
-      # `epub34` ships the experimental EPUB 3.4 image codecs (AVIF / JPEG XL) in
-      # the released binaries. Pure Rust (zenavif/zenjxl), no C/nasm toolchain, so
-      # it builds across all targets; `--target 3.4` is still opt-in at runtime.
+      # Ship the optional features in the released binaries:
+      #   - `epub34`   — experimental EPUB 3.4 image codecs (AVIF / JPEG XL;
+      #     zenavif/zenjxl). `--target 3.4` stays opt-in at runtime.
+      #   - `metadata` — `meta enrich` ISBN lookup (Open Library). Its HTTPS client
+      #     is rustls + the RustCrypto provider + webpki-roots.
+      # Both are 100% pure Rust — no C/nasm toolchain — so they build across all
+      # targets (musl, windows-msvc, macOS).
       - name: Build release binary
-        run: cargo build --release --locked --features epub34 --bin epublift --target ${{ matrix.target }}
+        run: cargo build --release --locked --features epub34,metadata --bin epublift --target ${{ matrix.target }}
 
       - name: Package (Unix)
         if: matrix.archive == 'tar.gz'
