@@ -195,7 +195,7 @@ older readers. Behind the opt-in `epub34` build feature; tracked in
 
 ---
 
-## 🚧 Planned — Metadata enrichment & editing — cli-v1.6.0 → web-v1.7.0
+## ✅ Shipped — Metadata enrichment & editing — cli-v1.6.0/1.6.1 · web-v1.7.0→1.7.2
 
 Goal: let anyone fix a book's metadata — fill what's missing from an online
 catalogue by **ISBN**, or edit fields by hand — and write it back into the EPUB's
@@ -218,9 +218,17 @@ Design & full field map: [`docs/metadata.md`](docs/metadata.md).
       network and ship in the default build; `enrich` is behind the opt-in
       **`metadata`** feature. The input is never mutated (writes `<name>_meta.epub`).
 - [x] **Provider abstraction** (`Http` trait, network-agnostic + unit-tested with
-      fixtures) — **Open Library** done (`jscmd=data` + `/isbn/<isbn>.json` for
-      language/work-link + `/works/<id>.json` for description). Google Books
-      (`langRestrict`) and Amazon (regional TLD) slot in next.
+      fixtures) — **Open Library** (`jscmd=data` + `/isbn/<isbn>.json` for
+      language/work-link + `/works/<id>.json` for description) and **Google Books**
+      *(cli-v1.6.1 / web-v1.7.1)* — `meta enrich --provider openlibrary|google`.
+      Google Books honors `GOOGLE_BOOKS_API_KEY` (anonymous quota is small).
+- [x] **Amazon — evaluated and dropped.** No usable metadata API (PA-API requires
+      affiliate sales in good standing), so it would mean **scraping**: against
+      Amazon's ToS, blocked from datacenter IPs (needs a headless browser →
+      breaks pure-Rust/C-free), brittle on every page change, and a liability for
+      the public hosted instance. The two open-API providers cover the need; a
+      future third provider, if any, should be a clean API / open data (e.g.
+      Wikidata or a national-library SRU for better local-language coverage).
 - [x] **Language-aware (critical)** — resolves the book's language
       (`dc:language`/`--lang`), matches by ISBN-13, and **skips fields whose
       language ≠ the book's** (edition mismatch warns; English work-level
@@ -230,12 +238,13 @@ Design & full field map: [`docs/metadata.md`](docs/metadata.md).
       with the **RustCrypto** crypto provider (no `ring`/`aws-lc`, no C toolchain)
       + `webpki-roots`, over a small hand-rolled HTTP/1.1 GET (redirects + chunked).
       Default build stays offline and C-free; only `--features metadata` pulls it.
-- [x] **Web form** *(web-v1.7.0)* — a **Metadata** mode in `epublift-web`: drop an
-      `.epub` → `/meta/read` populates an editable form → optional **Fetch from
-      Open Library** by ISBN (`/meta/enrich`, language-aware suggestions) → **Save
-      & download** (`/meta/write`). Stateless/in-memory like the other modes;
-      reuses the core writer; the network call runs server-side on the pure-Rust
-      TLS client. (i18n: English strings for now; full translations are a follow-up.)
+- [x] **Web form** *(web-v1.7.0→1.7.2)* — a **Metadata** mode in `epublift-web`:
+      drop an `.epub` → `/meta/read` populates an editable form → optional **Fetch**
+      by ISBN from **Open Library or Google Books** (`/meta/enrich`, language-aware)
+      → **Save & download** (`/meta/write`). Stateless/in-memory like the other
+      modes; the network call runs server-side on the pure-Rust TLS client. Fully
+      translated in all **13 UI languages** (form, status, and error messages);
+      landing-page copy refreshed to include the editor.
 - [ ] *(Later)* **Phase 2 fields** — classification (Dewey / LCC) and **EPUB
       Accessibility 1.1** metadata (`schema:accessMode`, `accessibilityFeature`,
       `accessibilityHazard`, `accessibilitySummary`, `dcterms:conformsTo`).

@@ -5,7 +5,8 @@ Core metadata by hand, or auto-filling missing fields from an online catalogue b
 **ISBN**. It covers both the CLI (`meta` subcommand) and the web form.
 
 Status: **shipped** — CLI in **cli-v1.6.0**, web Metadata mode in **web-v1.7.0**.
-**Open Library** (default) and **Google Books** are supported; Amazon is planned.
+**Open Library** (default) and **Google Books** are supported. (Amazon was
+evaluated and dropped — see [Providers](#providers).)
 
 ## Principles
 
@@ -130,8 +131,14 @@ with `meta enrich --provider <name>` (CLI) or the provider dropdown (web).
    `language` (BCP-47) — no follow-up request. Anonymous calls share a small daily
    quota (HTTP 429 when exhausted); set the `GOOGLE_BOOKS_API_KEY` environment
    variable to use your own key and raise it.
-3. **Amazon** (planned) — by ASIN against the locale's regional endpoint
-   (e.g. `.com.tr` for Turkish).
+**Amazon — evaluated and dropped.** Amazon has no usable metadata API (PA-API
+requires an affiliate account with qualifying sales), so it would require
+**scraping**: against Amazon's ToS, blocked from datacenter IPs (would need a
+headless browser, breaking the pure-Rust/C-free guarantee), brittle on every page
+change, and a liability for the public hosted instance. The two open-API providers
+cover the need. A future third provider, if added, should be a clean API / open
+data — e.g. **Wikidata** (open SPARQL, multilingual) or a **national-library SRU**
+endpoint for better local-language coverage.
 
 > We match by ISBN-13 exactly and apply the language gate ourselves (using the
 > edition's `language`), rather than relying on a provider's `langRestrict` — so a

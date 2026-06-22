@@ -1,6 +1,8 @@
 //! Metadata enrichment: fill a book's missing OPF metadata from an online
 //! catalogue, keyed by ISBN. Open Library and Google Books are supported (see
-//! [`fetch_isbn`]); Amazon slots in behind the same [`Http`] abstraction later.
+//! [`fetch_isbn`]). Any future provider plugs into the same [`Http`] abstraction;
+//! Amazon was evaluated and dropped (no usable API — scraping only). See
+//! `docs/metadata.md`.
 //!
 //! **Language-aware (the core rule):** metadata is written only in the book's own
 //! language (`dc:language`). We match by ISBN-13 exactly so the edition record
