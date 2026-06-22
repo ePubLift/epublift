@@ -5,8 +5,7 @@ Core metadata by hand, or auto-filling missing fields from an online catalogue b
 **ISBN**. It covers both the CLI (`meta` subcommand) and the web form.
 
 Status: **shipped** — CLI in **cli-v1.6.0**, web Metadata mode in **web-v1.7.0**.
-Open Library is the first provider; Google Books and Amazon are planned as later
-minor releases.
+**Open Library** (default) and **Google Books** are supported; Amazon is planned.
 
 ## Principles
 
@@ -119,15 +118,24 @@ epublift meta enrich --isbn 9780… [--lang tr] \      # auto-fill missing field
 
 ## Providers
 
-A `MetadataProvider` trait carries a `locale`/`lang` from the start so each
-backend can request language-appropriate data:
+Each provider returns a normalized `Fetched` (carrying the edition `language` for
+the policy); `enrich::fetch_isbn(provider, isbn, …)` dispatches by name. Selectable
+with `meta enrich --provider <name>` (CLI) or the provider dropdown (web).
 
-1. **Open Library** (first) — `GET /isbn/<isbn>.json`, then `works[0].key` for
-   description/subjects; `Accept: application/json`, a descriptive `User-Agent`
-   per their policy, gentle rate limiting.
-2. **Google Books** (next) — `volumes?q=isbn:<isbn>&langRestrict=<lang>`.
-3. **Amazon** (next) — by ASIN against the locale's regional endpoint
+1. **Open Library** (`openlibrary`, default) — `GET /isbn/<isbn>.json` for the
+   language + work link, the flattened `jscmd=data` view for names/subjects, and
+   `works[0]` for the description (only with `--include-description`).
+2. **Google Books** (`google`) — a single `GET /books/v1/volumes?q=isbn:<isbn>`
+   returns title/authors/publisher/date/categories, the ISBNs, and the edition
+   `language` (BCP-47) — no follow-up request. Anonymous calls share a small daily
+   quota (HTTP 429 when exhausted); set the `GOOGLE_BOOKS_API_KEY` environment
+   variable to use your own key and raise it.
+3. **Amazon** (planned) — by ASIN against the locale's regional endpoint
    (e.g. `.com.tr` for Turkish).
+
+> We match by ISBN-13 exactly and apply the language gate ourselves (using the
+> edition's `language`), rather than relying on a provider's `langRestrict` — so a
+> mismatched edition is reported, not silently dropped.
 
 ## Open Library response shape (reference)
 

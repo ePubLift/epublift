@@ -17,10 +17,12 @@ choose a mode from the switcher at the top of the panel:
   to re-run the optimizer on the way out (EPUB 3.3, WebP, `--keep-images`,
   `.kepub`).
 - **Metadata** — fix a book's [metadata](metadata.md): drop an `.epub` to load an
-  editable form, optionally **Fetch from Open Library** by ISBN to fill the gaps
-  (**language-aware** — only the book's own language), then **Save & download**.
-  The ISBN is written as a `dc:identifier` so Calibre / Apple Books recognize it.
-  The Open Library lookup runs server-side over a pure-Rust TLS client (no C).
+  editable form, optionally **Fetch** by ISBN from **Open Library** or **Google
+  Books** to fill the gaps (**language-aware** — only the book's own language),
+  then **Save & download**. The ISBN is written as a `dc:identifier` so Calibre /
+  Apple Books recognize it. The lookup runs server-side over a pure-Rust TLS
+  client (no C). Google Books needs an API key for reliable use — see
+  [Configuration](#configuration-env).
 
 It's powered by the same pure-Rust core, and every upload is processed **in memory
 and deleted immediately** — nothing is ever stored or logged, in any mode. The
@@ -53,6 +55,23 @@ profile — read-only root filesystem, all Linux capabilities dropped,
 ```bash
 docker compose up -d
 ```
+
+## Configuration (`.env`)
+
+Optional settings are read from a **`.env`** file next to `docker-compose.yml` —
+Docker Compose loads it automatically, so there's no `export` and no editing the
+compose file. Copy the template and fill in what you need:
+
+```bash
+cp .env.example .env      # then edit .env
+docker compose up -d
+```
+
+| Variable | Purpose |
+| :--- | :--- |
+| `GOOGLE_BOOKS_API_KEY` | A [Google Books API key](https://console.cloud.google.com/) for the **Metadata** editor's ISBN enrichment when you pick the *Google Books* provider. Anonymous requests share a small daily quota (HTTP 429 when exhausted); a key raises it. **Optional** — leave it blank to use Open Library only (the default provider needs no key). |
+
+Your real `.env` is git-ignored, so your key stays private.
 
 ## Put it behind a reverse proxy (TLS)
 

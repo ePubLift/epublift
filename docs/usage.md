@@ -98,8 +98,9 @@ epublift meta show book.epub
 # Edit by hand (repeat --author / --subject for multiple values)
 epublift meta set book.epub --title "…" --author "…" --language tr --series "Dune:2"
 
-# Auto-fill missing fields from Open Library by ISBN (needs the `metadata` feature)
-epublift meta enrich book.epub --isbn 9780… --dry-run
+# Auto-fill missing fields by ISBN (needs the `metadata` feature)
+epublift meta enrich book.epub --isbn 9780… --dry-run                 # Open Library (default)
+epublift meta enrich book.epub --isbn 9780… --provider google         # Google Books
 ```
 
 `meta enrich` is **language-aware**: it fills only fields in the book's own
@@ -107,7 +108,9 @@ language (`dc:language`, or `--lang`), matching by ISBN-13 — English work-leve
 subjects/description are skipped on a non-English book unless `--allow-foreign-meta`.
 By default it fills only gaps (`--overwrite` replaces existing fields) and
 `--dry-run` previews without writing; `--include-description` opts the description
-in. The lookup uses a **pure-Rust** HTTPS client (rustls + RustCrypto, no C), so
+in. Pick the source with `--provider openlibrary` (default) or `--provider google`;
+Google Books shares a small anonymous quota, so set `GOOGLE_BOOKS_API_KEY` for your
+own. The lookup uses a **pure-Rust** HTTPS client (rustls + RustCrypto, no C), so
 `enrich` is compiled only with the opt-in `metadata` feature
 (`cargo build --features metadata`); `show` and `set` are always available and
 need no network. Full details: [Metadata](metadata.md).
