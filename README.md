@@ -188,6 +188,7 @@ The full hardening profile, reverse-proxy/TLS setup, and the privacy/security mo
 - **[Usage guide](docs/usage.md)** — every flag, per-situation recipes, sandbox testing.
 - **[Archiving guide](docs/archiving.md)** — `archive` / `restore` and the `.eparc` format.
 - **[Web service guide](docs/web-service.md)** — self-hosting `epublift-web`.
+- **[Reader compatibility](docs/device-compatibility.md)** — which readers render which image formats (why `--keep-images` exists), verified on real hardware.
 - **[Experimental Zstandard packaging](docs/zstandard-research.md)** — research track (non-conformant, measurement only).
 - Design notes: [`.eparc` format](docs/design/eparc-format.md) · [`.eparc` codec choice](docs/design/eparc-codec-choice.md) · [Zstd-OCF experiment](docs/design/zstd-ocf-experimental.md).
 - [Roadmap](ROADMAP.md) · [Changelog](CHANGELOG.md).

@@ -10,6 +10,16 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+### Added
+- **Reader compatibility doc** (`docs/device-compatibility.md`) — which readers
+  render which image formats, with an **Our recommendation** column mapping each
+  reader to the right flags. A *Verified by us* table (first-hand: Kobo Forma/Sage
+  WebP blank; Apple Books WebP OK) is kept separate from a *Reported* table
+  (vendor-documented support for Kindle, PocketBook, Onyx Boox, and RMSDK-based
+  readers — WebP generally not listed; AVIF/JXL nowhere). Plus the durable
+  "reading appliance vs Android e-ink slate" split that explains why modern
+  formats lag. Linked from the README.
+
 ## [web-v1.7.2] - 2026-06-22
 
 ### Changed
