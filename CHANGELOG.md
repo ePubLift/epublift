@@ -10,6 +10,14 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+## [web-v1.8.1] - 2026-06-24
+
+### Changed
+- Landing-page **hero copy** now advertises the **Import PDF** feature — the
+  kicker (`Modernize · Archive · Metadata · Import PDF`) and the lede gained a
+  line about turning a PDF into a reflowable EPUB. Translated across all 13 UI
+  languages.
+
 ## [cli-v1.7.0] - 2026-06-24
 
 ### Added
