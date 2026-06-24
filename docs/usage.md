@@ -84,7 +84,9 @@ epublift -i book.epub -o optimized_book.epub -q 85 -r stats_report.txt
 | | `--kepub` | Produce a Kobo `.kepub.epub` (inject `koboSpan` markup; implies `--keep-images`) | *off* |
 
 (For the `archive` / `restore` subcommands, see the [Archiving guide](archiving.md);
-for the `meta` subcommand, see [Metadata](metadata.md) and the summary below.)
+for the `meta` subcommand, see [Metadata](metadata.md) and the summary below;
+for the experimental `import` subcommand — PDF → reflowable EPUB — see the
+[PDF import guide](pdf-import.md).)
 
 ### Read & edit metadata (`meta`)
 
