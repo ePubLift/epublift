@@ -44,7 +44,10 @@ pub(crate) fn write_epub(
     for (i, ch) in chapters.iter().enumerate() {
         let id = format!("ch{:03}", i + 1);
         let href = format!("{id}.xhtml");
-        let heading = ch.title.clone().unwrap_or_else(|| format!("Section {}", i + 1));
+        let heading = ch
+            .title
+            .clone()
+            .unwrap_or_else(|| format!("Section {}", i + 1));
 
         let mut body = format!("<h1>{}</h1>\n", esc(&heading));
         for p in &ch.paragraphs {
@@ -65,7 +68,10 @@ pub(crate) fn write_epub(
             "  <item id=\"{id}\" href=\"{href}\" media-type=\"application/xhtml+xml\"/>\n"
         ));
         spine.push_str(&format!("  <itemref idref=\"{id}\"/>\n"));
-        nav_items.push_str(&format!("    <li><a href=\"{href}\">{}</a></li>\n", esc(&heading)));
+        nav_items.push_str(&format!(
+            "    <li><a href=\"{href}\">{}</a></li>\n",
+            esc(&heading)
+        ));
     }
 
     zip.start_file("OEBPS/nav.xhtml", deflated)?;

@@ -101,10 +101,11 @@ fn media_box(doc: &Document, page_id: ObjectId) -> (f32, f32) {
     for _ in 0..16 {
         let Some(dict) = cur else { break };
         if let Ok(arr) = dict.get(b"MediaBox").and_then(|o| o.as_array())
-            && arr.len() == 4 {
-                let v: Vec<f32> = arr.iter().map(num).collect();
-                return ((v[2] - v[0]).abs(), (v[3] - v[1]).abs());
-            }
+            && arr.len() == 4
+        {
+            let v: Vec<f32> = arr.iter().map(num).collect();
+            return ((v[2] - v[0]).abs(), (v[3] - v[1]).abs());
+        }
         cur = dict
             .get(b"Parent")
             .ok()
@@ -122,7 +123,10 @@ enum Dec<'a> {
     /// bytes). Covers Type0/CID and simple fonts with custom Differences
     /// encodings that lopdf 0.34 can't read; `ToUnicodeCMap::parse` is also
     /// crate-private, so we parse the CMap ourselves.
-    Cid { map: HashMap<u32, String>, code_len: usize },
+    Cid {
+        map: HashMap<u32, String>,
+        code_len: usize,
+    },
 }
 
 /// A page font: how to decode its codes, plus per-code glyph widths (em units)
@@ -150,14 +154,24 @@ fn page_encodings<'a>(doc: &'a Document, page_id: ObjectId) -> HashMap<Vec<u8>, 
         // regardless of the CMap's declared source width; Type0 uses the width.
         let dec = if let Some((cmap, inferred)) = to_unicode_map(doc, dict) {
             let code_len = if subtype == "Type0" { inferred } else { 1 };
-            Dec::Cid { map: cmap, code_len }
+            Dec::Cid {
+                map: cmap,
+                code_len,
+            }
         } else if let Ok(enc) = dict.get_font_encoding(doc) {
             Dec::Simple(enc)
         } else {
             continue;
         };
         let (widths, default_width) = font_widths(doc, dict, &subtype);
-        map.insert(name, Font { dec, widths, default_width });
+        map.insert(
+            name,
+            Font {
+                dec,
+                widths,
+                default_width,
+            },
+        );
     }
     map
 }
@@ -175,9 +189,21 @@ fn font_widths(doc: &Document, dict: &Dictionary, subtype: &str) -> (HashMap<u32
             .and_then(|a| a.first())
             .and_then(|o| deref(doc, o))
             .and_then(|o| o.as_dict().ok());
-        let Some(desc) = desc else { return (widths, 0.5) };
-        let dw = desc.get(b"DW").ok().and_then(|o| o.as_float().ok()).unwrap_or(1000.0) / 1000.0;
-        if let Some(w) = desc.get(b"W").ok().and_then(|o| deref(doc, o)).and_then(|o| o.as_array().ok()) {
+        let Some(desc) = desc else {
+            return (widths, 0.5);
+        };
+        let dw = desc
+            .get(b"DW")
+            .ok()
+            .and_then(|o| o.as_float().ok())
+            .unwrap_or(1000.0)
+            / 1000.0;
+        if let Some(w) = desc
+            .get(b"W")
+            .ok()
+            .and_then(|o| deref(doc, o))
+            .and_then(|o| o.as_array().ok())
+        {
             let mut i = 0;
             while i < w.len() {
                 let Some(c) = w[i].as_i64().ok() else { break };
@@ -189,9 +215,10 @@ fn font_widths(doc: &Document, dict: &Dictionary, subtype: &str) -> (HashMap<u32
                         }
                     }
                     i += 2;
-                } else if let (Some(clast), Some(wv)) =
-                    (w.get(i + 1).and_then(|o| o.as_i64().ok()), w.get(i + 2).and_then(|o| o.as_float().ok()))
-                {
+                } else if let (Some(clast), Some(wv)) = (
+                    w.get(i + 1).and_then(|o| o.as_i64().ok()),
+                    w.get(i + 2).and_then(|o| o.as_float().ok()),
+                ) {
                     for code in c..=clast.min(c + 65535) {
                         widths.insert(code as u32, wv / 1000.0);
                     }
@@ -203,8 +230,17 @@ fn font_widths(doc: &Document, dict: &Dictionary, subtype: &str) -> (HashMap<u32
         }
         (widths, dw)
     } else {
-        let first = dict.get(b"FirstChar").ok().and_then(|o| o.as_i64().ok()).unwrap_or(0);
-        if let Some(arr) = dict.get(b"Widths").ok().and_then(|o| deref(doc, o)).and_then(|o| o.as_array().ok()) {
+        let first = dict
+            .get(b"FirstChar")
+            .ok()
+            .and_then(|o| o.as_i64().ok())
+            .unwrap_or(0);
+        if let Some(arr) = dict
+            .get(b"Widths")
+            .ok()
+            .and_then(|o| deref(doc, o))
+            .and_then(|o| o.as_array().ok())
+        {
             for (i, wv) in arr.iter().enumerate() {
                 if let Ok(wf) = wv.as_float() {
                     widths.insert((first + i as i64) as u32, wf / 1000.0);
@@ -229,7 +265,11 @@ fn page_resources(doc: &Document, page_id: ObjectId) -> Option<&Dictionary> {
         {
             return Some(res);
         }
-        cur = dict.get(b"Parent").ok().and_then(|p| deref(doc, p)).and_then(|o| o.as_dict().ok());
+        cur = dict
+            .get(b"Parent")
+            .ok()
+            .and_then(|p| deref(doc, p))
+            .and_then(|o| o.as_dict().ok());
     }
     None
 }
@@ -237,7 +277,9 @@ fn page_resources(doc: &Document, page_id: ObjectId) -> Option<&Dictionary> {
 /// Font name → font Dictionary for a page (resolving inherited Resources).
 fn page_font_dicts(doc: &Document, page_id: ObjectId) -> Vec<(Vec<u8>, &Dictionary)> {
     let mut out = Vec::new();
-    let Some(res) = page_resources(doc, page_id) else { return out };
+    let Some(res) = page_resources(doc, page_id) else {
+        return out;
+    };
     let Some(fonts) = res
         .get(b"Font")
         .ok()
@@ -265,9 +307,17 @@ fn deref<'a>(doc: &'a Document, o: &'a Object) -> Option<&'a Object> {
 /// widths so the caller can place inter-word spaces exactly.
 fn decode_run(font: Option<&Font>, bytes: &[u8]) -> (String, f32) {
     let Some(font) = font else {
-        return (String::from_utf8_lossy(bytes).into_owned(), bytes.len() as f32 * 0.5);
+        return (
+            String::from_utf8_lossy(bytes).into_owned(),
+            bytes.len() as f32 * 0.5,
+        );
     };
-    let width = |code: u32| font.widths.get(&code).copied().unwrap_or(font.default_width);
+    let width = |code: u32| {
+        font.widths
+            .get(&code)
+            .copied()
+            .unwrap_or(font.default_width)
+    };
     match &font.dec {
         Dec::Simple(e) => {
             let text = e
@@ -305,7 +355,10 @@ fn to_unicode_map(doc: &Document, font: &Dictionary) -> Option<(HashMap<u32, Str
         other => other,
     };
     let stream = obj.as_stream().ok()?;
-    let content = stream.decompressed_content().or_else(|_| stream.get_plain_content()).ok()?;
+    let content = stream
+        .decompressed_content()
+        .or_else(|_| stream.get_plain_content())
+        .ok()?;
     parse_to_unicode(&content)
 }
 
@@ -331,7 +384,9 @@ fn parse_to_unicode(content: &[u8]) -> Option<(HashMap<u32, String>, usize)> {
             while j < b.len() && b[j] != b'>' {
                 j += 1;
             }
-            toks.push(Tok::Hex(s[i + 1..j.min(b.len())].split_whitespace().collect()));
+            toks.push(Tok::Hex(
+                s[i + 1..j.min(b.len())].split_whitespace().collect(),
+            ));
             i = j + 1;
         } else if c == b'[' {
             toks.push(Tok::Open);
@@ -343,7 +398,8 @@ fn parse_to_unicode(content: &[u8]) -> Option<(HashMap<u32, String>, usize)> {
             i += 1;
         } else {
             let mut j = i;
-            while j < b.len() && !b[j].is_ascii_whitespace() && !matches!(b[j], b'<' | b'[' | b']') {
+            while j < b.len() && !b[j].is_ascii_whitespace() && !matches!(b[j], b'<' | b'[' | b']')
+            {
                 j += 1;
             }
             toks.push(Tok::Word(s[i..j].to_string()));
@@ -359,7 +415,9 @@ fn parse_to_unicode(content: &[u8]) -> Option<(HashMap<u32, String>, usize)> {
             Tok::Word(w) if w == "beginbfchar" => {
                 k += 1;
                 while k + 1 < toks.len() {
-                    let (Tok::Hex(src), Tok::Hex(dst)) = (&toks[k], &toks[k + 1]) else { break };
+                    let (Tok::Hex(src), Tok::Hex(dst)) = (&toks[k], &toks[k + 1]) else {
+                        break;
+                    };
                     src_hex_len = src_hex_len.max(src.len());
                     if let (Some(code), Some(text)) = (hex_u32(src), hex_string(dst)) {
                         map.insert(code, text);
@@ -373,9 +431,13 @@ fn parse_to_unicode(content: &[u8]) -> Option<(HashMap<u32, String>, usize)> {
                     if k + 2 >= toks.len() {
                         break;
                     }
-                    let (Tok::Hex(lo), Tok::Hex(hi)) = (&toks[k], &toks[k + 1]) else { break };
+                    let (Tok::Hex(lo), Tok::Hex(hi)) = (&toks[k], &toks[k + 1]) else {
+                        break;
+                    };
                     src_hex_len = src_hex_len.max(lo.len());
-                    let (Some(lo), Some(hi)) = (hex_u32(lo), hex_u32(hi)) else { break };
+                    let (Some(lo), Some(hi)) = (hex_u32(lo), hex_u32(hi)) else {
+                        break;
+                    };
                     k += 2;
                     match &toks[k] {
                         Tok::Hex(dst) => {
@@ -419,7 +481,11 @@ fn parse_to_unicode(content: &[u8]) -> Option<(HashMap<u32, String>, usize)> {
     if map.is_empty() {
         None
     } else {
-        let code_len = if src_hex_len == 0 { 2 } else { src_hex_len.div_ceil(2) };
+        let code_len = if src_hex_len == 0 {
+            2
+        } else {
+            src_hex_len.div_ceil(2)
+        };
         Some((map, code_len))
     }
 }
@@ -450,10 +516,18 @@ fn hex_string(s: &str) -> Option<String> {
 /// Extract positioned text runs from one page.
 pub(crate) fn extract_page(doc: &Document, page_id: ObjectId) -> PageContent {
     let (width, height) = media_box(doc, page_id);
-    let mut page = PageContent { width, height, runs: Vec::new() };
+    let mut page = PageContent {
+        width,
+        height,
+        runs: Vec::new(),
+    };
 
-    let Ok(data) = doc.get_page_content(page_id) else { return page };
-    let Ok(content) = Content::decode(&data) else { return page };
+    let Ok(data) = doc.get_page_content(page_id) else {
+        return page;
+    };
+    let Ok(content) = Content::decode(&data) else {
+        return page;
+    };
     let encodings = page_encodings(doc, page_id);
 
     // Graphics + text state.
@@ -475,7 +549,14 @@ pub(crate) fn extract_page(doc: &Document, page_id: ObjectId) -> PageContent {
                 }
             }
             "cm" if a.len() == 6 => {
-                let m = [num(&a[0]), num(&a[1]), num(&a[2]), num(&a[3]), num(&a[4]), num(&a[5])];
+                let m = [
+                    num(&a[0]),
+                    num(&a[1]),
+                    num(&a[2]),
+                    num(&a[3]),
+                    num(&a[4]),
+                    num(&a[5]),
+                ];
                 ctm = mat_mul(m, ctm);
             }
             "BT" => {
@@ -496,7 +577,14 @@ pub(crate) fn extract_page(doc: &Document, page_id: ObjectId) -> PageContent {
                 tm = tlm;
             }
             "Tm" if a.len() == 6 => {
-                tm = [num(&a[0]), num(&a[1]), num(&a[2]), num(&a[3]), num(&a[4]), num(&a[5])];
+                tm = [
+                    num(&a[0]),
+                    num(&a[1]),
+                    num(&a[2]),
+                    num(&a[3]),
+                    num(&a[4]),
+                    num(&a[5]),
+                ];
                 tlm = tm;
             }
             "TL" if a.len() == 1 => leading = num(&a[0]),
@@ -556,8 +644,12 @@ pub(crate) fn extract_page(doc: &Document, page_id: ObjectId) -> PageContent {
 /// decoding — used only to detect the presence of a text layer. This is robust
 /// where `extract_text` returns empty (CID fonts).
 pub(crate) fn shown_text_bytes(doc: &Document, page_id: ObjectId) -> usize {
-    let Ok(data) = doc.get_page_content(page_id) else { return 0 };
-    let Ok(content) = Content::decode(&data) else { return 0 };
+    let Ok(data) = doc.get_page_content(page_id) else {
+        return 0;
+    };
+    let Ok(content) = Content::decode(&data) else {
+        return 0;
+    };
     let mut bytes = 0;
     for op in &content.operations {
         match op.operator.as_str() {
@@ -621,14 +713,22 @@ pub(crate) fn page_text(doc: &Document, page_id: ObjectId, page_num: u32) -> Pag
             big_font = big_font_texts(&pc);
         }
     }
-    PageText { blocks, born_digital, big_font }
+    PageText {
+        blocks,
+        born_digital,
+        big_font,
+    }
 }
 
 /// Reconstruct paragraph-blocks from positioned runs (used as the CID fallback;
 /// geometry is clean on born-digital pages). Lines are clustered by y, then
 /// merged into blocks at large vertical gaps or first-line indents.
 fn blocks_from_runs(p: &PageContent) -> Vec<String> {
-    let mut runs: Vec<&TextRun> = p.runs.iter().filter(|r| !r.text.trim().is_empty()).collect();
+    let mut runs: Vec<&TextRun> = p
+        .runs
+        .iter()
+        .filter(|r| !r.text.trim().is_empty())
+        .collect();
     if runs.is_empty() {
         return Vec::new();
     }
@@ -663,9 +763,10 @@ fn blocks_from_runs(p: &PageContent) -> Vec<String> {
                 continue;
             }
             if let Some(pe) = prev_end
-                && r.x - pe > r.font_size * 0.2 {
-                    text.push(' ');
-                }
+                && r.x - pe > r.font_size * 0.2
+            {
+                text.push(' ');
+            }
             text.push_str(t);
             prev_end = Some(r.end_x);
         }
@@ -675,10 +776,19 @@ fn blocks_from_runs(p: &PageContent) -> Vec<String> {
         }
         let font = group.iter().map(|r| r.font_size).fold(0.0, f32::max);
         let x = group.iter().map(|r| r.x).fold(f32::INFINITY, f32::min);
-        lines.push(Line { y: y0, x, font, text });
+        lines.push(Line {
+            y: y0,
+            x,
+            font,
+            text,
+        });
     }
 
-    let mut gaps: Vec<f32> = lines.windows(2).map(|w| w[0].y - w[1].y).filter(|g| *g > 0.0).collect();
+    let mut gaps: Vec<f32> = lines
+        .windows(2)
+        .map(|w| w[0].y - w[1].y)
+        .filter(|g| *g > 0.0)
+        .collect();
     gaps.sort_by(f32::total_cmp);
     let median_gap = gaps.get(gaps.len() / 2).copied().unwrap_or(0.0);
     let left = lines.iter().map(|l| l.x).fold(f32::INFINITY, f32::min);
@@ -688,7 +798,9 @@ fn blocks_from_runs(p: &PageContent) -> Vec<String> {
     let mut prev_y: Option<f32> = None;
     for l in &lines {
         let new_para = cur.is_empty()
-            || prev_y.map(|py| median_gap > 0.0 && py - l.y > median_gap * 1.6).unwrap_or(false)
+            || prev_y
+                .map(|py| median_gap > 0.0 && py - l.y > median_gap * 1.6)
+                .unwrap_or(false)
             || l.x > left + l.font;
         if new_para {
             if !cur.trim().is_empty() {
@@ -713,7 +825,13 @@ fn blocks_from_runs(p: &PageContent) -> Vec<String> {
 pub(crate) fn letters_only(s: &str) -> String {
     let lettered: String = s
         .chars()
-        .map(|c| if c.is_alphabetic() { c.to_ascii_lowercase() } else { ' ' })
+        .map(|c| {
+            if c.is_alphabetic() {
+                c.to_ascii_lowercase()
+            } else {
+                ' '
+            }
+        })
         .collect();
     lettered.split_whitespace().collect::<Vec<_>>().join(" ")
 }
@@ -751,10 +869,15 @@ fn has_full_page_image(doc: &Document, page_id: ObjectId) -> bool {
     else {
         return false;
     };
-    let Some(xobjects) = resources.get(b"XObject").ok().and_then(|o| match o {
-        Object::Reference(id) => doc.get_object(*id).ok(),
-        other => Some(other),
-    }).and_then(|o| o.as_dict().ok()) else {
+    let Some(xobjects) = resources
+        .get(b"XObject")
+        .ok()
+        .and_then(|o| match o {
+            Object::Reference(id) => doc.get_object(*id).ok(),
+            other => Some(other),
+        })
+        .and_then(|o| o.as_dict().ok())
+    else {
         return false;
     };
     for (_n, v) in xobjects.iter() {
@@ -772,8 +895,18 @@ fn has_full_page_image(doc: &Document, page_id: ObjectId) -> bool {
         if !is_image {
             continue;
         }
-        let area = stream.dict.get(b"Width").ok().and_then(|o| o.as_i64().ok()).unwrap_or(0)
-            * stream.dict.get(b"Height").ok().and_then(|o| o.as_i64().ok()).unwrap_or(0);
+        let area = stream
+            .dict
+            .get(b"Width")
+            .ok()
+            .and_then(|o| o.as_i64().ok())
+            .unwrap_or(0)
+            * stream
+                .dict
+                .get(b"Height")
+                .ok()
+                .and_then(|o| o.as_i64().ok())
+                .unwrap_or(0);
         if area > 400_000 {
             return true; // ~ a full page of pixels
         }

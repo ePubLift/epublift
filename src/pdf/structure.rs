@@ -69,7 +69,10 @@ pub(crate) fn build_book(pages: &[PageText]) -> Vec<Chapter> {
                     })
                     .sum();
                 if body >= MIN_CHAPTER_BODY {
-                    chapters.push(Chapter { title: Some(h.clone()), paragraphs: Vec::new() });
+                    chapters.push(Chapter {
+                        title: Some(h.clone()),
+                        paragraphs: Vec::new(),
+                    });
                 } else {
                     chapters.last_mut().unwrap().paragraphs.push(h.clone());
                 }
@@ -112,12 +115,16 @@ fn recurring_templates(pages: &[PageText]) -> HashSet<String> {
             *freq.entry(template(first)).or_default() += 1;
         }
         if page.blocks.len() > 1
-            && let Some(last) = page.blocks.last() {
-                *freq.entry(template(last)).or_default() += 1;
-            }
+            && let Some(last) = page.blocks.last()
+        {
+            *freq.entry(template(last)).or_default() += 1;
+        }
     }
     let threshold = (pages.len() / 30).max(5);
-    freq.into_iter().filter(|(t, n)| t.len() > 3 && *n >= threshold).map(|(t, _)| t).collect()
+    freq.into_iter()
+        .filter(|(t, n)| t.len() > 3 && *n >= threshold)
+        .map(|(t, _)| t)
+        .collect()
 }
 
 fn clean_block(block: &str, dehyphen: &Regex) -> String {

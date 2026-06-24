@@ -108,7 +108,11 @@ pub fn import(input: &Path, output: &Path, opts: &ImportOptions) -> Result<Impor
     // PDF 1.5 object stream lopdf can't resolve, or an unsupported encoding) —
     // refuse rather than emit a garbage (and invalid-XML) EPUB.
     let (mut nonspace, mut letters) = (0usize, 0usize);
-    for ch in chapters.iter().flat_map(|c| c.paragraphs.iter()).flat_map(|p| p.chars()) {
+    for ch in chapters
+        .iter()
+        .flat_map(|c| c.paragraphs.iter())
+        .flat_map(|p| p.chars())
+    {
         if !ch.is_whitespace() {
             nonspace += 1;
             if ch.is_alphabetic() {

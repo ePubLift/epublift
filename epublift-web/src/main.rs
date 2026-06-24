@@ -559,8 +559,12 @@ async fn import(
     let (mut resp, out_bytes) =
         result.map_err(|e| bad_request(format!("could not import this PDF: {e}")))?;
 
-    resp.download_token =
-        stash(&state, resp.output_name.clone(), out_bytes, "application/epub+zip");
+    resp.download_token = stash(
+        &state,
+        resp.output_name.clone(),
+        out_bytes,
+        "application/epub+zip",
+    );
     Ok(Json(resp))
 }
 

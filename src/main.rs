@@ -377,7 +377,10 @@ fn run_import(args: &ImportArgs) -> Result<()> {
         .output
         .clone()
         .unwrap_or_else(|| args.input.with_extension("epub"));
-    let opts = ImportOptions { mode, language: args.language.clone() };
+    let opts = ImportOptions {
+        mode,
+        language: args.language.clone(),
+    };
     let summary = pdf::import(&args.input, &output, &opts)?;
     eprintln!(
         "[EXPERIMENTAL] imported {} → {} ({} chapters, {} paragraphs)",
