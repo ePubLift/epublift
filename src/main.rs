@@ -153,6 +153,32 @@ enum Command {
     /// Restore `.eparc` archive(s) back to a content-exact `.epub`.
     #[cfg(feature = "archival")]
     Restore(RestoreArgs),
+    /// [EXPERIMENTAL] Import a PDF into a reflowable EPUB.
+    #[cfg(feature = "pdf")]
+    Import(ImportArgs),
+}
+
+/// `epublift import …` — [EXPERIMENTAL] convert a PDF to a reflow EPUB.
+/// See docs/pdf-import.md.
+#[cfg(feature = "pdf")]
+#[derive(clap::Args, Debug)]
+struct ImportArgs {
+    /// Path to the input PDF.
+    #[arg(short, long)]
+    input: PathBuf,
+
+    /// Path to write the EPUB (default: alongside the PDF).
+    #[arg(short, long)]
+    output: Option<PathBuf>,
+
+    /// Output layout: "reflow" (default, a real reflowable ebook) or "fixed"
+    /// (preserve the page images — picture books, comics).
+    #[arg(long, default_value = "reflow", value_name = "reflow|fixed")]
+    mode: String,
+
+    /// Content language (BCP-47, e.g. "tr"). Used for de-hyphenation/metadata.
+    #[arg(long)]
+    language: Option<String>,
 }
 
 /// `epublift meta …` — read or edit a book's metadata. See docs/metadata.md.
@@ -330,9 +356,37 @@ fn run(args: Args) -> Result<()> {
         Some(Command::Archive(a)) => return run_archive(a),
         #[cfg(feature = "archival")]
         Some(Command::Restore(r)) => return run_restore(r),
+        #[cfg(feature = "pdf")]
+        Some(Command::Import(i)) => return run_import(i),
         None => {}
     }
     run_convert(args)
+}
+
+/// `epublift import` — [EXPERIMENTAL] convert a PDF to a reflow EPUB.
+#[cfg(feature = "pdf")]
+fn run_import(args: &ImportArgs) -> Result<()> {
+    use epublift::pdf::{self, ImportOptions, Mode};
+
+    let mode = match args.mode.as_str() {
+        "fixed" => Mode::Fixed,
+        "reflow" => Mode::Reflow,
+        other => anyhow::bail!("unknown --mode '{other}' (expected 'reflow' or 'fixed')"),
+    };
+    let output = args
+        .output
+        .clone()
+        .unwrap_or_else(|| args.input.with_extension("epub"));
+    let opts = ImportOptions { mode, language: args.language.clone() };
+    let summary = pdf::import(&args.input, &output, &opts)?;
+    eprintln!(
+        "[EXPERIMENTAL] imported {} → {} ({} chapters, {} paragraphs)",
+        args.input.display(),
+        output.display(),
+        summary.chapters,
+        summary.paragraphs,
+    );
+    Ok(())
 }
 
 /// `epublift meta …` — read or edit a book's metadata.

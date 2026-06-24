@@ -17,6 +17,13 @@ Thumbs.db
 *.epub
 *_report.txt
 
+# Scanned-book inputs for the OCR spike (often copyrighted) — never commit.
+*.pdf
+/tests/ocr-samples/
+
+# OCR/PDF research spikes — throwaway standalone crates kept locally only.
+/spikes/
+
 # Local environment (secrets like GOOGLE_BOOKS_API_KEY) — never commit your real
 # .env; the .env.example template IS committed.
 .env

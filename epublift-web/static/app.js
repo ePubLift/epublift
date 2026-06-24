@@ -46,8 +46,10 @@ const MODE_CFG = {
   optimize: { accept: '.epub',  dropKey: 'drop_title',       hKey: 'opt_h',         ctaKey: 'cta',         workKey: 'cta_working',         readyKey: 'res_ready',         endpoint: '/convert' },
   archive:  { accept: '.epub',  dropKey: 'drop_title',       hKey: 'opt_h_archive', ctaKey: 'cta_archive', workKey: 'cta_working_archive', readyKey: 'res_ready_archive', endpoint: '/archive' },
   restore:  { accept: '.eparc', dropKey: 'drop_title_eparc', hKey: 'opt_h_restore', ctaKey: 'cta_restore', workKey: 'cta_working_restore', readyKey: 'res_ready_restore', endpoint: '/restore' },
+  import:   { accept: '.pdf',   dropKey: 'drop_title_pdf',   hKey: 'opt_h_import',  ctaKey: 'cta_import',  workKey: 'cta_working_import',  readyKey: 'res_ready_import',  endpoint: '/import' },
   metadata: { accept: '.epub',  dropKey: 'drop_title' },
 };
+const importLang = document.getElementById('importLang');
 
 // Metadata editor elements.
 const ctaRow = document.getElementById('ctaRow');
@@ -99,6 +101,7 @@ function applyMode(m){
   mStatus.textContent = ''; mStatus.classList.remove('warn');
 
   updateOptionVisibility();
+  localizeBookLangs();
 
   // A file picked for one type rarely fits another (.epub vs .eparc) — start fresh.
   selectedFile = null; file.value = ''; chip.classList.remove('show');
@@ -184,6 +187,8 @@ go.addEventListener('click', async () => {
         fd.append('kepub', kepub.checked ? 'true' : 'false');
         fd.append('keep_images', keepImages.checked ? 'true' : 'false');
       }
+    } else if (mode === 'import'){
+      if (importLang) fd.append('language', importLang.value);
     }
     // archive sends only the file.
     const res = await fetch(cfg.endpoint, { method:'POST', body: fd });
@@ -246,6 +251,12 @@ function renderResult(m, data){
     resultSub.innerHTML = fill('sub_archive', {
       c: '<b>' + data.compressed_entries + '</b>',
       s: '<b>' + data.stored_entries + '</b>',
+    });
+  } else if (m === 'import'){
+    resultSub.innerHTML = fill('sub_import', {
+      c: '<b>' + data.chapters + '</b>',
+      p: '<b>' + data.paragraphs + '</b>',
+      size: '<b>' + fmtBytes(data.final_size) + '</b>',
     });
   } else { // restore
     const sizeStr = '<b>' + fmtBytes(data.output_size) + '</b>';
@@ -335,6 +346,7 @@ document.addEventListener('i18n:change', () => {
   rtxt.textContent = report.classList.contains('open') ? T('report_hide') : T('report_view');
   if (result.classList.contains('show') && mode === 'optimize') fillReportLabels();
   updateDateHint(); // re-append the localized date format hint after applyStatic
+  localizeBookLangs(); // re-localize the book-language names to the new UI language
 });
 
 // Footer build info: link the version to its GitHub release, and (when known)
@@ -371,6 +383,25 @@ async function errMsg(res){
 function setv(id, val){ document.getElementById(id).value = (val == null) ? '' : val; }
 function seriesStr(s){ return s ? (s.position ? s.name + ':' + s.position : s.name) : ''; }
 function curLang(){ return (window.i18n && window.i18n.lang) ? window.i18n.lang : 'en'; }
+
+// Localize the "Book language" <select> labels into the CURRENT PAGE language
+// (e.g. a Turkish UI shows "İngilizce, Almanca…"). The user is choosing the
+// book's language here, not the page language, so the names follow the page
+// language — unlike the top-right UI-language switcher, which uses endonyms.
+// Uses the browser's built-in Intl.DisplayNames (no translation tables); older
+// browsers keep the native-name fallbacks baked into the HTML.
+function localizeBookLangs(){
+  if (!importLang) return;
+  let dn;
+  try { dn = new Intl.DisplayNames([curLang()], { type: 'language' }); }
+  catch (_) { return; }
+  Array.from(importLang.options).forEach(o => {
+    try {
+      const name = dn.of(o.value);
+      if (name) o.textContent = name.charAt(0).toLocaleUpperCase(curLang()) + name.slice(1);
+    } catch (_) { /* keep the HTML fallback for this option */ }
+  });
+}
 
 // --- author name: show as "First Last" (flip a single-comma "Last, First") ---
 function authorDisplay(name){

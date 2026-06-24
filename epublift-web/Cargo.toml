@@ -22,7 +22,8 @@ publish = false
 # web UI's "Target version: 3.4" option works. `metadata` adds ISBN enrichment
 # (Open Library) for the metadata editor. Both pure Rust (zenavif/zenjxl;
 # rustls + RustCrypto — no C).
-epublift = { path = "..", features = ["epub34", "metadata"] }
+# `pdf` adds the experimental PDF → EPUB importer (text tiers; OCR not yet).
+epublift = { path = "..", features = ["epub34", "metadata", "pdf"] }
 axum = { version = "0.8", features = ["multipart"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal"] }
 tower = "0.5"

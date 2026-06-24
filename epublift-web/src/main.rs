@@ -158,6 +158,7 @@ async fn main() {
         .route("/healthz", get(|| async { "ok" }))
         .route("/version", get(version))
         .route("/convert", post(convert))
+        .route("/import", post(import))
         .route("/archive", post(archive))
         .route("/restore", post(restore))
         .route("/meta/read", post(meta_read))
@@ -488,6 +489,88 @@ async fn convert(
     resp.download_token = token;
 
     Ok(Json(resp))
+}
+
+/// [EXPERIMENTAL] Import a PDF into a reflow EPUB (text tiers; OCR not yet).
+async fn import(
+    State(state): State<Arc<AppState>>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    mut multipart: Multipart,
+) -> Result<Json<ImportResponse>, ApiError> {
+    if !state.limiter.allow(client_ip(&headers, peer)) {
+        return Err(ApiError(
+            StatusCode::TOO_MANY_REQUESTS,
+            "Too many requests — please wait a moment and try again.".into(),
+        ));
+    }
+
+    let (file_bytes, raw_name, fields) = read_upload(&mut multipart).await?;
+    let file_name = if raw_name.trim().is_empty() {
+        "book.pdf".to_string()
+    } else {
+        raw_name
+    };
+    let language = fields
+        .get("language")
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    let mode = match fields.get("mode").map(|s| s.trim()) {
+        Some("fixed") => epublift::pdf::Mode::Fixed,
+        _ => epublift::pdf::Mode::Reflow,
+    };
+
+    // Bound concurrent jobs (shares the convert pool).
+    let _permit = state
+        .convert_slots
+        .acquire()
+        .await
+        .map_err(|_| ApiError(StatusCode::SERVICE_UNAVAILABLE, "server busy".into()))?;
+
+    // Throwaway temp dir, deleted when the task ends. No upload is persisted.
+    let result =
+        tokio::task::spawn_blocking(move || -> anyhow::Result<(ImportResponse, Vec<u8>)> {
+            let tmp = tempfile::Builder::new().prefix("epublift_web_").tempdir()?;
+            let input_path = tmp.path().join(&file_name);
+            std::fs::write(&input_path, &file_bytes)?;
+            let out_path = input_path.with_extension("epub");
+
+            let opts = epublift::pdf::ImportOptions { mode, language };
+            let summary = epublift::pdf::import(&input_path, &out_path, &opts)?;
+            let out_bytes = std::fs::read(&out_path)?;
+
+            let resp = ImportResponse {
+                output_name: out_path
+                    .file_name()
+                    .map(|s| s.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| "book.epub".into()),
+                chapters: summary.chapters,
+                paragraphs: summary.paragraphs,
+                final_size: out_bytes.len() as u64,
+                download_token: String::new(), // filled in below
+            };
+            Ok((resp, out_bytes))
+        })
+        .await
+        .map_err(|_| ApiError(StatusCode::INTERNAL_SERVER_ERROR, "import crashed".into()))?;
+
+    // Most failures are scans needing OCR, CID-font PDFs, or non-PDFs — surface
+    // the library's helpful message as a client error.
+    let (mut resp, out_bytes) =
+        result.map_err(|e| bad_request(format!("could not import this PDF: {e}")))?;
+
+    resp.download_token =
+        stash(&state, resp.output_name.clone(), out_bytes, "application/epub+zip");
+    Ok(Json(resp))
+}
+
+#[derive(Serialize)]
+struct ImportResponse {
+    output_name: String,
+    chapters: usize,
+    paragraphs: usize,
+    final_size: u64,
+    download_token: String,
 }
 
 /// Stash a finished file in memory for one short-lived token download.

@@ -30,6 +30,8 @@ mod kepub;
 pub mod meta;
 mod nav;
 mod opf;
+#[cfg(feature = "pdf")]
+pub mod pdf;
 mod report;
 mod util;
 #[cfg(feature = "zstd-experimental")]

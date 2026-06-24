@@ -1,5 +1,8 @@
 [workspace]
 members = [".", "epublift-web"]
+# Throwaway OCR research crates live under spikes/ with their own Cargo.lock so
+# they never affect the shipped binary's dependency graph.
+exclude = ["spikes"]
 resolver = "2"
 
 [package]
@@ -70,6 +73,9 @@ zenwebp = "0.4"
 quick-xml = "0.40"
 roxmltree = "0.21"
 regex = "1"
+# [EXPERIMENTAL] PDF import (`epublift import`): read text/images from a PDF.
+# Optional so the default build doesn't carry it. See src/pdf/.
+lopdf = { version = "0.34", optional = true }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 tempfile = "3"
 walkdir = "2"
@@ -140,6 +146,12 @@ metadata = [
 # Pure Rust imazen codecs (zenavif + zenjxl, unified by zencodec); opt-in so the
 # default build stays 3.3.
 epub34 = ["dep:zenavif", "dep:zenjxl", "dep:rgb", "dep:imgref", "dep:almost-enough"]
+# [EXPERIMENTAL] PDF → EPUB import (`epublift import`). `pdf` = the text tiers
+# (born-digital PDFs + scans that already carry a text layer); pure Rust, light.
+# `pdf-ocr` will add OCR for scans with no text layer (a later phase: ocrs +
+# rten + model download). Opt-in so the default build stays lean. See src/pdf/.
+pdf = ["dep:lopdf"]
+pdf-ocr = ["pdf"]
 # Compile in the experimental `--zstd` packaging + decoder (pure Rust).
 zstd-experimental = ["dep:structured-zstd", "dep:crc32fast"]
 # Additionally compile the C libzstd reference backend for the benchmark only.

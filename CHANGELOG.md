@@ -11,6 +11,19 @@ are tagged with the component they belong to.
 ## [Unreleased]
 
 ### Added
+- **[EXPERIMENTAL] PDF → EPUB import** (`epublift import`, web **Import PDF**
+  mode) — turns a PDF into a reflowable EPUB. Handles PDFs that carry a text
+  layer: born-digital books and already-searchable scans (archive.org / Google
+  Books), including modern **Type0/CID** fonts decoded via the font's own
+  `/ToUnicode` CMap. **Accurate word spacing** from real glyph widths
+  (`/Widths`, `/W`) — a born-digital test book matched the publisher's own EPUB
+  at ~99.8% word overlap. Structure recovery strips running heads/footers + page
+  numbers, de-hyphenates line breaks, reassembles paragraphs, and detects
+  chapter headings → spine + ToC. Scanned PDFs with no text layer are detected
+  and report that OCR is coming in a later release (no broken output). Pure-Rust,
+  behind the opt-in **`pdf`** build feature (the pre-built CLI binary includes
+  it); the web UI ships the **Import PDF** tab in all 13 languages. See
+  `docs/pdf-import.md`.
 - **Reader compatibility doc** (`docs/device-compatibility.md`) — which readers
   render which image formats, with an **Our recommendation** column mapping each
   reader to the right flags. A *Verified by us* table (first-hand: Kobo Forma/Sage

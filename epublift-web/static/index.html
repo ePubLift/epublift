@@ -408,6 +408,9 @@
       <button type="button" class="mode" data-mode="metadata" role="tab" aria-selected="false">
         <span data-i18n="mode_metadata">Metadata</span><small data-i18n="mode_metadata_sub">edit · ISBN</small>
       </button>
+      <button type="button" class="mode" data-mode="import" role="tab" aria-selected="false">
+        <span data-i18n="mode_import">Import PDF</span><small data-i18n="mode_import_sub">.pdf → .epub</small>
+      </button>
     </div>
     <div class="panel-grid">
       <!-- dropzone -->
@@ -446,6 +449,30 @@
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 1.5v6M8 10v.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M8 1.5l5.5 2.4v3.5c0 3.3-2.3 5.6-5.5 6.6-3.2-1-5.5-3.3-5.5-6.6V3.9L8 1.5z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
             <span data-i18n="archive_note">An .eparc is an archive, not a readable e-book — it won't open in a reader. Keep it for storage and Restore it when you want to read.</span>
           </p>
+        </div>
+
+        <!-- import: experimental PDF -> reflow EPUB -->
+        <div class="modeinfo" data-modes="import">
+          <p data-i18n-html="import_lede">Turn a <b>PDF</b> into a reflowable <b>EPUB</b>. Works for PDFs that have a text layer — born-digital books and scans that are already searchable. Scan-only PDFs need OCR, which is coming in a later release.</p>
+          <p class="opt-note">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 1.5v6M8 10v.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M8 1.5l5.5 2.4v3.5c0 3.3-2.3 5.6-5.5 6.6-3.2-1-5.5-3.3-5.5-6.6V3.9L8 1.5z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
+            <span data-i18n="import_note">Experimental. Quality depends on the PDF; tables and equations are best kept as images for now.</span>
+          </p>
+          <div class="field-label" style="margin-top:14px;">
+            <span data-i18n="import_lang_label">Book language</span>
+          </div>
+          <select id="importLang" style="width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--line,#e4ded4);background:#fff;font:inherit;color:inherit;">
+            <option value="en">English</option>
+            <option value="tr">Türkçe</option>
+            <option value="de">Deutsch</option>
+            <option value="fr">Français</option>
+            <option value="es">Español</option>
+            <option value="it">Italiano</option>
+            <option value="pt">Português</option>
+            <option value="nl">Nederlands</option>
+            <option value="pl">Polski</option>
+            <option value="ru">Русский</option>
+          </select>
         </div>
 
         <!-- restore: intro + optional modernize -->

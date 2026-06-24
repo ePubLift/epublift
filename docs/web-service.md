@@ -23,6 +23,11 @@ choose a mode from the switcher at the top of the panel:
   Apple Books recognize it. The lookup runs server-side over a pure-Rust TLS
   client (no C). Google Books needs an API key for reliable use — see
   [Configuration](#configuration-env).
+- **Import PDF** *(experimental)* — turn a [PDF into a reflowable EPUB](pdf-import.md):
+  drop a `.pdf`, pick the book's language, convert. Works for PDFs that carry a
+  text layer (born-digital books and already-searchable scans), including modern
+  Type0/CID fonts. Scanned-only PDFs need OCR, a later phase — they're detected
+  and reported, never silently broken.
 
 It's powered by the same pure-Rust core, and every upload is processed **in memory
 and deleted immediately** — nothing is ever stored or logged, in any mode. The
