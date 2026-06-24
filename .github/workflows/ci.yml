@@ -49,8 +49,8 @@ jobs:
       # (pure Rust, no C). Build + test it too so it doesn't rot. The C ceiling
       # (`zstd-c-bench`) is intentionally NOT built in CI — it pulls libzstd and
       # is a local dev convenience only.
-      - name: Clippy (zstd-experimental)
-        run: cargo clippy --all-targets --locked --features zstd-experimental -- -D warnings
+      - name: Clippy (zstd-experimental + pdf)
+        run: cargo clippy --all-targets --locked --features zstd-experimental,pdf -- -D warnings
 
-      - name: Test (zstd-experimental)
-        run: cargo test --all-targets --locked --features zstd-experimental
+      - name: Test (zstd-experimental + pdf)
+        run: cargo test --all-targets --locked --features zstd-experimental,pdf

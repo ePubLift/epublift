@@ -111,11 +111,10 @@ fn recurring_templates(pages: &[PageText]) -> HashSet<String> {
         if let Some(first) = page.blocks.first() {
             *freq.entry(template(first)).or_default() += 1;
         }
-        if page.blocks.len() > 1 {
-            if let Some(last) = page.blocks.last() {
+        if page.blocks.len() > 1
+            && let Some(last) = page.blocks.last() {
                 *freq.entry(template(last)).or_default() += 1;
             }
-        }
     }
     let threshold = (pages.len() / 30).max(5);
     freq.into_iter().filter(|(t, n)| t.len() > 3 && *n >= threshold).map(|(t, _)| t).collect()

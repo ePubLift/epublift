@@ -100,12 +100,11 @@ fn media_box(doc: &Document, page_id: ObjectId) -> (f32, f32) {
     let mut cur = doc.get_object(page_id).ok().and_then(|o| o.as_dict().ok());
     for _ in 0..16 {
         let Some(dict) = cur else { break };
-        if let Ok(arr) = dict.get(b"MediaBox").and_then(|o| o.as_array()) {
-            if arr.len() == 4 {
+        if let Ok(arr) = dict.get(b"MediaBox").and_then(|o| o.as_array())
+            && arr.len() == 4 {
                 let v: Vec<f32> = arr.iter().map(num).collect();
                 return ((v[2] - v[0]).abs(), (v[3] - v[1]).abs());
             }
-        }
         cur = dict
             .get(b"Parent")
             .ok()
@@ -218,7 +217,7 @@ fn font_widths(doc: &Document, dict: &Dictionary, subtype: &str) -> (HashMap<u32
 
 /// The Resources dictionary for a page, walking the Parent chain (Resources can
 /// be inherited from an ancestor node in the page tree).
-fn page_resources<'a>(doc: &'a Document, page_id: ObjectId) -> Option<&'a Dictionary> {
+fn page_resources(doc: &Document, page_id: ObjectId) -> Option<&Dictionary> {
     let mut cur = doc.get_object(page_id).ok().and_then(|o| o.as_dict().ok());
     for _ in 0..16 {
         let dict = cur?;
@@ -236,7 +235,7 @@ fn page_resources<'a>(doc: &'a Document, page_id: ObjectId) -> Option<&'a Dictio
 }
 
 /// Font name → font Dictionary for a page (resolving inherited Resources).
-fn page_font_dicts<'a>(doc: &'a Document, page_id: ObjectId) -> Vec<(Vec<u8>, &'a Dictionary)> {
+fn page_font_dicts(doc: &Document, page_id: ObjectId) -> Vec<(Vec<u8>, &Dictionary)> {
     let mut out = Vec::new();
     let Some(res) = page_resources(doc, page_id) else { return out };
     let Some(fonts) = res
@@ -663,11 +662,10 @@ fn blocks_from_runs(p: &PageContent) -> Vec<String> {
             if t.is_empty() {
                 continue;
             }
-            if let Some(pe) = prev_end {
-                if r.x - pe > r.font_size * 0.2 {
+            if let Some(pe) = prev_end
+                && r.x - pe > r.font_size * 0.2 {
                     text.push(' ');
                 }
-            }
             text.push_str(t);
             prev_end = Some(r.end_x);
         }
@@ -761,7 +759,7 @@ fn has_full_page_image(doc: &Document, page_id: ObjectId) -> bool {
     };
     for (_n, v) in xobjects.iter() {
         let Object::Reference(id) = v else { continue };
-        let Ok(stream) = doc.get_object(*id).and_then(|o| Ok(o.as_stream()?)) else {
+        let Ok(stream) = doc.get_object(*id).and_then(|o| o.as_stream()) else {
             continue;
         };
         let is_image = stream
