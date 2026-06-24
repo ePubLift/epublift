@@ -5,7 +5,7 @@
 [![Release](https://img.shields.io/github/v/release/ePubLift/epublift)](https://github.com/ePubLift/epublift/releases)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](http://makeapullrequest.com)
 
-A fast, standard-compliant tool written in **Rust** to modernize, optimize, and significantly shrink EPUB files. Today it upgrades legacy **EPUB 2.0** structures to the **EPUB 3.3** specification and re-encodes heavy raster images (JPEG/PNG) into compact **WebP** — with support for newer EPUB versions and next-generation image formats (AVIF / JPEG XL) planned on the [roadmap](ROADMAP.md). It can also produce **Kobo `.kepub`** files for richer reading features on Kobo devices, and a **`--keep-images`** mode for readers that don't render WebP.
+A fast, standard-compliant tool written in **Rust** to modernize, optimize, and significantly shrink EPUB files. Today it upgrades legacy **EPUB 2.0** structures to the **EPUB 3.3** specification and re-encodes heavy raster images (JPEG/PNG) into compact **WebP** — with support for newer EPUB versions and next-generation image formats (AVIF / JPEG XL) planned on the [roadmap](ROADMAP.md). It can also produce **Kobo `.kepub`** files for richer reading features on Kobo devices, and a **`--keep-images`** mode for readers that don't render WebP. It can even **import a PDF into a reflowable EPUB** *(experimental)* — adjustable font, search, and bookmarks instead of a fixed-page document.
 
 Use it as a **command-line tool**, as a **library**, or as a self-hostable **web service** — try the hosted instance at **<https://epublift.itpax.net>** or [run your own with Docker](#-hosted-web-service-epublift-web).
 
@@ -134,6 +134,16 @@ You can optionally install it onto your `PATH`:
 cargo install --path .
 ```
 
+**Optional features** (all pure-Rust; bundled in the pre-built binaries, opt-in when building yourself):
+
+```bash
+cargo build --release --features metadata,epub34,pdf
+```
+
+- `metadata` — `meta enrich` ISBN lookup (Open Library / Google Books)
+- `epub34` — experimental EPUB 3.4 image codecs (AVIF / JPEG XL)
+- `pdf` — experimental `import` (PDF → reflowable EPUB)
+
 ---
 
 ## 🚀 Usage
@@ -173,7 +183,7 @@ Lossless, runs anywhere from a Raspberry Pi to a NAS. Full guide: **[Archiving g
 
 ## 🌐 Hosted Web Service (`epublift-web`)
 
-Drag-and-drop an EPUB in your browser and pick a mode: **Optimize** (modernize to EPUB 3.3 + WebP, with an in-page audit report), **Archive** a book to a compact `.eparc`, or **Restore** an `.eparc` back to a working `.epub` — content-exact by default, or modernized on the way out. The same pure-Rust core, with uploads processed **in memory and deleted immediately** (nothing stored or logged). Available in **13 languages**.
+Drag-and-drop a book in your browser and pick a mode: **Optimize** (modernize to EPUB 3.3 + WebP, with an in-page audit report), **Archive** a book to a compact `.eparc`, **Restore** an `.eparc` back to a working `.epub` (content-exact by default, or modernized on the way out), fix a book's **Metadata** (hand-edit or ISBN auto-fill), or **Import PDF** — turn a PDF into a reflowable EPUB *(experimental)*. The same pure-Rust core, with uploads processed **in memory and deleted immediately** (nothing stored or logged). Available in **13 languages**.
 
 > 💡 Hosted instance: **<https://epublift.itpax.net>**. Or self-host in one command:
 
@@ -188,6 +198,8 @@ The full hardening profile, reverse-proxy/TLS setup, and the privacy/security mo
 ## 📚 Documentation
 
 - **[Usage guide](docs/usage.md)** — every flag, per-situation recipes, sandbox testing.
+- **[PDF import guide](docs/pdf-import.md)** — `import`: turn a PDF into a reflowable EPUB (experimental).
+- **[Metadata guide](docs/metadata.md)** — `meta` show / set / enrich (ISBN auto-fill, language-aware).
 - **[Archiving guide](docs/archiving.md)** — `archive` / `restore` and the `.eparc` format.
 - **[Web service guide](docs/web-service.md)** — self-hosting `epublift-web`.
 - **[Reader compatibility](docs/device-compatibility.md)** — which readers render which image formats (why `--keep-images` exists), verified on real hardware.

@@ -9,8 +9,9 @@ specification and the surrounding tooling evolve. Versioning follows
 
 A fast, fully open, **pure-Rust** toolkit that modernizes EPUB files — upgrading
 legacy structures to current standards and shrinking file size with modern image
-codecs — usable both from the command line and, eventually, from a friendly
-drag-and-drop desktop app. No C toolchain, no system libraries, no surprises.
+codecs — and now also **imports PDFs into reflowable EPUBs**, usable both from the
+command line and, eventually, from a friendly drag-and-drop desktop app. No C
+toolchain, no system libraries, no surprises.
 
 ---
 
@@ -251,6 +252,37 @@ Design & full field map: [`docs/metadata.md`](docs/metadata.md).
 - [ ] *(Long-term, optional)* **Upstream contribution** — feed the skip/coverage
       reports back to **Open Library** to improve Turkish/Korean records over time
       (a team effort, parallel to the tool — not a prerequisite for shipping).
+
+---
+
+## ✅ Shipped — PDF → EPUB import (experimental) — cli-v1.7.0 · web-v1.8.0
+
+Goal: answer the **most-requested** capability after launch — turn a PDF into a
+**reflowable** EPUB you can actually read on a small screen (adjustable font,
+search, bookmarks) instead of a fixed-page document. Behind the opt-in `pdf`
+build feature. Design & usage: [`docs/pdf-import.md`](docs/pdf-import.md).
+
+- [x] **`import` subcommand** (`epublift import -i book.pdf`) + a web **Import
+      PDF** mode (all 13 UI languages). Classifies the input and handles the two
+      tiers that carry text: born-digital PDFs and scans with an existing text
+      layer (archive.org / Google Books / searchable PDFs).
+- [x] **Modern font support** — composite **Type0/CID** fonts decoded via the
+      font's own `/ToUnicode` CMap (common in non-Latin, incl. Turkish, PDFs),
+      with a font resolver that walks inherited resources where lopdf falls short.
+- [x] **Accurate word spacing** from real glyph widths (`/Widths`, `/W`) — a
+      born-digital test book matched the publisher's own EPUB at ~99.8% word
+      overlap.
+- [x] **Structure recovery** — strip recurring running heads/footers + page
+      numbers, de-hyphenate line breaks, reassemble paragraphs, detect chapter
+      headings → spine + ToC. A **quality gate** refuses with a clear message
+      rather than emit a broken EPUB when a PDF can't be decoded.
+- [ ] *(Next)* **OCR for image-only scans** (`pdf-ocr` feature) — pure-Rust OCR
+      with on-demand model download, for PDFs that carry no text layer at all.
+- [ ] *(Later)* **Figures, tables, equations** — carry figures over verbatim and
+      keep tables/equations as images; structured tables / MathML eventually.
+- [ ] *(Later)* **Object-stream PDFs** — some PDF-1.5 files store their fonts in
+      object streams the current parser can't resolve; detected and reported for
+      now (no broken output).
 
 ---
 
