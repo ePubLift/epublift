@@ -10,11 +10,19 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+## [cli-v1.8.1] - 2026-06-26
+
 ### Fixed
 - **Kobo `.kepub` output is now named `<name>_v3.3.kepub.epub`** (was
   `<name>.kepub.epub`) — keeps the version stamp so it's easy to tell apart from
   the original, while still ending in `.kepub.epub` so Kobo treats it as a kepub.
-- **Web: the "WebP images in .kepub" toggle now implies Kobo `.kepub` output.**
+
+## [web-v1.9.1] - 2026-06-26
+
+### Fixed
+- Kobo `.kepub` downloads are now named `<name>_v3.3.kepub.epub` (was
+  `<name>.kepub.epub`) — shared with the CLI fix above.
+- **The "WebP images in .kepub" toggle now implies Kobo `.kepub` output.**
   Enabling it on its own previously produced a plain `_v3.3.epub`, which Kobo
   shows blank; the toggle now turns on `.kepub` and drives its image format
   (off = keep originals, on = WebP), and turning `.kepub` off clears it.

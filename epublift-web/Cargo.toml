@@ -11,8 +11,10 @@ name = "epublift-web"
 # 1.7.2 refreshes the landing-page copy to include the Metadata editor (13 langs);
 # 1.8.0 adds the experimental Import PDF mode (PDF → reflowable EPUB, 13 langs);
 # 1.8.1 advertises Import PDF in the landing-page hero copy (13 langs);
-# 1.8.2 carries born-digital figures into the imported EPUB (shared core).
-version = "1.9.0"
+# 1.8.2 carries born-digital figures into the imported EPUB (shared core);
+# 1.9.0 adds the "WebP images in .kepub" toggle (Kobo WebP plugin, 13 langs);
+# 1.9.1 names kepub downloads _v3.3.kepub.epub + the toggle now implies .kepub.
+version = "1.9.1"
 edition = "2024"
 license = "AGPL-3.0-or-later"
 description = "Web front-end for epublift: convert, archive, restore & edit EPUB metadata in the browser"
