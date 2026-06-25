@@ -276,10 +276,12 @@ build feature. Design & usage: [`docs/pdf-import.md`](docs/pdf-import.md).
       numbers, de-hyphenate line breaks, reassemble paragraphs, detect chapter
       headings → spine + ToC. A **quality gate** refuses with a clear message
       rather than emit a broken EPUB when a PDF can't be decoded.
+- [x] **Figures** — born-digital figures are carried into the EPUB (JPEG
+      verbatim, raw → PNG; JPEG2000/CCITT/JBIG2/CMYK skipped), placed per page.
 - [ ] *(Next)* **OCR for image-only scans** (`pdf-ocr` feature) — pure-Rust OCR
       with on-demand model download, for PDFs that carry no text layer at all.
-- [ ] *(Later)* **Figures, tables, equations** — carry figures over verbatim and
-      keep tables/equations as images; structured tables / MathML eventually.
+- [ ] *(Later)* **Tables & equations** — keep them as images (structured tables
+      / MathML eventually); plus exact figure placement + proper cover metadata.
 - [ ] *(Later)* **Object-stream PDFs** — some PDF-1.5 files store their fonts in
       object streams the current parser can't resolve; detected and reported for
       now (no broken output).

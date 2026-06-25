@@ -66,6 +66,10 @@ deletes it immediately, like every other mode.
   hyphens re-joined ("in-\ncreased" → "increased"), paragraphs reassembled, and
   chapter headings detected (font-size on born-digital pages, ALL-CAPS
   otherwise) to build the spine + table of contents.
+- **Figures** from born-digital books are carried into the EPUB — JPEG images
+  verbatim, raw images re-encoded to PNG — placed per page (after that page's
+  text). JPEG2000 / CCITT / JBIG2 / CMYK figures are skipped (no EPUB-core or
+  pure-Rust path).
 
 **Doesn't yet (known limits, honest):**
 
@@ -74,9 +78,10 @@ deletes it immediately, like every other mode.
 - **Some PDF-1.5 object-stream PDFs** whose font objects the parser can't
   resolve → detected by a quality gate (if the decoded text is mostly garbage)
   and refused with a clear message rather than emitting a broken EPUB.
-- **Figures, tables, equations** are not yet carried over — the current build
-  imports text only. Preserving figures (and keeping tables/equations as images)
-  is planned.
+- **Tables and equations** are not yet preserved (text only; keeping them as
+  images is planned). Figure **placement** is per-page (approximate), not at the
+  exact original position, and the cover image appears as the first figure rather
+  than as EPUB cover metadata.
 - **Front-matter heading noise**: scholarly scans with long bibliographies can
   produce a few spurious chapter entries. Cosmetic; the body text is unaffected.
 

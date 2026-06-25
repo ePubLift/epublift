@@ -19,8 +19,8 @@ fn sample(name: &str) -> PathBuf {
         .join(name)
 }
 
-/// Import a PDF and return (summary, all `<p>` text of the produced EPUB).
-fn import_text(pdf: &Path) -> (pdf::ImportSummary, String) {
+/// Import a PDF and return (summary, all `<p>` text, figure-image count).
+fn import_text(pdf: &Path) -> (pdf::ImportSummary, String, usize) {
     let out = std::env::temp_dir().join(format!(
         "epublift_it_{}_{}.epub",
         std::process::id(),
@@ -42,9 +42,14 @@ fn import_text(pdf: &Path) -> (pdf::ImportSummary, String) {
 
     let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
     let mut text = String::new();
+    let mut images = 0usize;
     for i in 0..zip.len() {
         let mut f = zip.by_index(i).unwrap();
-        if f.name().ends_with(".xhtml") {
+        let name = f.name().to_string();
+        if name.starts_with("OEBPS/images/") {
+            images += 1;
+        }
+        if name.ends_with(".xhtml") {
             let mut s = String::new();
             f.read_to_string(&mut s).ok();
             for part in s.split("<p>").skip(1) {
@@ -55,7 +60,7 @@ fn import_text(pdf: &Path) -> (pdf::ImportSummary, String) {
             }
         }
     }
-    (summary, text)
+    (summary, text, images)
 }
 
 #[test]
@@ -65,7 +70,7 @@ fn holmes_reflow_quality() {
         eprintln!("skip holmes_reflow_quality: {} not present", pdf.display());
         return;
     }
-    let (summary, text) = import_text(&pdf);
+    let (summary, text, images) = import_text(&pdf);
     assert!(
         summary.chapters >= 10,
         "too few chapters: {}",
@@ -86,6 +91,9 @@ fn holmes_reflow_quality() {
         !text.contains("in- creased") && !text.contains("in-  creased"),
         "de-hyphenation regressed"
     );
+    // Holmes is a searchable scan whose figures are JPEG2000 — those are
+    // skipped (not an EPUB core type), so no figures are embedded.
+    assert_eq!(images, 0, "unexpected images from a JPEG2000 scan");
 }
 
 #[test]
@@ -98,7 +106,7 @@ fn project_hail_mary_cid_spacing() {
         );
         return;
     }
-    let (_summary, text) = import_text(&pdf);
+    let (_summary, text, images) = import_text(&pdf);
     // CID/Type0 font decoded with correct, glyph-width-based word spacing
     // (the earlier "autom ated" / "bestI" artifacts must stay gone).
     assert!(
@@ -109,6 +117,9 @@ fn project_hail_mary_cid_spacing() {
         text.contains("complex problems"),
         "CID decoding/spacing regressed"
     );
+    // A born-digital book: its JPEG figures (cover + interior diagrams) are
+    // carried into the EPUB.
+    assert!(images >= 30, "figures not extracted: {images}");
     assert!(
         !text.contains("autom ated") && !text.contains("bestI"),
         "spacing artifacts returned"

@@ -687,10 +687,43 @@ pub(crate) struct PageText {
     /// Letters-only normalised texts shown in notably-large font on this page
     /// (heading candidates). Only meaningful when `born_digital`.
     pub big_font: Vec<String>,
+    /// Figure images on this page, in document order, to carry into the EPUB.
+    /// Only collected on born-digital pages (a scan page's lone full-page image
+    /// is the page itself, not a figure).
+    pub figures: Vec<Figure>,
 }
 
-/// Extract a page's clean text blocks plus heading/regime signals.
-pub(crate) fn page_text(doc: &Document, page_id: ObjectId, page_num: u32) -> PageText {
+/// An extracted figure image, ready to drop into the EPUB verbatim.
+#[derive(Debug, Clone)]
+pub(crate) struct Figure {
+    pub data: Vec<u8>,
+    pub media_type: &'static str,
+    pub ext: &'static str,
+}
+
+/// True for a born-digital document (most pages are text, not full-page
+/// images). Such a doc's full-page images are real illustrations worth keeping;
+/// a searchable-scan doc's full-page images ARE the pages, so we don't.
+pub(crate) fn born_digital_doc(doc: &Document) -> bool {
+    let pages = doc.get_pages();
+    if pages.is_empty() {
+        return false;
+    }
+    let scan = pages
+        .values()
+        .filter(|&&id| has_full_page_image(doc, id))
+        .count();
+    scan * 2 < pages.len()
+}
+
+/// Extract a page's clean text blocks plus heading/regime signals. `figures` is
+/// a doc-level decision (see [`born_digital_doc`]).
+pub(crate) fn page_text(
+    doc: &Document,
+    page_id: ObjectId,
+    page_num: u32,
+    extract_figures: bool,
+) -> PageText {
     let mut blocks: Vec<String> = doc
         .extract_text(&[page_num])
         .unwrap_or_default()
@@ -713,10 +746,149 @@ pub(crate) fn page_text(doc: &Document, page_id: ObjectId, page_num: u32) -> Pag
             big_font = big_font_texts(&pc);
         }
     }
+    // Carry over real figures when the doc is born-digital (decided once at the
+    // document level — see `born_digital_doc`).
+    let figures = if extract_figures {
+        page_figures(doc, page_id)
+    } else {
+        Vec::new()
+    };
     PageText {
         blocks,
         born_digital,
         big_font,
+        figures,
+    }
+}
+
+/// Collect a page's image XObjects as EPUB-ready figures (JPEG verbatim, raw
+/// 8-bit gray/RGB re-encoded to PNG; JPEG2000 / CCITT / JBIG2 / CMYK skipped).
+fn page_figures(doc: &Document, page_id: ObjectId) -> Vec<Figure> {
+    let mut out = Vec::new();
+    let Some(res) = page_resources(doc, page_id) else {
+        return out;
+    };
+    let Some(xobjects) = res
+        .get(b"XObject")
+        .ok()
+        .and_then(|o| deref(doc, o))
+        .and_then(|o| o.as_dict().ok())
+    else {
+        return out;
+    };
+    for (_name, val) in xobjects.iter() {
+        let Object::Reference(id) = val else { continue };
+        let Ok(stream) = doc.get_object(*id).and_then(|o| o.as_stream()) else {
+            continue;
+        };
+        let is_image = stream
+            .dict
+            .get(b"Subtype")
+            .ok()
+            .and_then(|o| o.as_name().ok())
+            .map(|n| n == b"Image")
+            .unwrap_or(false);
+        if !is_image {
+            continue;
+        }
+        if let Some(fig) = figure_from_stream(doc, stream) {
+            out.push(fig);
+        }
+    }
+    out
+}
+
+fn figure_from_stream(doc: &Document, stream: &lopdf::Stream) -> Option<Figure> {
+    let dict = &stream.dict;
+    let filter = dict.get(b"Filter").ok().and_then(|o| match o {
+        Object::Name(n) => Some(String::from_utf8_lossy(n).into_owned()),
+        Object::Array(a) => a
+            .iter()
+            .filter_map(|x| x.as_name().ok())
+            .map(|n| String::from_utf8_lossy(n).into_owned())
+            .next_back(),
+        _ => None,
+    });
+    match filter.as_deref() {
+        // A DCTDecode stream's bytes ARE a JPEG file — drop it in verbatim.
+        Some("DCTDecode") => Some(Figure {
+            data: stream.content.clone(),
+            media_type: "image/jpeg",
+            ext: "jpg",
+        }),
+        // Raw (uncompressed-after-Flate) pixels → encode an 8-bit gray/RGB PNG.
+        Some("FlateDecode") | Some("LZWDecode") | None => raw_to_png(doc, stream),
+        // JPEG2000 / CCITT / JBIG2 etc.: not an EPUB core type and no pure-Rust
+        // decoder — skip the figure rather than embed something unreadable.
+        _ => None,
+    }
+}
+
+/// Encode a raw 8-bit DeviceGray/DeviceRGB image stream to PNG.
+fn raw_to_png(doc: &Document, stream: &lopdf::Stream) -> Option<Figure> {
+    let dict = &stream.dict;
+    let w = dict.get(b"Width").ok()?.as_i64().ok()? as u32;
+    let h = dict.get(b"Height").ok()?.as_i64().ok()? as u32;
+    let bpc = dict
+        .get(b"BitsPerComponent")
+        .ok()
+        .and_then(|o| o.as_i64().ok())
+        .unwrap_or(8);
+    if bpc != 8 || w == 0 || h == 0 {
+        return None;
+    }
+    let comps = image_components(doc, dict)?;
+    let data = stream.decompressed_content().ok()?;
+    if data.len() < (w as usize) * (h as usize) * comps {
+        return None;
+    }
+    let mut png = Vec::new();
+    let cursor = &mut std::io::Cursor::new(&mut png);
+    let ok = match comps {
+        1 => image::GrayImage::from_raw(w, h, data)
+            .map(image::DynamicImage::ImageLuma8)
+            .and_then(|i| i.write_to(cursor, image::ImageFormat::Png).ok()),
+        3 => image::RgbImage::from_raw(w, h, data)
+            .map(image::DynamicImage::ImageRgb8)
+            .and_then(|i| i.write_to(cursor, image::ImageFormat::Png).ok()),
+        _ => None,
+    };
+    ok?;
+    Some(Figure {
+        data: png,
+        media_type: "image/png",
+        ext: "png",
+    })
+}
+
+/// Number of colour components for a raw image, or None for ones we don't
+/// re-encode (Indexed, CMYK, Lab, …).
+fn image_components(doc: &Document, dict: &Dictionary) -> Option<usize> {
+    let cs = dict.get(b"ColorSpace").ok().and_then(|o| deref(doc, o))?;
+    match cs {
+        Object::Name(n) => match n.as_slice() {
+            b"DeviceGray" | b"CalGray" | b"G" => Some(1),
+            b"DeviceRGB" | b"CalRGB" | b"RGB" => Some(3),
+            _ => None,
+        },
+        Object::Array(a) => {
+            // e.g. [/ICCBased <stream>] — read the profile's component count /N.
+            let head = a.first().and_then(|o| o.as_name().ok())?;
+            if head == b"ICCBased" {
+                let icc = a
+                    .get(1)
+                    .and_then(|o| deref(doc, o))
+                    .and_then(|o| o.as_stream().ok())?;
+                match icc.dict.get(b"N").ok().and_then(|o| o.as_i64().ok())? {
+                    1 => Some(1),
+                    3 => Some(3),
+                    _ => None,
+                }
+            } else {
+                None
+            }
+        }
+        _ => None,
     }
 }
 

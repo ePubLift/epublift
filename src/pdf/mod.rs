@@ -83,10 +83,11 @@ pub fn import(input: &Path, output: &Path, opts: &ImportOptions) -> Result<Impor
         );
     }
 
+    let extract_figures = extract::born_digital_doc(&doc);
     let pages: Vec<_> = doc
         .get_pages()
         .into_iter()
-        .map(|(num, id)| extract::page_text(&doc, id, num))
+        .map(|(num, id)| extract::page_text(&doc, id, num, extract_figures))
         .collect();
 
     let chapters = structure::build_book(&pages);
@@ -110,7 +111,11 @@ pub fn import(input: &Path, output: &Path, opts: &ImportOptions) -> Result<Impor
     let (mut nonspace, mut letters) = (0usize, 0usize);
     for ch in chapters
         .iter()
-        .flat_map(|c| c.paragraphs.iter())
+        .flat_map(|c| &c.blocks)
+        .filter_map(|b| match b {
+            structure::Block::Paragraph(p) => Some(p.as_str()),
+            structure::Block::Figure(_) => None,
+        })
         .flat_map(|p| p.chars())
     {
         if !ch.is_whitespace() {
@@ -138,6 +143,10 @@ pub fn import(input: &Path, output: &Path, opts: &ImportOptions) -> Result<Impor
 
     Ok(ImportSummary {
         chapters: chapters.len(),
-        paragraphs: chapters.iter().map(|c| c.paragraphs.len()).sum(),
+        paragraphs: chapters
+            .iter()
+            .flat_map(|c| &c.blocks)
+            .filter(|b| matches!(b, structure::Block::Paragraph(_)))
+            .count(),
     })
 }

@@ -10,6 +10,12 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+### Added
+- **PDF import now carries over figures** — born-digital figures are embedded in
+  the EPUB (JPEG verbatim, raw images re-encoded to PNG), placed per page after
+  that page's text. JPEG2000 / CCITT / JBIG2 / CMYK figures are skipped (no
+  EPUB-core or pure-Rust path). Text-only books are unaffected.
+
 ## [web-v1.8.1] - 2026-06-24
 
 ### Changed

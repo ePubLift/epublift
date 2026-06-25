@@ -12,18 +12,26 @@ use std::collections::{HashMap, HashSet};
 
 use regex::Regex;
 
-use super::extract::{self, PageText};
+use super::extract::{self, Figure, PageText};
 
-/// A chapter: an optional heading plus its paragraphs.
+/// One piece of chapter content, in reading order.
+#[derive(Debug, Clone)]
+pub(crate) enum Block {
+    Paragraph(String),
+    Figure(Figure),
+}
+
+/// A chapter: an optional heading plus its ordered content blocks.
 #[derive(Debug, Clone, Default)]
 pub(crate) struct Chapter {
     pub title: Option<String>,
-    pub paragraphs: Vec<String>,
+    pub blocks: Vec<Block>,
 }
 
 enum Item {
     Heading(String),
     Body(String),
+    Figure(Figure),
 }
 
 /// Build the book's chapters from per-page extracted text.
@@ -31,7 +39,8 @@ pub(crate) fn build_book(pages: &[PageText]) -> Vec<Chapter> {
     let heads = recurring_templates(pages);
     let dehyphen = Regex::new(r"(\p{L})-\s+(\p{Ll})").unwrap();
 
-    // Flatten kept blocks into a stream of headings / body paragraphs.
+    // Flatten into a stream of headings / body paragraphs / figures. A page's
+    // figures are appended after its text (per-page placement).
     let mut items: Vec<Item> = Vec::new();
     for page in pages {
         let big: HashSet<&str> = page.big_font.iter().map(String::as_str).collect();
@@ -49,20 +58,32 @@ pub(crate) fn build_book(pages: &[PageText]) -> Vec<Chapter> {
                 items.push(Item::Body(clean));
             }
         }
+        for fig in &page.figures {
+            items.push(Item::Figure(fig.clone()));
+        }
     }
 
-    // A heading only starts a chapter if real body follows (≥400 chars before
-    // the next heading); otherwise it's a false positive (front-matter, stacked
-    // titles) and is demoted to a paragraph.
+    // A heading only starts a chapter if real body text follows before the next
+    // heading (figures don't count); otherwise it's a false positive
+    // (front-matter, stacked titles) and is demoted to a paragraph.
     const MIN_CHAPTER_BODY: usize = 400;
     let mut chapters: Vec<Chapter> = vec![Chapter::default()];
     for (i, item) in items.iter().enumerate() {
         match item {
-            Item::Body(p) => chapters.last_mut().unwrap().paragraphs.push(p.clone()),
+            Item::Body(p) => chapters
+                .last_mut()
+                .unwrap()
+                .blocks
+                .push(Block::Paragraph(p.clone())),
+            Item::Figure(f) => chapters
+                .last_mut()
+                .unwrap()
+                .blocks
+                .push(Block::Figure(f.clone())),
             Item::Heading(h) => {
                 let body: usize = items[i + 1..]
                     .iter()
-                    .take_while(|it| matches!(it, Item::Body(_)))
+                    .take_while(|it| !matches!(it, Item::Heading(_)))
                     .map(|it| match it {
                         Item::Body(p) => p.len(),
                         _ => 0,
@@ -71,16 +92,20 @@ pub(crate) fn build_book(pages: &[PageText]) -> Vec<Chapter> {
                 if body >= MIN_CHAPTER_BODY {
                     chapters.push(Chapter {
                         title: Some(h.clone()),
-                        paragraphs: Vec::new(),
+                        blocks: Vec::new(),
                     });
                 } else {
-                    chapters.last_mut().unwrap().paragraphs.push(h.clone());
+                    chapters
+                        .last_mut()
+                        .unwrap()
+                        .blocks
+                        .push(Block::Paragraph(h.clone()));
                 }
             }
         }
     }
 
-    chapters.retain(|c| c.title.is_some() || !c.paragraphs.is_empty());
+    chapters.retain(|c| c.title.is_some() || !c.blocks.is_empty());
     chapters
 }
 
@@ -157,14 +182,18 @@ mod tests {
             blocks: blocks.iter().map(|s| s.to_string()).collect(),
             born_digital: true,
             big_font: Vec::new(),
+            figures: Vec::new(),
         }
     }
 
     fn body_text(chapters: &[Chapter]) -> String {
         chapters
             .iter()
-            .flat_map(|c| &c.paragraphs)
-            .cloned()
+            .flat_map(|c| &c.blocks)
+            .filter_map(|b| match b {
+                Block::Paragraph(p) => Some(p.as_str()),
+                Block::Figure(_) => None,
+            })
             .collect::<Vec<_>>()
             .join(" ")
     }
@@ -191,6 +220,7 @@ mod tests {
                 blocks: vec!["MY BOOK TITLE".to_string(), body],
                 born_digital: true,
                 big_font: Vec::new(),
+                figures: Vec::new(),
             });
         }
         let text = body_text(&build_book(&pages));

@@ -11,7 +11,7 @@ use anyhow::{Context, Result};
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipWriter};
 
-use super::structure::Chapter;
+use super::structure::{Block, Chapter};
 
 /// Write `chapters` as a reflow EPUB to `out`.
 pub(crate) fn write_epub(
@@ -41,6 +41,7 @@ pub(crate) fn write_epub(
     let mut manifest = String::new();
     let mut spine = String::new();
     let mut nav_items = String::new();
+    let mut img_seq = 0usize;
     for (i, ch) in chapters.iter().enumerate() {
         let id = format!("ch{:03}", i + 1);
         let href = format!("{id}.xhtml");
@@ -50,8 +51,24 @@ pub(crate) fn write_epub(
             .unwrap_or_else(|| format!("Section {}", i + 1));
 
         let mut body = format!("<h1>{}</h1>\n", esc(&heading));
-        for p in &ch.paragraphs {
-            body.push_str(&format!("<p>{}</p>\n", esc(p)));
+        for block in &ch.blocks {
+            match block {
+                Block::Paragraph(p) => body.push_str(&format!("<p>{}</p>\n", esc(p))),
+                Block::Figure(fig) => {
+                    img_seq += 1;
+                    let name = format!("fig{img_seq:03}.{}", fig.ext);
+                    // Images are already compressed (JPEG/PNG) → store, don't deflate.
+                    zip.start_file(format!("OEBPS/images/{name}"), stored)?;
+                    zip.write_all(&fig.data)?;
+                    manifest.push_str(&format!(
+                        "  <item id=\"img{img_seq:03}\" href=\"images/{name}\" media-type=\"{}\"/>\n",
+                        fig.media_type
+                    ));
+                    body.push_str(&format!(
+                        "<div class=\"figure\"><img src=\"images/{name}\" alt=\"\"/></div>\n"
+                    ));
+                }
+            }
         }
         let xhtml = format!(
             r#"<?xml version="1.0" encoding="utf-8"?>
@@ -144,7 +161,7 @@ mod tests {
     fn writes_a_valid_epub() {
         let chapters = vec![Chapter {
             title: Some("Chapter <1>".to_string()),
-            paragraphs: vec!["Hello & welcome.".to_string()],
+            blocks: vec![Block::Paragraph("Hello & welcome.".to_string())],
         }];
         let out =
             std::env::temp_dir().join(format!("epublift_reflow_test_{}.epub", std::process::id()));
