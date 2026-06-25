@@ -315,23 +315,37 @@ function renderImageReport(data){
   txt.download = data.output_name.replace(/\.epub$/i, '') + '_report.txt';
 }
 
-// Kobo (.kepub) forces keep-original images (Kobo can't render WebP), so reflect
-// that in the UI: tick and lock the "Keep original images" toggle while kepub is on.
+// For Kobo (.kepub) the image format is decided by the "WebP images in .kepub"
+// sub-toggle, not the standalone keep-original control: off = keep originals
+// (stock Kobo can't render WebP), on = WebP (needs the Kobo WebP plugin). Keep
+// the UI consistent and make the sub-toggle imply kepub so you can't accidentally
+// ship a plain WebP .epub (which Kobo shows blank).
 let keepImagesPrev = keepImages.checked;
 let imgfmtPrev = imgfmt;
-kepub.addEventListener('change', () => {
+function syncKobo() {
   if (kepub.checked) {
-    keepImagesPrev = keepImages.checked;
-    keepImages.checked = true;
     keepImages.disabled = true;
-    // Kobo can't render WebP/AVIF/JXL → lock the 3.4 selector to Keep original.
-    imgfmtPrev = imgfmt;
+    keepImages.checked = !kepubWebp.checked; // WebP opted in → not keeping originals
+    // 3.4's AVIF/JXL aren't covered by the WebP plugin → lock to Keep original.
     setImgfmt('keep', true);
   } else {
+    kepubWebp.checked = false; // sub-toggle only applies with kepub
     keepImages.disabled = false;
     keepImages.checked = keepImagesPrev;
     setImgfmt(imgfmtPrev, false);
   }
+}
+kepub.addEventListener('change', () => {
+  if (kepub.checked) { keepImagesPrev = keepImages.checked; imgfmtPrev = imgfmt; }
+  syncKobo();
+});
+kepubWebp.addEventListener('change', () => {
+  if (kepubWebp.checked && !kepub.checked) { // WebP-in-kepub implies kepub
+    keepImagesPrev = keepImages.checked;
+    imgfmtPrev = imgfmt;
+    kepub.checked = true;
+  }
+  syncKobo();
 });
 
 const rtoggle = document.getElementById('rtoggle');

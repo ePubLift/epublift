@@ -39,7 +39,7 @@ Calibre, and most reading apps.
 ```bash
 epublift -i book.epub --kepub
 ```
-Makes `book.kepub.epub`, tuned for Kobo: faster page turns, reading statistics,
+Makes `book_v3.3.kepub.epub`, tuned for Kobo: faster page turns, reading statistics,
 and tap-a-word dictionary. It **keeps your images in their original format by
 default**, because **stock Kobo can't display WebP** (see the next item). Copy
 the `.kepub.epub` file onto your Kobo over USB (into the `.kobo` folder) or send
@@ -139,7 +139,7 @@ epublift -i book.epub --keep-images
 
 ```bash
 epublift -i book.epub --kepub
-# → book.kepub.epub
+# → book_v3.3.kepub.epub
 ```
 
 The result is still a valid EPUB 3 (Kobo simply keys on the `.kepub.epub` extension and the spans), so the same file also opens in other readers. The transform follows the approach of the open-source [`kepubify`](https://github.com/pgaskin/kepubify): sentence-level spans, each image in its own paragraph, and Kobo's column scaffolding. Sideload the `.kepub.epub` onto your Kobo (into the `.kobo` folder or via Calibre) to use it.
