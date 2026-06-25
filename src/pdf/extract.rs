@@ -932,3 +932,54 @@ pub(crate) fn classify(doc: &Document) -> InputKind {
         InputKind::Scan
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_bfchar_cmap() {
+        let cmap = b"begincmap
+1 begincodespacerange <0000> <FFFF> endcodespacerange
+2 beginbfchar
+<0003> <0041>
+<0004> <0042>
+endbfchar
+endcmap";
+        let (map, code_len) = parse_to_unicode(cmap).unwrap();
+        assert_eq!(code_len, 2, "2-byte codes inferred from 4-hex src");
+        assert_eq!(map.get(&3).map(String::as_str), Some("A"));
+        assert_eq!(map.get(&4).map(String::as_str), Some("B"));
+    }
+
+    #[test]
+    fn parses_bfrange_cmap() {
+        // single-dst range: 0x10..=0x12 → a, b, c (last unit increments)
+        let (map, _) = parse_to_unicode(b"beginbfrange <0010> <0012> <0061> endbfrange").unwrap();
+        assert_eq!(map.get(&0x10).map(String::as_str), Some("a"));
+        assert_eq!(map.get(&0x11).map(String::as_str), Some("b"));
+        assert_eq!(map.get(&0x12).map(String::as_str), Some("c"));
+    }
+
+    #[test]
+    fn parses_bfrange_array_form() {
+        let (map, _) =
+            parse_to_unicode(b"beginbfrange <0020> <0021> [<0058> <005A>] endbfrange").unwrap();
+        assert_eq!(map.get(&0x20).map(String::as_str), Some("X"));
+        assert_eq!(map.get(&0x21).map(String::as_str), Some("Z"));
+    }
+
+    #[test]
+    fn hex_helpers() {
+        assert_eq!(hex_units("0041").unwrap(), vec![0x41]);
+        // two UTF-16 code units → the "fi" ligature spelled out
+        assert_eq!(hex_string("00660069").as_deref(), Some("fi"));
+        assert_eq!(hex_u32("00ff"), Some(255));
+        assert!(hex_units("zz").is_none());
+    }
+
+    #[test]
+    fn empty_cmap_is_none() {
+        assert!(parse_to_unicode(b"begincmap endcmap").is_none());
+    }
+}

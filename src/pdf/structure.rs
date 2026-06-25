@@ -147,3 +147,95 @@ fn is_heading(s: &str, born_digital: bool, big_font: &HashSet<&str>) -> bool {
     let large_font = born_digital && big_font.contains(extract::letters_only(s).as_str());
     mostly_caps || large_font
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn page(blocks: &[&str]) -> PageText {
+        PageText {
+            blocks: blocks.iter().map(|s| s.to_string()).collect(),
+            born_digital: true,
+            big_font: Vec::new(),
+        }
+    }
+
+    fn body_text(chapters: &[Chapter]) -> String {
+        chapters
+            .iter()
+            .flat_map(|c| &c.paragraphs)
+            .cloned()
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+
+    #[test]
+    fn dehyphenates_across_line_break() {
+        let chapters = build_book(&[page(&["The inter-  national group met today."])]);
+        let text = body_text(&chapters);
+        assert!(text.contains("international"), "got: {text}");
+        assert!(!text.contains("inter-"), "hyphen not joined: {text}");
+    }
+
+    #[test]
+    fn strips_recurring_running_head() {
+        // Same header on 8 pages (≥ the min-5 threshold) → stripped from the body.
+        // Each body is distinct (real bodies don't recur), so only the head is.
+        let words = [
+            "alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf", "hotel",
+        ];
+        let mut pages = Vec::new();
+        for w in words {
+            let body = format!("This is the {w} section with enough genuine words to count.");
+            pages.push(PageText {
+                blocks: vec!["MY BOOK TITLE".to_string(), body],
+                born_digital: true,
+                big_font: Vec::new(),
+            });
+        }
+        let text = body_text(&build_book(&pages));
+        assert!(
+            !text.contains("MY BOOK TITLE"),
+            "running head leaked: {text}"
+        );
+        assert!(
+            text.contains("alpha") && text.contains("hotel"),
+            "body lost: {text}"
+        );
+    }
+
+    #[test]
+    fn strips_standalone_page_numbers() {
+        // both arabic and roman numerals
+        let chapters = build_book(&[page(&["42", "Real body text that is long enough.", "xiv"])]);
+        let text = body_text(&chapters);
+        assert!(
+            !text.contains("42") && !text.contains("xiv"),
+            "page number kept: {text}"
+        );
+        assert!(text.contains("Real body text"));
+    }
+
+    #[test]
+    fn caps_heading_with_body_starts_a_chapter() {
+        let body = "word ".repeat(120); // ~600 chars ≥ MIN_CHAPTER_BODY
+        let chapters = build_book(&[page(&["CHAPTER ONE", &body])]);
+        assert!(
+            chapters
+                .iter()
+                .any(|c| c.title.as_deref() == Some("CHAPTER ONE")),
+            "no heading chapter: {:?}",
+            chapters.iter().map(|c| &c.title).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn heading_without_body_is_demoted() {
+        // Stacked front-matter caps lines with no real body → no chapter titles.
+        let chapters = build_book(&[page(&["TITLE", "AUTHOR", "PUBLISHER"])]);
+        assert!(
+            chapters.iter().all(|c| c.title.is_none()),
+            "unexpected chapter title"
+        );
+    }
+}

@@ -128,3 +128,36 @@ fn esc(s: &str) -> String {
         })
         .collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn escapes_xml_and_strips_control_chars() {
+        // control char (0x07) dropped; metacharacters escaped
+        let out = esc("a <b> & \"c\"\u{0007}");
+        assert_eq!(out, "a &lt;b&gt; &amp; &quot;c&quot;");
+    }
+
+    #[test]
+    fn writes_a_valid_epub() {
+        let chapters = vec![Chapter {
+            title: Some("Chapter <1>".to_string()),
+            paragraphs: vec!["Hello & welcome.".to_string()],
+        }];
+        let out =
+            std::env::temp_dir().join(format!("epublift_reflow_test_{}.epub", std::process::id()));
+        write_epub(&out, "My Title", "en", &chapters).unwrap();
+        let bytes = std::fs::read(&out).unwrap();
+        let _ = std::fs::remove_file(&out);
+
+        assert_eq!(&bytes[..2], b"PK", "not a zip");
+        // OCF requires the first entry to be an uncompressed `mimetype` whose
+        // bytes therefore appear verbatim near the start of the archive.
+        assert!(
+            bytes.windows(20).any(|w| w == b"application/epub+zip"),
+            "mimetype entry missing"
+        );
+    }
+}
