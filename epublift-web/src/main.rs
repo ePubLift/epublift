@@ -381,6 +381,7 @@ async fn convert(
     let ascii = field_on(&fields, "ascii");
     let kepub = field_on(&fields, "kepub");
     let keep_images = field_on(&fields, "keep_images");
+    let kepub_webp = field_on(&fields, "kepub_webp");
 
     // Experimental EPUB 3.4: AVIF / JPEG XL images. Defaults to 3.3 / WebP.
     let target_34 = fields.get("target").map(|s| s.trim()) == Some("3.4");
@@ -426,6 +427,7 @@ async fn convert(
                 image_policy,
                 avif_speed: WEB_AVIF_SPEED,
                 kepub,
+                kepub_webp,
                 // The hosted service only ever emits conformant EPUBs; the
                 // experimental Zstd packaging is CLI/research-only.
                 packaging: epublift::Packaging::Deflate,
@@ -755,6 +757,7 @@ async fn restore(
     let modernize = field_on(&fields, "modernize");
     let keep_images = field_on(&fields, "keep_images");
     let kepub = field_on(&fields, "kepub");
+    let kepub_webp = field_on(&fields, "kepub_webp");
     let quality: u8 = fields
         .get("quality")
         .and_then(|v| v.trim().parse().ok())
@@ -803,6 +806,7 @@ async fn restore(
                 image_policy: None,
                 avif_speed: WEB_AVIF_SPEED,
                 kepub,
+                kepub_webp,
                 packaging: epublift::Packaging::Deflate,
                 output: None,
             };

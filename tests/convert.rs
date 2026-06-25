@@ -515,6 +515,42 @@ fn kepub_injects_kobospans_and_names_output() {
 }
 
 #[test]
+fn kepub_webp_opts_into_webp_images() {
+    // Opt-in: `--kepub --kepub-webp` emits WebP (for Kobo devices that have the
+    // WebP image plugin installed) instead of the default keep-original.
+    let dir = tempfile::tempdir().unwrap();
+    let input = dir.path().join("legacy.epub");
+    build_epub(&input, &legacy_with_images());
+
+    let opts = Options {
+        kepub: true,
+        kepub_webp: true,
+        ..Options::default()
+    };
+    let report = convert(&input, &opts, |_| {}).unwrap();
+
+    // Still a Kobo .kepub with koboSpan markup...
+    assert_eq!(report.output_name, "legacy.kepub.epub");
+    let out = &report.output_path;
+    let chapter = read_entry(out, "OEBPS/chapter1.html");
+    assert!(chapter.contains("class=\"koboSpan\""), "still a kepub");
+    // ...but now images ARE converted to WebP.
+    let names = entry_names(out);
+    assert!(
+        names.iter().any(|n| n.ends_with(".webp")),
+        "kepub_webp must produce WebP images"
+    );
+    assert!(
+        !names.iter().any(|n| n == "OEBPS/images/cover.jpg"),
+        "original JPEG replaced by WebP"
+    );
+    assert!(
+        !report.image_metrics.is_empty(),
+        "images were converted with kepub_webp"
+    );
+}
+
+#[test]
 fn keep_images_skips_webp_but_upgrades_structure() {
     let dir = tempfile::tempdir().unwrap();
     let input = dir.path().join("legacy.epub");

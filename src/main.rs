@@ -78,8 +78,8 @@ struct Args {
 
     /// Produce a Kobo .kepub.epub: inject koboSpan markup for Kobo's reading
     /// features. Composes with the normal upgrades; output is named
-    /// "<name>.kepub.epub" unless -o is given. Implies --keep-images, since Kobo
-    /// e-ink readers cannot render WebP.
+    /// "<name>.kepub.epub" unless -o is given. Keeps original images by default
+    /// (stock Kobo e-ink shows WebP as blank); use --kepub-webp to opt into WebP.
     #[arg(long)]
     kepub: bool,
 
@@ -88,6 +88,12 @@ struct Args {
     /// still upgraded to EPUB 3.3.
     #[arg(long)]
     keep_images: bool,
+
+    /// With --kepub, emit WebP images instead of keeping originals. Only for Kobo
+    /// devices that have the WebP image plugin installed (see kobo-webp-plugin/);
+    /// without it, Kobo shows blank images. No effect unless --kepub is set.
+    #[arg(long)]
+    kepub_webp: bool,
 
     /// [EXPERIMENTAL] Target EPUB version: "3.3" (default) or "3.4". 3.4 uses the
     /// new core image types content-adaptively: photos (JPEG sources) → AVIF,
@@ -320,9 +326,15 @@ struct RestoreArgs {
     #[arg(long)]
     keep_images: bool,
 
-    /// Produce a Kobo `.kepub.epub` when re-targeting (implies --keep-images).
+    /// Produce a Kobo `.kepub.epub` when re-targeting (keeps original images by
+    /// default; use --kepub-webp to opt into WebP).
     #[arg(long)]
     kepub: bool,
+
+    /// With --kepub, emit WebP images instead of keeping originals. Only for Kobo
+    /// devices with the WebP image plugin installed (see kobo-webp-plugin/).
+    #[arg(long)]
+    kepub_webp: bool,
 
     /// WebP quality (1-100) when re-targeting with image conversion.
     #[arg(short, long, default_value_t = 80)]
@@ -611,6 +623,7 @@ fn run_convert(args: Args) -> Result<()> {
         image_policy,
         avif_speed: 4,
         kepub: args.kepub,
+        kepub_webp: args.kepub_webp,
         packaging,
         output: args.output.clone(),
     };
@@ -787,6 +800,7 @@ fn run_restore(args: &RestoreArgs) -> Result<()> {
             image_policy,
             avif_speed: 4,
             kepub: args.kepub,
+            kepub_webp: args.kepub_webp,
             packaging: epublift::Packaging::Deflate,
             output: None,
         };

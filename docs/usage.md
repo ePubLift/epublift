@@ -40,10 +40,15 @@ Calibre, and most reading apps.
 epublift -i book.epub --kepub
 ```
 Makes `book.kepub.epub`, tuned for Kobo: faster page turns, reading statistics,
-and tap-a-word dictionary. It also keeps your images in their original format,
-because **Kobo can't display WebP** (see the next item). Copy the
-`.kepub.epub` file onto your Kobo over USB (into the `.kobo` folder) or send it
-with Calibre.
+and tap-a-word dictionary. It **keeps your images in their original format by
+default**, because **stock Kobo can't display WebP** (see the next item). Copy
+the `.kepub.epub` file onto your Kobo over USB (into the `.kobo` folder) or send
+it with Calibre.
+
+> **Advanced — `--kepub --kepub-webp`:** if you've installed the
+> [Kobo WebP plugin](../kobo-webp-plugin/README.md) on your device, add
+> `--kepub-webp` to emit WebP images in the `.kepub` instead of keeping
+> originals. Without the plugin, those images show blank — leave it off.
 
 **🖼️ My converted book opens but the images are blank:**
 
@@ -81,7 +86,8 @@ epublift -i book.epub -o optimized_book.epub -q 85 -r stats_report.txt
 | `-r` | `--report` | Path to write the conversion audit report | `<input>_report.txt` |
 | | `--ascii` | Transliterate the auto-generated output/report names to ASCII | *off* |
 | | `--keep-images` | Keep original images (skip JPEG/PNG → WebP) for readers that don't render WebP | *off* |
-| | `--kepub` | Produce a Kobo `.kepub.epub` (inject `koboSpan` markup; implies `--keep-images`) | *off* |
+| | `--kepub` | Produce a Kobo `.kepub.epub` (inject `koboSpan` markup; keeps original images by default) | *off* |
+| | `--kepub-webp` | With `--kepub`, emit WebP instead of keeping originals — needs the [Kobo WebP plugin](../kobo-webp-plugin/README.md) | *off* |
 
 (For the `archive` / `restore` subcommands, see the [Archiving guide](archiving.md);
 for the `meta` subcommand, see [Metadata](metadata.md) and the summary below;
