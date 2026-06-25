@@ -147,14 +147,20 @@ pub struct Options {
     pub ascii: bool,
     /// Target EPUB version for the output.
     pub target_version: EpubVersion,
-    /// How raster images are handled. Note: [`Options::kepub`] forces
-    /// [`ImageStrategy::KeepOriginal`] regardless of this value, since Kobo
-    /// devices can't render WebP.
+    /// How raster images are handled. Note: [`Options::kepub`] keeps originals
+    /// by default (Kobo can't render WebP) unless [`Options::kepub_webp`] opts
+    /// back into WebP — see that field.
     pub image_strategy: ImageStrategy,
     /// Produce a Kobo `.kepub.epub`: inject `koboSpan` markup into the content
     /// documents and name the output `<stem>.kepub.epub`. The result is still a
     /// valid EPUB 3 on top of the normal upgrades.
     pub kepub: bool,
+    /// For `.kepub` output, emit WebP images instead of keeping originals.
+    /// Default `false`: stock Kobo firmware shows WebP as blank, so `kepub`
+    /// keeps the original JPEG/PNG. Set `true` only if the target Kobo has the
+    /// WebP image plugin installed (see `kobo-webp-plugin/`). No effect unless
+    /// [`Options::kepub`] is set.
+    pub kepub_webp: bool,
     /// How the output raster image format is chosen. `None` uses the target
     /// version's default ([`FormatPolicy::Fixed`]`(WebP)` for 3.3, the
     /// content-adaptive [`FormatPolicy::Auto`] for 3.4). `Some(..)` overrides:
@@ -183,6 +189,7 @@ impl Default for Options {
             image_policy: None,
             avif_speed: 4,
             kepub: false,
+            kepub_webp: false,
             packaging: Packaging::default(),
             output: None,
         }
@@ -420,8 +427,10 @@ pub fn convert(input: &Path, options: &Options, progress: impl Fn(&str)) -> Resu
     let info = opf::parse_opf_info(&opf_xml)?;
 
     // Step 3: Optimize images — unless we're keeping originals. Kobo `.kepub`
-    // forces KeepOriginal because Kobo e-ink can't render WebP.
-    let image_strategy = if options.kepub {
+    // keeps originals by default because stock Kobo e-ink can't render WebP;
+    // `kepub_webp` opts back into WebP for devices with the WebP plugin
+    // (see kobo-webp-plugin/).
+    let image_strategy = if options.kepub && !options.kepub_webp {
         ImageStrategy::KeepOriginal
     } else {
         options.image_strategy

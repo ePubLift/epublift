@@ -10,6 +10,26 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+### Added
+- **Kobo WebP plugin** (`kobo-webp-plugin/`) — a community-built Qt image-format
+  plugin that teaches Kobo e-ink readers to decode **WebP**, which stock firmware
+  can't (Nickel's Qt 5.2.1 predates WebP support — it was added upstream only in
+  Qt 5.3.0). Ships a prebuilt `libqwebp.so` + `KoboRoot.tgz`, a reproducible
+  from-source build recipe, and LGPL/BSD license notes. Fixes the `.kepub.epub`
+  path (covers + in-book images); plain `.epub` library thumbnails are out of
+  reach (Kobo's separate non-Qt path). Verified on a Forma (fw 4.38.23697).
+  Reported upstream as kobolabs/epub-spec#74.
+- **`--kepub-webp`** (CLI) and a **"WebP images in .kepub" toggle** (web) — opt
+  back into WebP for `--kepub` output, for devices that have the plugin above
+  installed. The web toggle is localized in all 13 UI languages.
+- New **"Making WebP render on Kobo"** section in `docs/device-compatibility.md`
+  (root cause + what the plugin does and doesn't fix).
+
+### Changed
+- **`--kepub` no longer forces `--keep-images`.** It still keeps the original
+  JPEG/PNG **by default** (stock Kobo shows WebP as blank), but that is now a
+  safe, overridable default (`--kepub-webp`) rather than a hard rule.
+
 ## [cli-v1.7.2] - 2026-06-25
 
 ### Added

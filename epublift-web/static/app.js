@@ -21,6 +21,7 @@ const result = document.getElementById('result');
 const outname = document.getElementById('outname');
 const ascii = document.getElementById('ascii');
 const kepub = document.getElementById('kepub');
+const kepubWebp = document.getElementById('kepub_webp');
 const keepImages = document.getElementById('keep_images');
 const modernize = document.getElementById('modernize');
 const go = document.getElementById('go');
@@ -170,6 +171,7 @@ go.addEventListener('click', async () => {
       fd.append('quality', q.value);
       fd.append('ascii', ascii.checked ? 'true' : 'false');
       fd.append('kepub', kepub.checked ? 'true' : 'false');
+      fd.append('kepub_webp', kepubWebp.checked ? 'true' : 'false');
       fd.append('target', ver);
       if (ver === '3.4'){
         // 3.4: the image-format pills choose Keep original / AVIF / JPEG XL.
@@ -185,6 +187,7 @@ go.addEventListener('click', async () => {
       if (modernize.checked){
         fd.append('quality', q.value);
         fd.append('kepub', kepub.checked ? 'true' : 'false');
+        fd.append('kepub_webp', kepubWebp.checked ? 'true' : 'false');
         fd.append('keep_images', keepImages.checked ? 'true' : 'false');
       }
     } else if (mode === 'import'){
