@@ -10,11 +10,19 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+## [cli-v1.7.1] - 2026-06-25
+
 ### Added
 - **PDF import now carries over figures** — born-digital figures are embedded in
   the EPUB (JPEG verbatim, raw images re-encoded to PNG), placed per page after
   that page's text. JPEG2000 / CCITT / JBIG2 / CMYK figures are skipped (no
   EPUB-core or pure-Rust path). Text-only books are unaffected.
+
+## [web-v1.8.2] - 2026-06-25
+
+### Added
+- **Import PDF carries over figures** — the web Import PDF mode now embeds
+  born-digital figures in the output EPUB (shared with the CLI's `import`).
 
 ## [web-v1.8.1] - 2026-06-24
 
