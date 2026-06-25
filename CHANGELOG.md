@@ -10,6 +10,8 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+## [cli-v1.8.0] - 2026-06-26
+
 ### Added
 - **Kobo WebP plugin** (`kobo-webp-plugin/`) — a community-built Qt image-format
   plugin that teaches Kobo e-ink readers to decode **WebP**, which stock firmware
@@ -19,9 +21,9 @@ are tagged with the component they belong to.
   path (covers + in-book images); plain `.epub` library thumbnails are out of
   reach (Kobo's separate non-Qt path). Verified on a Forma (fw 4.38.23697).
   Reported upstream as kobolabs/epub-spec#74.
-- **`--kepub-webp`** (CLI) and a **"WebP images in .kepub" toggle** (web) — opt
-  back into WebP for `--kepub` output, for devices that have the plugin above
-  installed. The web toggle is localized in all 13 UI languages.
+- **`--kepub-webp`** — opt back into WebP images for `--kepub` output (on
+  `convert` and `restore`), for Kobo devices that have the plugin above
+  installed. Without it, those images show blank, so it's off by default.
 - New **"Making WebP render on Kobo"** section in `docs/device-compatibility.md`
   (root cause + what the plugin does and doesn't fix).
 
@@ -29,6 +31,17 @@ are tagged with the component they belong to.
 - **`--kepub` no longer forces `--keep-images`.** It still keeps the original
   JPEG/PNG **by default** (stock Kobo shows WebP as blank), but that is now a
   safe, overridable default (`--kepub-webp`) rather than a hard rule.
+
+## [web-v1.9.0] - 2026-06-26
+
+### Added
+- **"WebP images in .kepub" toggle** — opt back into WebP for Kobo `.kepub`
+  output when the device has the [Kobo WebP plugin](kobo-webp-plugin/) installed.
+  Off by default (stock Kobo shows WebP blank); localized in all 13 UI languages.
+
+### Changed
+- Kobo `.kepub` output keeps original images by default but no longer forces it —
+  the new toggle opts into WebP.
 
 ## [cli-v1.7.2] - 2026-06-25
 
