@@ -282,9 +282,18 @@ build feature. Design & usage: [`docs/pdf-import.md`](docs/pdf-import.md).
       with on-demand model download, for PDFs that carry no text layer at all.
 - [ ] *(Later)* **Tables & equations** — keep them as images (structured tables
       / MathML eventually); plus exact figure placement + proper cover metadata.
+- [ ] *(Later)* **Optimize extracted figures** — figures are carried VERBATIM
+      today, so an import can be ~6× the byte size of a publisher EPUB's
+      optimized images (measured on Project Hail Mary: 5.8 MB vs 1.0 MB of
+      images). Run them through the size-safe WebP/3.4 re-encoder.
+- [ ] *(Later)* **Finer chapter structure** — heading detection finds fewer
+      chapter breaks than a publisher EPUB (PHM: 9 docs vs 41), so the ToC is
+      coarser. Text is complete; this is granularity/navigation only.
 - [ ] *(Later)* **Object-stream PDFs** — some PDF-1.5 files store their fonts in
-      object streams the current parser can't resolve; detected and reported for
-      now (no broken output).
+      object streams the current parser can't resolve. Verified: no clean lopdf
+      upgrade (0.42 fixes resolution but panics on CMaps + regresses spacing).
+      Needs an upstream lopdf fix or a custom ObjStm parser. Detected and
+      reported for now (no broken output).
 
 ---
 
