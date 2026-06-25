@@ -252,8 +252,9 @@ pub fn output_stem(input: &Path, ascii: bool) -> String {
 }
 
 /// The default output path next to `input`: version-stamped (e.g. `book_v3.3.epub`),
-/// a Kobo `book.kepub.epub` when [`Options::kepub`] is set, or a
-/// `book_zstd-experimental.epub` when [`Packaging::Zstd`] is selected.
+/// a Kobo `book_v3.3.kepub.epub` when [`Options::kepub`] is set (the version stamp
+/// is kept so it's easy to tell from the original, and `.kepub.epub` is what Kobo
+/// keys on), or a `book_zstd-experimental.epub` when [`Packaging::Zstd`] is selected.
 ///
 /// The `_zstd-experimental` suffix is deliberately *not* `_v3.x`: a Zstd archive
 /// is non-conformant, so a version-looking name would misrepresent it. The
@@ -263,7 +264,7 @@ pub fn default_output_path(input: &Path, options: &Options) -> PathBuf {
     let stem = output_stem(input, options.ascii);
     let parent = input.parent().unwrap_or_else(|| Path::new("."));
     let base = if options.kepub {
-        format!("{}.kepub", stem)
+        format!("{}_v{}.kepub", stem, options.target_version.tag())
     } else if matches!(options.packaging, Packaging::Zstd { .. }) {
         stem
     } else {

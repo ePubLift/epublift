@@ -40,7 +40,7 @@ reader you're using (nothing extra is stored; it re-runs the optimizer):
 epublift restore book.eparc                 # content-exact original (default)
 epublift restore book.eparc --target 3.3    # re-emit as EPUB 3.3 (WebP images)
 epublift restore book.eparc --keep-images   # modernized, but original JPEG/PNG (e.g. Kobo)
-epublift restore book.eparc --kepub         # → book.kepub.epub for Kobo
+epublift restore book.eparc --kepub         # → book_v3.3.kepub.epub for Kobo
 ```
 
 | Flag | Effect |

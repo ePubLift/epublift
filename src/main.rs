@@ -78,8 +78,8 @@ struct Args {
 
     /// Produce a Kobo .kepub.epub: inject koboSpan markup for Kobo's reading
     /// features. Composes with the normal upgrades; output is named
-    /// "<name>.kepub.epub" unless -o is given. Keeps original images by default
-    /// (stock Kobo e-ink shows WebP as blank); use --kepub-webp to opt into WebP.
+    /// "<name>_v3.3.kepub.epub" unless -o is given. Keeps original images by
+    /// default (stock Kobo shows WebP as blank); use --kepub-webp to opt into WebP.
     #[arg(long)]
     kepub: bool,
 

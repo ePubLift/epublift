@@ -467,8 +467,9 @@ fn kepub_injects_kobospans_and_names_output() {
     };
     let report = convert(&input, &opts, |_| {}).unwrap();
 
-    // Kobo output gets the .kepub.epub extension, not the _v3.3 stamp.
-    assert_eq!(report.output_name, "legacy.kepub.epub");
+    // Kobo output keeps the version stamp and adds the .kepub.epub extension
+    // (Kobo keys on .kepub.epub; the _v3.3 marks it apart from the original).
+    assert_eq!(report.output_name, "legacy_v3.3.kepub.epub");
     let out = &report.output_path;
     // Still a valid EPUB: mimetype stored first.
     assert!(
@@ -530,7 +531,7 @@ fn kepub_webp_opts_into_webp_images() {
     let report = convert(&input, &opts, |_| {}).unwrap();
 
     // Still a Kobo .kepub with koboSpan markup...
-    assert_eq!(report.output_name, "legacy.kepub.epub");
+    assert_eq!(report.output_name, "legacy_v3.3.kepub.epub");
     let out = &report.output_path;
     let chapter = read_entry(out, "OEBPS/chapter1.html");
     assert!(chapter.contains("class=\"koboSpan\""), "still a kepub");
