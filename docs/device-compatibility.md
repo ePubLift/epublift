@@ -25,12 +25,44 @@ Notes:
 - **Kobo / WebP** — confirmed on Forma and Sage: WebP images appear as blank
   pages, even though the files inside the EPUB are valid (the same book renders
   fine in Apple Books). This is a reader-engine limitation, not a packaging bug.
-  → Use `--keep-images` (default on for `--kepub`) to keep the original JPEG/PNG.
+  → Use `--keep-images` (default on for `--kepub`) to keep the original JPEG/PNG,
+  **or** install our [Kobo WebP plugin](#making-webp-render-on-kobo-community-plugin).
 - **Apple Books** is a reading *app*, not a device; we list it because it was our
   control when verifying the Kobo WebP issue.
 - **AVIF / JXL** are grouped because they're the next-generation formats EPUB 3.4
   introduces; we have not yet tested either on any device, so both are left as
   `—`. Expect support to lag for years on cheap e-ink readers (see below).
+
+## Making WebP render on Kobo (community plugin)
+
+We traced *why* Kobo can't show WebP, and built a plugin that fixes it.
+
+**Root cause.** Kobo's reading software (Nickel) is built on **Qt 5.2.1**, and a
+WebP image-format plugin was only added to Qt in **Qt 5.3.0** — Kobo's image
+stack predates WebP entirely (verified in Kobo's own published source:
+`kobolabs/qtimageformats` ships only mng/tga/tiff/wbmp; `qt/qtimageformats` adds
+`webp` at v5.3.0). So `QImageReader` has no WebP decoder, and WebP shows blank.
+Reported upstream: [kobolabs/epub-spec#74](https://github.com/kobolabs/epub-spec/issues/74).
+
+**The fix.** [`kobo-webp-plugin/`](../kobo-webp-plugin/) contains a WebP plugin
+backported from Qt 5.3.0 and built against Kobo's own Qt 5.2.1, plus a
+`KoboRoot.tgz` installer and a full from-source recipe.
+
+**Important — it only helps the `.kepub.epub` path.** Verified on a Forma
+(fw 4.38.23697):
+
+| Path | After installing the plugin |
+|------|:---------------------------:|
+| `.kepub.epub` — in-book images + cover | ✅ WebP renders |
+| plain `.epub` — library cover thumbnail | ❌ still blank |
+
+Plain `.epub` library cover thumbnails come from Kobo's separate, **non-Qt**
+(Adobe/RMSDK-style) path, which a Qt plugin can't reach. **For WebP on Kobo, use
+`.kepub.epub`.** The plugin is an **unofficial, at-your-own-risk** device
+modification — see [`kobo-webp-plugin/README.md`](../kobo-webp-plugin/README.md).
+
+If you'd rather not modify your device, `--keep-images` (keep JPEG/PNG) remains
+the zero-risk option.
 
 ## Reported (vendor docs / community — not tested by us)
 
