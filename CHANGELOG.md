@@ -10,6 +10,21 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+## [cli-v1.7.2] - 2026-06-25
+
+### Added
+- **[EXPERIMENTAL] OCR for scanned PDFs** (`pdf-ocr` build feature) — `epublift
+  import` now converts pure scans (PDFs with no text layer) using a 100%
+  pure-Rust OCR pipeline (ocrs on the rten tensor engine), with flat-field
+  illumination correction for phone-photo scans. The ~12 MB models download on
+  first use and cache (override with `EPUBLIFT_OCR_MODELS`); the downloader uses
+  the same pure-Rust rustls/RustCrypto client as `meta enrich` (no C). OCR is
+  best-effort: ~92% word accuracy on a clean prose scan, lower on
+  skewed/low-contrast/photographed pages — it gets readable reflowable text out
+  of an otherwise-unreadable image PDF, not a faithful reproduction. The web
+  service does **not** OCR yet (long jobs need async handling); scanned uploads
+  are still reported there. See `docs/pdf-import.md`.
+
 ## [cli-v1.7.1] - 2026-06-25
 
 ### Added

@@ -4,10 +4,12 @@ This document specifies ePubLift's **`import`** feature: turning a PDF into a
 reflowable EPUB. It covers the CLI (`import` subcommand) and the web **Import
 PDF** mode.
 
-Status: **experimental** — shipped behind the opt-in `pdf` build feature. Text
-extraction works well for PDFs that carry a text layer; scanned-only PDFs (no
-text layer) need OCR, which is a later phase (`pdf-ocr`). We're shipping early to
-gather real-world feedback — please report PDFs that convert badly.
+Status: **experimental** — text extraction (behind the `pdf` build feature)
+works well for PDFs that carry a text layer; scanned-only PDFs (no text layer)
+are handled by **OCR** behind the heavier opt-in `pdf-ocr` feature (pure-Rust
+ocrs + rten; models download on first use). OCR is best-effort — see
+[Accuracy](#accuracy). We're shipping early to gather real-world feedback —
+please report PDFs that convert badly.
 
 ## What it does
 
@@ -20,10 +22,11 @@ into three tiers, and `import` detects which one it's looking at:
 2. **Scan with an embedded OCR text layer** (archive.org, Google Books, most
    "searchable PDFs") → reuse that text layer. No re-OCR; quality is whatever
    the original OCR produced.
-3. **Pure scan, no text layer** → needs OCR. **Not available yet** — `import`
-   detects this and tells you OCR support is coming in a later release.
+3. **Pure scan, no text layer** → **OCR** (pure-Rust ocrs + rten). Behind the
+   `pdf-ocr` build feature; the ~12 MB models download on first use. Best-effort
+   quality — see [Accuracy](#accuracy).
 
-Tiers 1 and 2 are what the current `pdf` feature handles.
+Tiers 1 and 2 need only the light `pdf` feature; tier 3 (OCR) needs `pdf-ocr`.
 
 ## CLI usage
 
@@ -42,8 +45,21 @@ Flags:
 | `--language <code>` | content language (BCP-47, e.g. `tr`); sets `dc:language` |
 | `--mode reflow\|fixed` | `reflow` (default). `fixed` (preserve page images) is **not implemented yet** |
 
-The `import` subcommand only exists when the binary is built `--features pdf`
-(the pre-built release binaries include it).
+The `import` subcommand exists when the binary is built `--features pdf` (the
+pre-built release binaries include it). **OCR of scanned PDFs additionally needs
+`--features pdf-ocr`** (also in the pre-built binaries); on a scanned PDF the
+first run downloads the OCR models (~12 MB) to a cache dir — set
+`EPUBLIFT_OCR_MODELS` to use a directory you've pre-populated instead.
+
+## Accuracy
+
+- **Born-digital / searchable scans (tiers 1–2):** essentially lossless — on a
+  born-digital test book the text matched the publisher's own EPUB at ~99.8%.
+- **OCR (tier 3):** best-effort. On a clean, flat prose scan, word accuracy is
+  around **~92%** (expect the odd `i`↔`1`, case slips, or a dropped line);
+  quality drops further on phone-photo, skewed, low-contrast, or artistic pages.
+  OCR is for getting readable, reflowable text out of an otherwise-unreadable
+  image PDF — not a faithful reproduction.
 
 ## Web usage
 
@@ -70,11 +86,15 @@ deletes it immediately, like every other mode.
   verbatim, raw images re-encoded to PNG — placed per page (after that page's
   text). JPEG2000 / CCITT / JBIG2 / CMYK figures are skipped (no EPUB-core or
   pure-Rust path).
+- **OCR** (`pdf-ocr` feature) for scanned PDFs with no text layer — pure-Rust
+  ocrs + rten, with flat-field illumination correction for phone-photo scans.
+  Best-effort (~92% on clean prose); see [Accuracy](#accuracy).
 
 **Doesn't yet (known limits, honest):**
 
-- **Scanned PDFs with no text layer** → OCR is a later phase; you get a clear
-  "OCR coming" message, not a broken file.
+- **Scanned PDFs in the `pdf`-only build** (no `pdf-ocr`) → reported, not
+  converted: you get a clear "OCR is needed" message, not a broken file. OCR is
+  also skipped when a scan's page images are JPEG2000 (no pure-Rust decoder).
 - **Some PDF-1.5 object-stream PDFs** whose font objects the parser can't
   resolve → detected by a quality gate (if the decoded text is mostly garbage)
   and refused with a clear message rather than emitting a broken EPUB.
@@ -88,8 +108,9 @@ deletes it immediately, like every other mode.
 ## Build features
 
 - **`pdf`** — the text tiers (1–2). Pure-Rust (adds only `lopdf`); light.
-- **`pdf-ocr`** — *reserved for the OCR phase* (will add a pure-Rust OCR engine +
-  on-demand model download). Not functional yet.
+- **`pdf-ocr`** — adds OCR for tier 3 (pure-Rust ocrs + rten + a rustls model
+  downloader). Heavier; opt-in. Models (~12 MB) download on first use and cache
+  (override the location with `EPUBLIFT_OCR_MODELS`).
 
 ## How it works (brief)
 

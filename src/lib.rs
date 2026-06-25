@@ -23,7 +23,7 @@
 pub mod enrich;
 #[cfg(feature = "archival")]
 pub mod eparc;
-#[cfg(feature = "metadata")]
+#[cfg(any(feature = "metadata", feature = "pdf-ocr"))]
 pub mod http;
 mod images;
 mod kepub;

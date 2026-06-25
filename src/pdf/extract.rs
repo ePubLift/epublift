@@ -761,6 +761,52 @@ pub(crate) fn page_text(
     }
 }
 
+/// The page's largest image as OCR-ready bytes (JPEG verbatim or raw → PNG) —
+/// for scanned pages where the page IS one big image. None for JPEG2000/CCITT/
+/// JBIG2 scans (no decodable bytes).
+#[cfg(feature = "pdf-ocr")]
+pub(crate) fn page_scan_image(doc: &Document, page_id: ObjectId) -> Option<Figure> {
+    let res = page_resources(doc, page_id)?;
+    let xobjects = res
+        .get(b"XObject")
+        .ok()
+        .and_then(|o| deref(doc, o))
+        .and_then(|o| o.as_dict().ok())?;
+    let mut best: Option<(&lopdf::Stream, i64)> = None;
+    for (_n, v) in xobjects.iter() {
+        let Object::Reference(id) = v else { continue };
+        let Ok(stream) = doc.get_object(*id).and_then(|o| o.as_stream()) else {
+            continue;
+        };
+        let is_image = stream
+            .dict
+            .get(b"Subtype")
+            .ok()
+            .and_then(|o| o.as_name().ok())
+            .map(|n| n == b"Image")
+            .unwrap_or(false);
+        if !is_image {
+            continue;
+        }
+        let area = stream
+            .dict
+            .get(b"Width")
+            .ok()
+            .and_then(|o| o.as_i64().ok())
+            .unwrap_or(0)
+            * stream
+                .dict
+                .get(b"Height")
+                .ok()
+                .and_then(|o| o.as_i64().ok())
+                .unwrap_or(0);
+        if best.as_ref().map(|(_, a)| area > *a).unwrap_or(true) {
+            best = Some((stream, area));
+        }
+    }
+    figure_from_stream(doc, best?.0)
+}
+
 /// Collect a page's image XObjects as EPUB-ready figures (JPEG verbatim, raw
 /// 8-bit gray/RGB re-encoded to PNG; JPEG2000 / CCITT / JBIG2 / CMYK skipped).
 fn page_figures(doc: &Document, page_id: ObjectId) -> Vec<Figure> {

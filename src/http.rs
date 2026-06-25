@@ -12,6 +12,7 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result, bail};
 
+#[cfg(feature = "metadata")]
 use crate::enrich::Http;
 
 const USER_AGENT: &str = concat!(
@@ -20,6 +21,7 @@ const USER_AGENT: &str = concat!(
     " (+https://github.com/ePubLift/epublift)"
 );
 const MAX_REDIRECTS: u8 = 5;
+#[cfg(feature = "metadata")]
 const MAX_BODY: usize = 8 * 1024 * 1024;
 
 /// A reusable HTTPS client backed by a pure-Rust rustls config.
@@ -47,7 +49,7 @@ impl RustlsHttp {
 
     /// Perform a single GET (no redirect handling), returning the raw response
     /// bytes (status line + headers + body).
-    fn fetch_once(&self, host: &str, path: &str) -> Result<Vec<u8>> {
+    fn fetch_once(&self, host: &str, path: &str, max_body: usize) -> Result<Vec<u8>> {
         let server_name = rustls::pki_types::ServerName::try_from(host.to_string())
             .with_context(|| format!("invalid hostname: {host}"))?;
         let mut conn = rustls::ClientConnection::new(self.config.clone(), server_name)
@@ -75,8 +77,8 @@ impl RustlsHttp {
                 Ok(0) => break,
                 Ok(n) => {
                     resp.extend_from_slice(&buf[..n]);
-                    if resp.len() > MAX_BODY {
-                        bail!("response from {host} exceeds the {MAX_BODY}-byte limit");
+                    if resp.len() > max_body {
+                        bail!("response from {host} exceeds the {max_body}-byte limit");
                     }
                 }
                 // Many servers close the TCP connection without a TLS close_notify;
@@ -96,12 +98,13 @@ impl RustlsHttp {
     }
 }
 
+#[cfg(feature = "metadata")]
 impl Http for RustlsHttp {
     fn get(&self, url: &str) -> Result<String> {
         let mut current = url.to_string();
         for _ in 0..=MAX_REDIRECTS {
             let (host, path) = parse_https_url(&current)?;
-            let raw = self.fetch_once(&host, &path)?;
+            let raw = self.fetch_once(&host, &path, MAX_BODY)?;
             let (status, headers, body) = split_response(&raw)?;
             match status {
                 200 => return String::from_utf8(body).context("response was not valid UTF-8"),
@@ -116,6 +119,32 @@ impl Http for RustlsHttp {
                      try again later or set an API key"
                 ),
                 403 => bail!("access denied (HTTP 403)"),
+                other => bail!("unexpected HTTP status {other}"),
+            }
+        }
+        bail!("too many redirects (>{MAX_REDIRECTS})")
+    }
+}
+
+impl RustlsHttp {
+    /// Binary GET (follows redirects), for downloading larger files such as the
+    /// OCR models. Capped well above the JSON limit.
+    #[cfg(feature = "pdf-ocr")]
+    pub fn get_bytes(&self, url: &str) -> Result<Vec<u8>> {
+        const MAX_FILE: usize = 64 * 1024 * 1024;
+        let mut current = url.to_string();
+        for _ in 0..=MAX_REDIRECTS {
+            let (host, path) = parse_https_url(&current)?;
+            let raw = self.fetch_once(&host, &path, MAX_FILE)?;
+            let (status, headers, body) = split_response(&raw)?;
+            match status {
+                200 => return Ok(body),
+                301 | 302 | 303 | 307 | 308 => {
+                    let loc = header_value(&headers, "location")
+                        .context("redirect response had no Location header")?;
+                    current = resolve_redirect(&host, &loc);
+                }
+                404 => bail!("not found (HTTP 404)"),
                 other => bail!("unexpected HTTP status {other}"),
             }
         }

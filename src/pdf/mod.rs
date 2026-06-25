@@ -74,34 +74,39 @@ pub fn import(input: &Path, output: &Path, opts: &ImportOptions) -> Result<Impor
     let doc = lopdf::Document::load(input)
         .with_context(|| format!("failed to open PDF {}", input.display()))?;
 
-    // v1 (`pdf` feature) handles inputs that carry a text layer. Pure scans need
-    // OCR, which is the `pdf-ocr` feature (a later phase).
-    if extract::classify(&doc) == extract::InputKind::Scan {
-        bail!(
-            "this PDF looks like a scan with no text layer — OCR is needed, \
-             which is not available yet (coming in a later release)"
-        );
-    }
-
-    let extract_figures = extract::born_digital_doc(&doc);
-    let pages: Vec<_> = doc
-        .get_pages()
-        .into_iter()
-        .map(|(num, id)| extract::page_text(&doc, id, num, extract_figures))
-        .collect();
+    // Pure scans (no text layer) go through OCR (`pdf-ocr` feature); inputs that
+    // carry a text layer are read directly. Both yield per-page `PageText`, then
+    // the structure/quality-gate/reflow tail is shared.
+    let kind = extract::classify(&doc);
+    let pages: Vec<extract::PageText> = if kind == extract::InputKind::Scan {
+        scan_pages(&doc, opts)?
+    } else {
+        let extract_figures = extract::born_digital_doc(&doc);
+        doc.get_pages()
+            .into_iter()
+            .map(|(num, id)| extract::page_text(&doc, id, num, extract_figures))
+            .collect()
+    };
 
     let chapters = structure::build_book(&pages);
     if chapters.is_empty() {
-        // A text layer was detected (classify said so) but nothing decoded →
-        // almost certainly CID/Type0 fonts, which v1 can't read yet.
-        if pages.iter().all(|p| p.blocks.is_empty()) {
-            bail!(
+        match kind {
+            // A scan that OCR couldn't read (image quality, or undecodable codec).
+            extract::InputKind::Scan => bail!(
+                "OCR found no readable text in this scan — the page images may be \
+                 too low-quality, or in a format we can't decode (e.g. JPEG2000)"
+            ),
+            // A text layer was detected but nothing decoded → almost certainly
+            // CID/Type0 fonts in an object stream, which v1 can't read yet.
+            extract::InputKind::TextLayer if pages.iter().all(|p| p.blocks.is_empty()) => bail!(
                 "this PDF has a text layer, but its fonts can't be decoded yet \
                  (CID/Type0 — common in modern, non-Latin PDFs); support is coming \
                  in a later release"
-            );
+            ),
+            extract::InputKind::TextLayer => {
+                bail!("no extractable text found in {}", input.display())
+            }
         }
-        bail!("no extractable text found in {}", input.display());
     }
 
     // Quality gate: real prose is ~80% letters; if the decoded text is mostly
@@ -149,4 +154,45 @@ pub fn import(input: &Path, output: &Path, opts: &ImportOptions) -> Result<Impor
             .filter(|b| matches!(b, structure::Block::Paragraph(_)))
             .count(),
     })
+}
+
+/// OCR a scanned PDF into per-page text blocks (`pdf-ocr` feature).
+#[cfg(feature = "pdf-ocr")]
+fn scan_pages(doc: &lopdf::Document, opts: &ImportOptions) -> Result<Vec<extract::PageText>> {
+    let language = opts
+        .language
+        .as_deref()
+        .filter(|s| !s.is_empty())
+        .context("--language is required for scanned PDFs (e.g. --language tr)")?;
+    let _ = language; // currently advisory; sets dc:language downstream via opts
+    let engine = ocr::load_engine()?;
+    Ok(doc
+        .get_pages()
+        .into_values()
+        .map(|id| {
+            let text = extract::page_scan_image(doc, id)
+                .and_then(|fig| ocr::ocr_image(&engine, &fig.data).ok())
+                .unwrap_or_default();
+            let blocks = text
+                .lines()
+                .map(|l| l.split_whitespace().collect::<Vec<_>>().join(" "))
+                .filter(|l| !l.is_empty())
+                .collect();
+            extract::PageText {
+                blocks,
+                born_digital: false,
+                big_font: Vec::new(),
+                figures: Vec::new(),
+            }
+        })
+        .collect())
+}
+
+/// Without the `pdf-ocr` feature, scanned PDFs are reported, not converted.
+#[cfg(not(feature = "pdf-ocr"))]
+fn scan_pages(_doc: &lopdf::Document, _opts: &ImportOptions) -> Result<Vec<extract::PageText>> {
+    bail!(
+        "this PDF looks like a scan with no text layer — OCR is needed, \
+         which is not available yet (coming in a later release)"
+    )
 }
