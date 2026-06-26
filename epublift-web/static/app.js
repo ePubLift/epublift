@@ -21,8 +21,7 @@ const result = document.getElementById('result');
 const outname = document.getElementById('outname');
 const ascii = document.getElementById('ascii');
 const kepub = document.getElementById('kepub');
-const kepubWebp = document.getElementById('kepub_webp');
-const keepImages = document.getElementById('keep_images');
+const kepubDesc = document.getElementById('kepubDesc');
 const modernize = document.getElementById('modernize');
 const go = document.getElementById('go');
 
@@ -40,7 +39,7 @@ const verpills = document.getElementById('verpills');
 const imgfmtpills = document.getElementById('imgfmtpills');
 const ver34note = document.getElementById('ver34note');
 let ver = '3.3';
-let imgfmt = 'avif';
+let imgfmt = 'webp';
 
 // Per-mode configuration: which file type, which i18n keys, which endpoint.
 const MODE_CFG = {
@@ -137,10 +136,20 @@ if (verpills) verpills.querySelectorAll('.pill').forEach(p => {
     ver = p.dataset.ver;
     verpills.querySelectorAll('.pill').forEach(x => x.classList.toggle('on', x === p));
     updateOptionVisibility();
+    // Snap the image format to the new version's default (3.3 → WebP, 3.4 → AVIF);
+    // AVIF/JPEG XL pills don't exist on 3.3.
+    setImgfmt(ver === '3.4' ? 'avif' : 'webp', false);
+    renderKepubDesc(); // filename in the .kepub note follows the version
   });
 });
 
-// 3.4 image-format pills (Keep original / AVIF / JPEG XL).
+// The .kepub description names the output file with the selected version
+// (_v3.3 / _v3.4), so re-render it on version and language changes.
+function renderKepubDesc() {
+  if (kepubDesc) kepubDesc.innerHTML = fill('kepub_desc', { ver });
+}
+
+// Image-format pills (Keep original / WebP / AVIF / JPEG XL).
 function setImgfmt(fmt, locked) {
   imgfmt = fmt;
   if (!imgfmtpills) return;
@@ -171,15 +180,10 @@ go.addEventListener('click', async () => {
       fd.append('quality', q.value);
       fd.append('ascii', ascii.checked ? 'true' : 'false');
       fd.append('kepub', kepub.checked ? 'true' : 'false');
-      fd.append('kepub_webp', kepubWebp.checked ? 'true' : 'false');
       fd.append('target', ver);
-      if (ver === '3.4'){
-        // 3.4: the image-format pills choose Keep original / AVIF / JPEG XL.
-        if (imgfmt === 'keep') fd.append('keep_images', 'true');
-        else fd.append('image_format', imgfmt); // avif | jxl
-      } else {
-        fd.append('keep_images', keepImages.checked ? 'true' : 'false');
-      }
+      // The image-format pill drives everything (keep | webp | avif | jxl);
+      // the backend maps it for both versions.
+      fd.append('image_format', imgfmt);
     } else if (mode === 'archive'){
       fd.append('ascii', ascii.checked ? 'true' : 'false');
     } else if (mode === 'restore'){
@@ -187,8 +191,7 @@ go.addEventListener('click', async () => {
       if (modernize.checked){
         fd.append('quality', q.value);
         fd.append('kepub', kepub.checked ? 'true' : 'false');
-        fd.append('kepub_webp', kepubWebp.checked ? 'true' : 'false');
-        fd.append('keep_images', keepImages.checked ? 'true' : 'false');
+        fd.append('image_format', imgfmt);
       }
     } else if (mode === 'import'){
       if (importLang) fd.append('language', importLang.value);
@@ -315,39 +318,6 @@ function renderImageReport(data){
   txt.download = data.output_name.replace(/\.epub$/i, '') + '_report.txt';
 }
 
-// For Kobo (.kepub) the image format is decided by the "WebP images in .kepub"
-// sub-toggle, not the standalone keep-original control: off = keep originals
-// (stock Kobo can't render WebP), on = WebP (needs the Kobo WebP plugin). Keep
-// the UI consistent and make the sub-toggle imply kepub so you can't accidentally
-// ship a plain WebP .epub (which Kobo shows blank).
-let keepImagesPrev = keepImages.checked;
-let imgfmtPrev = imgfmt;
-function syncKobo() {
-  if (kepub.checked) {
-    keepImages.disabled = true;
-    keepImages.checked = !kepubWebp.checked; // WebP opted in → not keeping originals
-    // 3.4's AVIF/JXL aren't covered by the WebP plugin → lock to Keep original.
-    setImgfmt('keep', true);
-  } else {
-    kepubWebp.checked = false; // sub-toggle only applies with kepub
-    keepImages.disabled = false;
-    keepImages.checked = keepImagesPrev;
-    setImgfmt(imgfmtPrev, false);
-  }
-}
-kepub.addEventListener('change', () => {
-  if (kepub.checked) { keepImagesPrev = keepImages.checked; imgfmtPrev = imgfmt; }
-  syncKobo();
-});
-kepubWebp.addEventListener('change', () => {
-  if (kepubWebp.checked && !kepub.checked) { // WebP-in-kepub implies kepub
-    keepImagesPrev = keepImages.checked;
-    imgfmtPrev = imgfmt;
-    kepub.checked = true;
-  }
-  syncKobo();
-});
-
 const rtoggle = document.getElementById('rtoggle');
 const report = document.getElementById('report');
 const rtxt = document.getElementById('rtoggle-txt');
@@ -364,6 +334,7 @@ document.addEventListener('i18n:change', () => {
   if (result.classList.contains('show') && mode === 'optimize') fillReportLabels();
   updateDateHint(); // re-append the localized date format hint after applyStatic
   localizeBookLangs(); // re-localize the book-language names to the new UI language
+  renderKepubDesc(); // re-render the .kepub note in the new language (with the version)
 });
 
 // Footer build info: link the version to its GitHub release, and (when known)
@@ -596,3 +567,4 @@ mSave.addEventListener('click', doSave);
 
 // Initialize the default mode (also sets the per-mode option visibility).
 applyMode('optimize');
+renderKepubDesc(); // initial render of the .kepub note with the current version
