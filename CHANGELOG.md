@@ -10,6 +10,8 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+## [web-v1.10.0] - 2026-06-26
+
 ### Added
 - **Web: WebP is now selectable on EPUB 3.4** (alongside AVIF / JPEG XL), so you
   can force WebP at either target version.
