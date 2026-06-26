@@ -380,8 +380,6 @@ async fn convert(
         .unwrap_or(80);
     let ascii = field_on(&fields, "ascii");
     let kepub = field_on(&fields, "kepub");
-    let keep_images = field_on(&fields, "keep_images");
-    let kepub_webp = field_on(&fields, "kepub_webp");
 
     // Experimental EPUB 3.4: AVIF / JPEG XL images. Defaults to 3.3 / WebP.
     let target_34 = fields.get("target").map(|s| s.trim()) == Some("3.4");
@@ -390,15 +388,23 @@ async fn convert(
     } else {
         EpubVersion::LATEST
     };
-    let image_policy = if target_34 {
-        match fields.get("image_format").map(|s| s.trim()) {
-            Some("avif") => Some(epublift::FormatPolicy::Fixed(epublift::ImageFormat::Avif)),
-            Some("jxl") => Some(epublift::FormatPolicy::Fixed(epublift::ImageFormat::Jxl)),
-            _ => None,
-        }
-    } else {
-        None
+    // The image-format pill drives everything: keep | webp | avif | jxl (AVIF/JXL
+    // only on 3.4). `webp` is forced explicitly so 3.4 emits WebP rather than its
+    // content-adaptive default.
+    let image_format = fields
+        .get("image_format")
+        .map(|s| s.trim())
+        .unwrap_or("keep");
+    let keep_images = image_format == "keep";
+    let image_policy = match image_format {
+        "webp" => Some(epublift::FormatPolicy::Fixed(epublift::ImageFormat::WebP)),
+        "avif" if target_34 => Some(epublift::FormatPolicy::Fixed(epublift::ImageFormat::Avif)),
+        "jxl" if target_34 => Some(epublift::FormatPolicy::Fixed(epublift::ImageFormat::Jxl)),
+        _ => None,
     };
+    // For .kepub, a non-"keep" format opts into emitting it (needs the Kobo WebP
+    // plugin); "keep" keeps originals (safe on stock Kobo).
+    let kepub_webp = kepub && !keep_images;
 
     // Bound concurrent conversions.
     let _permit = state
@@ -755,9 +761,14 @@ async fn restore(
     let (file_bytes, file_name, fields) = read_upload(&mut multipart).await?;
     let stem = file_stem_or(&file_name, "book");
     let modernize = field_on(&fields, "modernize");
-    let keep_images = field_on(&fields, "keep_images");
     let kepub = field_on(&fields, "kepub");
-    let kepub_webp = field_on(&fields, "kepub_webp");
+    // Restore re-targets to 3.3, so the image-format pill is keep | webp.
+    let image_format = fields
+        .get("image_format")
+        .map(|s| s.trim())
+        .unwrap_or("keep");
+    let keep_images = image_format == "keep";
+    let kepub_webp = kepub && !keep_images;
     let quality: u8 = fields
         .get("quality")
         .and_then(|v| v.trim().parse().ok())

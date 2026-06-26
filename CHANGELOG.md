@@ -10,6 +10,18 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+### Added
+- **Web: WebP is now selectable on EPUB 3.4** (alongside AVIF / JPEG XL), so you
+  can force WebP at either target version.
+
+### Changed
+- **Web UI: one image-format selector.** Optimize (and Restore) now choose the
+  image format from a single pill row — `Keep original · WebP` on 3.3,
+  `Keep original · AVIF · JPEG XL · WebP` on 3.4 — replacing the standalone "Keep
+  original images" checkbox and the two stacked Kobo toggles. `.kepub` output is
+  driven by the same pill, and its note follows the chosen format and the target
+  version (`_v3.3` / `_v3.4`).
+
 ## [cli-v1.8.1] - 2026-06-26
 
 ### Fixed

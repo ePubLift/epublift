@@ -516,45 +516,24 @@
           </label>
         </div>
 
-        <div class="toggle-row" data-modes="optimize restore" data-mz="1" data-ver="3.3">
-          <div class="txt">
-            <span style="font-weight:600;font-size:15px;" data-i18n="keep_title">Keep original images</span>
-            <small data-i18n-html="keep_desc">Skip JPEG/PNG → WebP. Use for readers that don't render WebP — notably <b>Kobo</b> e-ink devices. Structure is still upgraded to EPUB 3.3.</small>
-          </div>
-          <label class="switch">
-            <input type="checkbox" id="keep_images" />
-            <span class="slot"></span>
-          </label>
-        </div>
-
-        <!-- 3.4 image format selector (Keep original / AVIF / JPEG XL) -->
-        <div data-modes="optimize" data-ver="3.4">
+        <!-- image format (shared optimize+restore; AVIF/JPEG XL only on EPUB 3.4) -->
+        <div data-modes="optimize restore" data-mz="1">
           <p class="opt-h" style="margin-bottom:10px" data-i18n="imgfmt_h">Image format</p>
           <div class="pills pills-3" id="imgfmtpills">
-            <div class="pill on" data-fmt="avif">AVIF<small data-i18n="imgfmt_avif_sub">Smallest on photos</small></div>
-            <div class="pill" data-fmt="jxl">JPEG XL<small data-i18n="imgfmt_jxl_sub">Newest codec</small></div>
             <div class="pill" data-fmt="keep"><span data-i18n="imgfmt_keep">Keep original</span><small data-i18n="imgfmt_keep_sub">No re-encode</small></div>
+            <div class="pill on" data-fmt="webp">WebP<small data-i18n="imgfmt_webp_sub">Standard, smaller</small></div>
+            <div class="pill" data-fmt="avif" data-modes="optimize" data-ver="3.4">AVIF<small data-i18n="imgfmt_avif_sub">Smallest on photos</small></div>
+            <div class="pill" data-fmt="jxl" data-modes="optimize" data-ver="3.4">JPEG XL<small data-i18n="imgfmt_jxl_sub">Newest codec</small></div>
           </div>
         </div>
 
         <div class="toggle-row" data-modes="optimize restore" data-mz="1">
           <div class="txt">
             <span style="font-weight:600;font-size:15px;" data-i18n="kepub_title">Kobo (.kepub) output</span>
-            <small data-i18n-html="kepub_desc">Add Kobo's koboSpan markup for page turns, stats &amp; dictionary on Kobo devices. Output is named <code style="font-family:inherit">.kepub.epub</code>. Keeps the original images by default (stock Kobo shows WebP as blank).</small>
+            <small id="kepubDesc">Add Kobo's koboSpan markup for page turns, stats &amp; dictionary on Kobo devices. Output is named <code style="font-family:inherit">_v3.3.kepub.epub</code>. Uses the image format chosen above — for WebP on Kobo you need the <a href="https://github.com/ePubLift/epublift/tree/main/kobo-webp-plugin" target="_blank" rel="noopener">WebP plugin</a>; without it, pick Keep original.</small>
           </div>
           <label class="switch">
             <input type="checkbox" id="kepub" />
-            <span class="slot"></span>
-          </label>
-        </div>
-
-        <div class="toggle-row" data-modes="optimize restore" data-mz="1">
-          <div class="txt">
-            <span style="font-weight:600;font-size:15px;" data-i18n="kepub_webp_title">WebP images in .kepub (advanced)</span>
-            <small data-i18n-html="kepub_webp_desc">Off by default. Stock Kobo can't render WebP, so .kepub keeps the original JPEG/PNG. Enable this only if your Kobo has the <a href="https://github.com/ePubLift/epublift/tree/main/kobo-webp-plugin" target="_blank" rel="noopener">WebP plugin</a> installed — otherwise images show blank.</small>
-          </div>
-          <label class="switch">
-            <input type="checkbox" id="kepub_webp" />
             <span class="slot"></span>
           </label>
         </div>
