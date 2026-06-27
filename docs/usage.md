@@ -92,7 +92,8 @@ epublift -i book.epub -o optimized_book.epub -q 85 -r stats_report.txt
 (For the `archive` / `restore` subcommands, see the [Archiving guide](archiving.md);
 for the `meta` subcommand, see [Metadata](metadata.md) and the summary below;
 for the experimental `import` subcommand — PDF → reflowable EPUB — see the
-[PDF import guide](pdf-import.md).)
+[PDF import guide](pdf-import.md), and Markdown → reflowable EPUB in the
+[Markdown import guide](markdown-import.md).)
 
 ### Read & edit metadata (`meta`)
 

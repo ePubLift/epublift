@@ -23,10 +23,15 @@
 pub mod enrich;
 #[cfg(feature = "archival")]
 pub mod eparc;
+// Shared minimal EPUB writer used by the PDF and Markdown importers.
+#[cfg(any(feature = "pdf", feature = "markdown"))]
+mod epub_writer;
 #[cfg(any(feature = "metadata", feature = "pdf-ocr"))]
 pub mod http;
 mod images;
 mod kepub;
+#[cfg(feature = "markdown")]
+pub mod markdown;
 pub mod meta;
 mod nav;
 mod opf;

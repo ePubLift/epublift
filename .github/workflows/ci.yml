@@ -50,7 +50,7 @@ jobs:
       # (`zstd-c-bench`) is intentionally NOT built in CI — it pulls libzstd and
       # is a local dev convenience only.
       - name: Clippy (zstd-experimental + pdf-ocr)
-        run: cargo clippy --all-targets --locked --features zstd-experimental,pdf-ocr -- -D warnings
+        run: cargo clippy --all-targets --locked --features zstd-experimental,pdf-ocr,markdown -- -D warnings
 
       - name: Test (zstd-experimental + pdf-ocr)
-        run: cargo test --all-targets --locked --features zstd-experimental,pdf-ocr
+        run: cargo test --all-targets --locked --features zstd-experimental,pdf-ocr,markdown

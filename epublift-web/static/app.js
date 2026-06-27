@@ -46,7 +46,7 @@ const MODE_CFG = {
   optimize: { accept: '.epub',  dropKey: 'drop_title',       hKey: 'opt_h',         ctaKey: 'cta',         workKey: 'cta_working',         readyKey: 'res_ready',         endpoint: '/convert' },
   archive:  { accept: '.epub',  dropKey: 'drop_title',       hKey: 'opt_h_archive', ctaKey: 'cta_archive', workKey: 'cta_working_archive', readyKey: 'res_ready_archive', endpoint: '/archive' },
   restore:  { accept: '.eparc', dropKey: 'drop_title_eparc', hKey: 'opt_h_restore', ctaKey: 'cta_restore', workKey: 'cta_working_restore', readyKey: 'res_ready_restore', endpoint: '/restore' },
-  import:   { accept: '.pdf',   dropKey: 'drop_title_pdf',   hKey: 'opt_h_import',  ctaKey: 'cta_import',  workKey: 'cta_working_import',  readyKey: 'res_ready_import',  endpoint: '/import' },
+  import:   { accept: '.pdf,.md,.markdown,.zip', dropKey: 'drop_title_pdf', hKey: 'opt_h_import', ctaKey: 'cta_import', workKey: 'cta_working_import', readyKey: 'res_ready_import', endpoint: '/import' },
   metadata: { accept: '.epub',  dropKey: 'drop_title' },
 };
 const importLang = document.getElementById('importLang');
@@ -259,11 +259,20 @@ function renderResult(m, data){
       s: '<b>' + data.stored_entries + '</b>',
     });
   } else if (m === 'import'){
-    resultSub.innerHTML = fill('sub_import', {
-      c: '<b>' + data.chapters + '</b>',
-      p: '<b>' + data.paragraphs + '</b>',
-      size: '<b>' + fmtBytes(data.final_size) + '</b>',
-    });
+    // Markdown imports report images; PDF imports report paragraphs.
+    if (data.kind === 'markdown'){
+      resultSub.innerHTML = fill('sub_import_md', {
+        c: '<b>' + data.chapters + '</b>',
+        i: '<b>' + data.images + '</b>',
+        size: '<b>' + fmtBytes(data.final_size) + '</b>',
+      });
+    } else {
+      resultSub.innerHTML = fill('sub_import', {
+        c: '<b>' + data.chapters + '</b>',
+        p: '<b>' + data.paragraphs + '</b>',
+        size: '<b>' + fmtBytes(data.final_size) + '</b>',
+      });
+    }
   } else { // restore
     const sizeStr = '<b>' + fmtBytes(data.output_size) + '</b>';
     const key = data.modernized ? 'sub_restore_modernized' : 'sub_restore_exact';

@@ -10,6 +10,28 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+## [cli-v1.9.0] - 2026-06-27
+
+### Added
+- **Markdown → EPUB import.** `epublift import book.md` turns a CommonMark
+  Markdown file into a reflowable EPUB. The `import` command now routes by file
+  extension — `.md` / `.markdown` take this path, `.pdf` the existing PDF path.
+  Pure-Rust and fully offline (behind the new opt-in `markdown` build feature).
+  It renders Markdown to well-formed XHTML, splits chapters at top-level `#`
+  headings, and **embeds local images** referenced by the Markdown (resolved
+  relative to the file). Headings, emphasis, lists, blockquotes, tables, code
+  blocks, links and horizontal rules are supported; raw HTML is dropped to keep
+  the output valid. See [docs/markdown-import.md](docs/markdown-import.md).
+
+## [web-v1.11.0] - 2026-06-27
+
+### Added
+- **Import now accepts Markdown.** The Import mode takes a `.md` / `.markdown`
+  file, or a **`.zip` of Markdown plus its images folder** — e.g. a book you ran
+  through an AI OCR tool. The zip is unpacked safely and the referenced images
+  are embedded into the EPUB. Fully local; nothing is stored. The UI ships in all
+  13 languages.
+
 ## [web-v1.10.0] - 2026-06-26
 
 ### Added

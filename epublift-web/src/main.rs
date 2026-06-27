@@ -6,7 +6,7 @@
 
 use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -499,7 +499,9 @@ async fn convert(
     Ok(Json(resp))
 }
 
-/// [EXPERIMENTAL] Import a PDF into a reflow EPUB (text tiers; OCR not yet).
+/// [EXPERIMENTAL] Import a PDF or Markdown file into a reflow EPUB, routed by the
+/// upload's file extension. A `.zip` is treated as Markdown-plus-images: it's
+/// safely unpacked and its `.md` imported so relative image paths resolve.
 async fn import(
     State(state): State<Arc<AppState>>,
     ConnectInfo(peer): ConnectInfo<SocketAddr>,
@@ -515,10 +517,22 @@ async fn import(
 
     let (file_bytes, raw_name, fields) = read_upload(&mut multipart).await?;
     let file_name = if raw_name.trim().is_empty() {
-        "book.pdf".to_string()
+        "book".to_string()
     } else {
         raw_name
     };
+    // A safe, dir-free base name for the output download and temp input file.
+    let base = Path::new(&file_name)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .map(|s| s.to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "book".to_string());
+    let ext = Path::new(&file_name)
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
     let language = fields
         .get("language")
         .map(|s| s.trim().to_string())
@@ -539,33 +553,72 @@ async fn import(
     let result =
         tokio::task::spawn_blocking(move || -> anyhow::Result<(ImportResponse, Vec<u8>)> {
             let tmp = tempfile::Builder::new().prefix("epublift_web_").tempdir()?;
-            let input_path = tmp.path().join(&file_name);
-            std::fs::write(&input_path, &file_bytes)?;
-            let out_path = input_path.with_extension("epub");
+            let out_path = tmp.path().join(format!("{base}.epub"));
+            let output_name = format!("{base}.epub");
 
-            let opts = epublift::pdf::ImportOptions { mode, language };
-            let summary = epublift::pdf::import(&input_path, &out_path, &opts)?;
-            let out_bytes = std::fs::read(&out_path)?;
-
-            let resp = ImportResponse {
-                output_name: out_path
-                    .file_name()
-                    .map(|s| s.to_string_lossy().into_owned())
-                    .unwrap_or_else(|| "book.epub".into()),
-                chapters: summary.chapters,
-                paragraphs: summary.paragraphs,
-                final_size: out_bytes.len() as u64,
-                download_token: String::new(), // filled in below
+            let mut resp = match ext.as_str() {
+                "pdf" => {
+                    let input_path = tmp.path().join(format!("{base}.pdf"));
+                    std::fs::write(&input_path, &file_bytes)?;
+                    let opts = epublift::pdf::ImportOptions { mode, language };
+                    let s = epublift::pdf::import(&input_path, &out_path, &opts)?;
+                    ImportResponse {
+                        output_name,
+                        kind: "pdf",
+                        chapters: s.chapters,
+                        paragraphs: s.paragraphs,
+                        images: 0,
+                        final_size: 0,
+                        download_token: String::new(),
+                    }
+                }
+                "md" | "markdown" => {
+                    let input_path = tmp.path().join(format!("{base}.md"));
+                    std::fs::write(&input_path, &file_bytes)?;
+                    let opts = epublift::markdown::ImportOptions { language };
+                    let s = epublift::markdown::import(&input_path, &out_path, &opts)?;
+                    ImportResponse {
+                        output_name,
+                        kind: "markdown",
+                        chapters: s.chapters,
+                        paragraphs: 0,
+                        images: s.images,
+                        final_size: 0,
+                        download_token: String::new(),
+                    }
+                }
+                "zip" => {
+                    let root = tmp.path().join("src");
+                    let md_path = extract_zip_find_md(&file_bytes, &root)?;
+                    let opts = epublift::markdown::ImportOptions { language };
+                    let s = epublift::markdown::import(&md_path, &out_path, &opts)?;
+                    ImportResponse {
+                        output_name,
+                        kind: "markdown",
+                        chapters: s.chapters,
+                        paragraphs: 0,
+                        images: s.images,
+                        final_size: 0,
+                        download_token: String::new(),
+                    }
+                }
+                other => anyhow::bail!(
+                    "unsupported import type '.{other}' — use a .pdf, a .md file, or a \
+                     .zip of Markdown plus its images"
+                ),
             };
+
+            let out_bytes = std::fs::read(&out_path)?;
+            resp.final_size = out_bytes.len() as u64;
             Ok((resp, out_bytes))
         })
         .await
         .map_err(|_| ApiError(StatusCode::INTERNAL_SERVER_ERROR, "import crashed".into()))?;
 
-    // Most failures are scans needing OCR, CID-font PDFs, or non-PDFs — surface
-    // the library's helpful message as a client error.
+    // Most failures are scans needing OCR, CID-font PDFs, bad Markdown, or the
+    // wrong file type — surface the library's helpful message as a client error.
     let (mut resp, out_bytes) =
-        result.map_err(|e| bad_request(format!("could not import this PDF: {e}")))?;
+        result.map_err(|e| bad_request(format!("could not import this file: {e}")))?;
 
     resp.download_token = stash(
         &state,
@@ -579,10 +632,80 @@ async fn import(
 #[derive(Serialize)]
 struct ImportResponse {
     output_name: String,
+    /// "pdf" or "markdown" — tells the UI which metric (paragraphs vs images) is
+    /// meaningful.
+    kind: &'static str,
     chapters: usize,
     paragraphs: usize,
+    images: usize,
     final_size: u64,
     download_token: String,
+}
+
+/// Safely unpack an uploaded `.zip` into `dest` and return the path of the
+/// Markdown file to import (the shallowest `.md` / `.markdown`).
+///
+/// Hardened against zip-slip (entries that escape `dest` are skipped) and zip
+/// bombs (caps on entry count and total uncompressed size).
+fn extract_zip_find_md(bytes: &[u8], dest: &Path) -> anyhow::Result<PathBuf> {
+    use std::io::Cursor;
+
+    const MAX_ENTRIES: usize = 5_000;
+    const MAX_TOTAL_BYTES: u64 = 200 * 1024 * 1024; // 200 MiB uncompressed
+
+    let mut zip = zip::ZipArchive::new(Cursor::new(bytes))
+        .map_err(|e| anyhow::anyhow!("not a valid .zip: {e}"))?;
+    if zip.len() > MAX_ENTRIES {
+        anyhow::bail!("the .zip has too many entries");
+    }
+
+    let mut total: u64 = 0;
+    let mut md_candidates: Vec<PathBuf> = Vec::new();
+    for i in 0..zip.len() {
+        let mut entry = zip.by_index(i)?;
+        // `enclosed_name` returns None for entries that would escape the target
+        // (absolute paths, `..`) — the zip-slip guard.
+        let rel = match entry.enclosed_name() {
+            Some(p) => p.to_path_buf(),
+            None => continue,
+        };
+        if entry.is_dir() {
+            continue;
+        }
+        total = total.saturating_add(entry.size());
+        if total > MAX_TOTAL_BYTES {
+            anyhow::bail!("the .zip's contents are too large");
+        }
+        let out = dest.join(&rel);
+        if let Some(parent) = out.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let mut f = std::fs::File::create(&out)?;
+        std::io::copy(&mut entry, &mut f)?;
+
+        if matches!(
+            rel.extension()
+                .and_then(|e| e.to_str())
+                .map(|e| e.to_ascii_lowercase())
+                .as_deref(),
+            Some("md") | Some("markdown")
+        ) {
+            md_candidates.push(rel);
+        }
+    }
+
+    // Prefer the shallowest .md (fewest path components), then lexically first.
+    md_candidates.sort_by(|a, b| {
+        a.components()
+            .count()
+            .cmp(&b.components().count())
+            .then_with(|| a.cmp(b))
+    });
+    let rel = md_candidates
+        .into_iter()
+        .next()
+        .ok_or_else(|| anyhow::anyhow!("the .zip has no .md / .markdown file"))?;
+    Ok(dest.join(rel))
 }
 
 /// Stash a finished file in memory for one short-lived token download.

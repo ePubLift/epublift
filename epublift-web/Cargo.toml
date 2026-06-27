@@ -14,8 +14,10 @@ name = "epublift-web"
 # 1.8.2 carries born-digital figures into the imported EPUB (shared core);
 # 1.9.0 adds the "WebP images in .kepub" toggle (Kobo WebP plugin, 13 langs);
 # 1.9.1 names kepub downloads _v3.3.kepub.epub + the toggle now implies .kepub;
-# 1.10.0 unifies image format into one pill selector (WebP selectable on 3.4 too).
-version = "1.10.0"
+# 1.10.0 unifies image format into one pill selector (WebP selectable on 3.4 too);
+# 1.11.0 broadens Import to accept Markdown (.md) and a .zip of Markdown+images
+# (the local, offline core behind a future AI "Smart Import"), 13 langs.
+version = "1.11.0"
 edition = "2024"
 license = "AGPL-3.0-or-later"
 description = "Web front-end for epublift: convert, archive, restore & edit EPUB metadata in the browser"
@@ -28,8 +30,10 @@ publish = false
 # web UI's "Target version: 3.4" option works. `metadata` adds ISBN enrichment
 # (Open Library) for the metadata editor. Both pure Rust (zenavif/zenjxl;
 # rustls + RustCrypto — no C).
-# `pdf` adds the experimental PDF → EPUB importer (text tiers; OCR not yet).
-epublift = { path = "..", features = ["epub34", "metadata", "pdf"] }
+# `pdf` adds the experimental PDF → EPUB importer (text tiers; OCR not yet);
+# `markdown` adds the Markdown → EPUB importer (the offline core behind a future
+# AI "Smart Import"). Both pure Rust.
+epublift = { path = "..", features = ["epub34", "metadata", "pdf", "markdown"] }
 axum = { version = "0.8", features = ["multipart"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal"] }
 tower = "0.5"
@@ -38,6 +42,9 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 anyhow = "1"
 tempfile = "3"
+# Safely unpacking an uploaded Markdown-plus-images .zip for import. Matches the
+# epublift core's zip version. default-features off keeps it pure Rust (deflate).
+zip = { version = "8", default-features = false, features = ["deflate"] }
 uuid = { version = "1", features = ["v4"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

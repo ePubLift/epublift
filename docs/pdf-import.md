@@ -2,7 +2,8 @@
 
 This document specifies ePubLift's **`import`** feature: turning a PDF into a
 reflowable EPUB. It covers the CLI (`import` subcommand) and the web **Import
-PDF** mode.
+PDF** mode. The same `import` command also accepts **Markdown** input (routed by
+file extension) — see the [Markdown import guide](markdown-import.md).
 
 Status: **experimental** — text extraction (behind the `pdf` build feature)
 works well for PDFs that carry a text layer; scanned-only PDFs (no text layer)

@@ -159,26 +159,26 @@ enum Command {
     /// Restore `.eparc` archive(s) back to a content-exact `.epub`.
     #[cfg(feature = "archival")]
     Restore(RestoreArgs),
-    /// [EXPERIMENTAL] Import a PDF into a reflowable EPUB.
-    #[cfg(feature = "pdf")]
+    /// [EXPERIMENTAL] Import a PDF or Markdown file into a reflowable EPUB.
+    #[cfg(any(feature = "pdf", feature = "markdown"))]
     Import(ImportArgs),
 }
 
-/// `epublift import …` — [EXPERIMENTAL] convert a PDF to a reflow EPUB.
-/// See docs/pdf-import.md.
-#[cfg(feature = "pdf")]
+/// `epublift import …` — [EXPERIMENTAL] convert a PDF or Markdown file to a reflow
+/// EPUB (routed by file extension). See docs/pdf-import.md.
+#[cfg(any(feature = "pdf", feature = "markdown"))]
 #[derive(clap::Args, Debug)]
 struct ImportArgs {
-    /// Path to the input PDF.
+    /// Path to the input file (PDF or Markdown, by extension).
     #[arg(short, long)]
     input: PathBuf,
 
-    /// Path to write the EPUB (default: alongside the PDF).
+    /// Path to write the EPUB (default: alongside the input).
     #[arg(short, long)]
     output: Option<PathBuf>,
 
-    /// Output layout: "reflow" (default, a real reflowable ebook) or "fixed"
-    /// (preserve the page images — picture books, comics).
+    /// [PDF only] Output layout: "reflow" (default, a real reflowable ebook) or
+    /// "fixed" (preserve the page images — picture books, comics).
     #[arg(long, default_value = "reflow", value_name = "reflow|fixed")]
     mode: String,
 
@@ -368,40 +368,78 @@ fn run(args: Args) -> Result<()> {
         Some(Command::Archive(a)) => return run_archive(a),
         #[cfg(feature = "archival")]
         Some(Command::Restore(r)) => return run_restore(r),
-        #[cfg(feature = "pdf")]
+        #[cfg(any(feature = "pdf", feature = "markdown"))]
         Some(Command::Import(i)) => return run_import(i),
         None => {}
     }
     run_convert(args)
 }
 
-/// `epublift import` — [EXPERIMENTAL] convert a PDF to a reflow EPUB.
-#[cfg(feature = "pdf")]
+/// `epublift import` — [EXPERIMENTAL] convert a PDF or Markdown file to a reflow
+/// EPUB, routed by the input's file extension.
+#[cfg(any(feature = "pdf", feature = "markdown"))]
 fn run_import(args: &ImportArgs) -> Result<()> {
-    use epublift::pdf::{self, ImportOptions, Mode};
-
-    let mode = match args.mode.as_str() {
-        "fixed" => Mode::Fixed,
-        "reflow" => Mode::Reflow,
-        other => anyhow::bail!("unknown --mode '{other}' (expected 'reflow' or 'fixed')"),
-    };
     let output = args
         .output
         .clone()
         .unwrap_or_else(|| args.input.with_extension("epub"));
-    let opts = ImportOptions {
-        mode,
-        language: args.language.clone(),
-    };
-    let summary = pdf::import(&args.input, &output, &opts)?;
-    eprintln!(
-        "[EXPERIMENTAL] imported {} → {} ({} chapters, {} paragraphs)",
+    let ext = args
+        .input
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+
+    #[cfg(feature = "markdown")]
+    if matches!(ext.as_str(), "md" | "markdown" | "mdown" | "mkd" | "mkdn") {
+        use epublift::markdown::{self, ImportOptions};
+        let opts = ImportOptions {
+            language: args.language.clone(),
+        };
+        let summary = markdown::import(&args.input, &output, &opts)?;
+        eprintln!(
+            "[EXPERIMENTAL] imported {} → {} ({} chapters, {} images)",
+            args.input.display(),
+            output.display(),
+            summary.chapters,
+            summary.images,
+        );
+        return Ok(());
+    }
+
+    #[cfg(feature = "pdf")]
+    if ext == "pdf" {
+        use epublift::pdf::{self, ImportOptions, Mode};
+        let mode = match args.mode.as_str() {
+            "fixed" => Mode::Fixed,
+            "reflow" => Mode::Reflow,
+            other => anyhow::bail!("unknown --mode '{other}' (expected 'reflow' or 'fixed')"),
+        };
+        let opts = ImportOptions {
+            mode,
+            language: args.language.clone(),
+        };
+        let summary = pdf::import(&args.input, &output, &opts)?;
+        eprintln!(
+            "[EXPERIMENTAL] imported {} → {} ({} chapters, {} paragraphs)",
+            args.input.display(),
+            output.display(),
+            summary.chapters,
+            summary.paragraphs,
+        );
+        return Ok(());
+    }
+
+    let mut kinds: Vec<&str> = Vec::new();
+    #[cfg(feature = "markdown")]
+    kinds.push(".md/.markdown");
+    #[cfg(feature = "pdf")]
+    kinds.push(".pdf");
+    anyhow::bail!(
+        "don't know how to import {} — supported input types in this build: {}",
         args.input.display(),
-        output.display(),
-        summary.chapters,
-        summary.paragraphs,
-    );
-    Ok(())
+        kinds.join(", "),
+    )
 }
 
 /// `epublift meta …` — read or edit a book's metadata.

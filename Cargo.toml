@@ -7,7 +7,7 @@ resolver = "2"
 
 [package]
 name = "epublift"
-version = "1.8.1"
+version = "1.9.0"
 edition = "2024"
 license = "AGPL-3.0-or-later"
 description = "Modernize and optimize EPUB files — upgrade structure and re-encode images"
@@ -76,6 +76,11 @@ regex = "1"
 # [EXPERIMENTAL] PDF import (`epublift import`): read text/images from a PDF.
 # Optional so the default build doesn't carry it. See src/pdf/.
 lopdf = { version = "0.34", optional = true }
+# [EXPERIMENTAL] Markdown import (`epublift import file.md`): turn a Markdown
+# file (e.g. an AI-OCR'd PDF) into a reflowable EPUB. pulldown-cmark is the
+# CommonMark standard, pure Rust, zero C. default-features off drops its bundled
+# CLI (getopts). See src/markdown.rs.
+pulldown-cmark = { version = "0.12", default-features = false, optional = true }
 # [EXPERIMENTAL] PDF OCR (`pdf-ocr` feature): pure-Rust OCR for scanned PDFs.
 # ocrs runs on the rten tensor engine — both pure Rust, no C/ONNX-runtime. The
 # ~12 MB models download on first use. Heavy, so strictly opt-in.
@@ -159,6 +164,11 @@ pdf = ["dep:lopdf"]
 # OCR also needs the pure-Rust HTTPS client (src/http.rs) to download models on
 # first use — same rustls + RustCrypto stack as `metadata` (no C).
 pdf-ocr = ["pdf", "dep:ocrs", "dep:rten", "dep:rustls", "dep:rustls-rustcrypto", "dep:webpki-roots"]
+# [EXPERIMENTAL] Markdown → EPUB import (`epublift import file.md`). Turns a
+# Markdown file (+ its local images) into a reflowable EPUB — the pure-Rust,
+# offline core that AI "Smart Import" (e.g. Mistral OCR) feeds its output into.
+# Pure Rust, no C. Opt-in so the default build stays lean. See src/markdown.rs.
+markdown = ["dep:pulldown-cmark"]
 # Compile in the experimental `--zstd` packaging + decoder (pure Rust).
 zstd-experimental = ["dep:structured-zstd", "dep:crc32fast"]
 # Additionally compile the C libzstd reference backend for the benchmark only.
