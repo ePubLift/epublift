@@ -152,6 +152,77 @@ impl RustlsHttp {
     }
 }
 
+impl RustlsHttp {
+    /// Perform a single POST with a JSON body and `Bearer` auth, returning
+    /// `(status, body_bytes)`. No redirect handling — APIs don't redirect POSTs.
+    /// Read/write timeouts keep an interactive request from hanging if the peer
+    /// ignores `Connection: close`.
+    #[cfg(feature = "smart-import")]
+    pub fn post_json(
+        &self,
+        url: &str,
+        bearer: &str,
+        body: &[u8],
+        max_body: usize,
+    ) -> Result<(u16, Vec<u8>)> {
+        use std::time::Duration;
+        const IO_TIMEOUT: Duration = Duration::from_secs(180);
+
+        let (host, path) = parse_https_url(url)?;
+        let server_name = rustls::pki_types::ServerName::try_from(host.clone())
+            .with_context(|| format!("invalid hostname: {host}"))?;
+        let mut conn = rustls::ClientConnection::new(self.config.clone(), server_name)
+            .context("rustls: could not start TLS session")?;
+        let mut sock = TcpStream::connect((host.as_str(), 443))
+            .with_context(|| format!("could not connect to {host}:443"))?;
+        sock.set_read_timeout(Some(IO_TIMEOUT)).ok();
+        sock.set_write_timeout(Some(IO_TIMEOUT)).ok();
+        let mut tls = rustls::Stream::new(&mut conn, &mut sock);
+
+        let header = format!(
+            "POST {path} HTTP/1.1\r\n\
+             Host: {host}\r\n\
+             User-Agent: {USER_AGENT}\r\n\
+             Authorization: Bearer {bearer}\r\n\
+             Content-Type: application/json\r\n\
+             Accept: application/json\r\n\
+             Accept-Encoding: identity\r\n\
+             Content-Length: {len}\r\n\
+             Connection: close\r\n\r\n",
+            len = body.len(),
+        );
+        tls.write_all(header.as_bytes())
+            .context("failed to send request headers")?;
+        tls.write_all(body).context("failed to send request body")?;
+        let _ = tls.flush();
+
+        let mut resp = Vec::new();
+        let mut buf = [0u8; 16384];
+        loop {
+            match tls.read(&mut buf) {
+                Ok(0) => break,
+                Ok(n) => {
+                    resp.extend_from_slice(&buf[..n]);
+                    if resp.len() > max_body {
+                        bail!("response from {host} exceeds the {max_body}-byte limit");
+                    }
+                }
+                Err(e)
+                    if matches!(
+                        e.kind(),
+                        std::io::ErrorKind::UnexpectedEof | std::io::ErrorKind::ConnectionAborted
+                    ) =>
+                {
+                    break;
+                }
+                Err(e) => return Err(e).context("error reading HTTPS response"),
+            }
+        }
+        let (status, _headers, body) = split_response(&resp)?;
+        Ok((status, body))
+    }
+}
+
 /// Split `https://host/path` into `(host, path)`. Only HTTPS is supported.
 fn parse_https_url(url: &str) -> Result<(String, String)> {
     let rest = url

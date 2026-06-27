@@ -10,6 +10,19 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+## [web-v1.12.0] - 2026-06-27
+
+### Added
+- **[EXPERIMENTAL] Smart Import — AI OCR.** A new Import option turns a **PDF**
+  (including scans and photos with no text layer) into an EPUB by sending it to
+  an AI OCR provider (**Mistral OCR**), whose Markdown output the offline
+  Markdown engine then builds into the book. It is **config-gated and
+  bring-your-own-key**: the mode stays locked until a provider key (e.g.
+  `MISTRAL_API_KEY`) is set in the server's environment, and the key never
+  reaches the browser — the page only asks the server *whether* one is
+  configured. This is the only mode that sends your file off the machine. Shipped
+  in all 13 languages. See [docs/smart-import.md](docs/smart-import.md).
+
 ## [cli-v1.9.0] - 2026-06-27
 
 ### Added

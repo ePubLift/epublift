@@ -81,6 +81,9 @@ lopdf = { version = "0.34", optional = true }
 # CommonMark standard, pure Rust, zero C. default-features off drops its bundled
 # CLI (getopts). See src/markdown.rs.
 pulldown-cmark = { version = "0.12", default-features = false, optional = true }
+# [EXPERIMENTAL] Smart Import: base64 for inlining the PDF into the OCR API
+# request and decoding the images it returns. Pure Rust. See src/smart_import/.
+base64 = { version = "0.22", optional = true }
 # [EXPERIMENTAL] PDF OCR (`pdf-ocr` feature): pure-Rust OCR for scanned PDFs.
 # ocrs runs on the rten tensor engine — both pure Rust, no C/ONNX-runtime. The
 # ~12 MB models download on first use. Heavy, so strictly opt-in.
@@ -169,6 +172,19 @@ pdf-ocr = ["pdf", "dep:ocrs", "dep:rten", "dep:rustls", "dep:rustls-rustcrypto",
 # offline core that AI "Smart Import" (e.g. Mistral OCR) feeds its output into.
 # Pure Rust, no C. Opt-in so the default build stays lean. See src/markdown.rs.
 markdown = ["dep:pulldown-cmark"]
+# [EXPERIMENTAL] Smart Import: AI OCR (e.g. Mistral) turns a PDF into Markdown,
+# which the `markdown` core then makes into an EPUB. Cloud egress + bring-your-own
+# API key, so it's strictly opt-in and isolated from the offline core. Uses the
+# same pure-Rust HTTPS stack as `metadata` (rustls + RustCrypto, no C). See
+# src/smart_import/.
+smart-import = [
+    "markdown",
+    "dep:serde_json",
+    "dep:base64",
+    "dep:rustls",
+    "dep:rustls-rustcrypto",
+    "dep:webpki-roots",
+]
 # Compile in the experimental `--zstd` packaging + decoder (pure Rust).
 zstd-experimental = ["dep:structured-zstd", "dep:crc32fast"]
 # Additionally compile the C libzstd reference backend for the benchmark only.

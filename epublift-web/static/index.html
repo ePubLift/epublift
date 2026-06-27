@@ -409,7 +409,10 @@
         <span data-i18n="mode_metadata">Metadata</span><small data-i18n="mode_metadata_sub">edit · ISBN</small>
       </button>
       <button type="button" class="mode" data-mode="import" role="tab" aria-selected="false">
-        <span data-i18n="mode_import">Import PDF</span><small data-i18n="mode_import_sub">.pdf → .epub</small>
+        <span data-i18n="mode_import">Import</span><small data-i18n="mode_import_sub">.pdf · .md → .epub</small>
+      </button>
+      <button type="button" class="mode" data-mode="smart" role="tab" aria-selected="false">
+        <span data-i18n="mode_smart">Smart</span><small data-i18n="mode_smart_sub">.pdf · AI</small>
       </button>
     </div>
     <div class="panel-grid">
@@ -473,6 +476,44 @@
             <option value="pl">Polski</option>
             <option value="ru">Русский</option>
           </select>
+        </div>
+
+        <!-- smart: AI OCR (PDF -> Markdown -> EPUB), config-gated by a server API key -->
+        <div class="modeinfo" data-modes="smart">
+          <p data-i18n-html="smart_lede">Let an <b>AI OCR</b> service read a <b>PDF</b> — including scans and photos — into clean text, then build a reflowable <b>EPUB</b>. Your file is sent to the provider you choose; this is the only mode that leaves your machine. It uses the server's own API key.</p>
+          <!-- shown when NO provider key is configured server-side -->
+          <p class="opt-note hide" id="smartDisabled">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 1.5v6M8 10v.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M8 1.5l5.5 2.4v3.5c0 3.3-2.3 5.6-5.5 6.6-3.2-1-5.5-3.3-5.5-6.6V3.9L8 1.5z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
+            <span data-i18n-html="smart_disabled">Smart Import is switched off. To enable it, set a provider API key (e.g. <code>MISTRAL_API_KEY</code>) in the server's environment, then reload this page.</span>
+          </p>
+          <!-- shown when a provider key IS configured -->
+          <div id="smartEnabled" class="hide">
+            <div class="field-label" style="margin-top:14px;">
+              <span data-i18n="smart_provider_label">OCR provider</span>
+            </div>
+            <select id="smartProvider" style="width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--line,#e4ded4);background:#fff;font:inherit;color:inherit;">
+              <option value="mistral">Mistral OCR</option>
+            </select>
+            <div class="field-label" style="margin-top:14px;">
+              <span data-i18n="import_lang_label">Book language</span>
+            </div>
+            <select id="smartLang" style="width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--line,#e4ded4);background:#fff;font:inherit;color:inherit;">
+              <option value="en">English</option>
+              <option value="tr">Türkçe</option>
+              <option value="de">Deutsch</option>
+              <option value="fr">Français</option>
+              <option value="es">Español</option>
+              <option value="it">Italiano</option>
+              <option value="pt">Português</option>
+              <option value="nl">Nederlands</option>
+              <option value="pl">Polski</option>
+              <option value="ru">Русский</option>
+            </select>
+            <p class="opt-note" style="margin-top:14px;">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 1.5v6M8 10v.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M8 1.5l5.5 2.4v3.5c0 3.3-2.3 5.6-5.5 6.6-3.2-1-5.5-3.3-5.5-6.6V3.9L8 1.5z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
+              <span data-i18n="smart_note">Experimental. Your PDF is sent to the selected AI provider for OCR; epublift stores nothing.</span>
+            </p>
+          </div>
         </div>
 
         <!-- restore: intro + optional modernize -->

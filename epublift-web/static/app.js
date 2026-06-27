@@ -47,9 +47,16 @@ const MODE_CFG = {
   archive:  { accept: '.epub',  dropKey: 'drop_title',       hKey: 'opt_h_archive', ctaKey: 'cta_archive', workKey: 'cta_working_archive', readyKey: 'res_ready_archive', endpoint: '/archive' },
   restore:  { accept: '.eparc', dropKey: 'drop_title_eparc', hKey: 'opt_h_restore', ctaKey: 'cta_restore', workKey: 'cta_working_restore', readyKey: 'res_ready_restore', endpoint: '/restore' },
   import:   { accept: '.pdf,.md,.markdown,.zip', dropKey: 'drop_title_pdf', hKey: 'opt_h_import', ctaKey: 'cta_import', workKey: 'cta_working_import', readyKey: 'res_ready_import', endpoint: '/import' },
+  smart:    { accept: '.pdf', dropKey: 'drop_title_smart', hKey: 'opt_h_import', ctaKey: 'cta_import', workKey: 'cta_working_import', readyKey: 'res_ready_import', endpoint: '/smart-import' },
   metadata: { accept: '.epub',  dropKey: 'drop_title' },
 };
 const importLang = document.getElementById('importLang');
+// Smart Import (AI OCR) elements + capability flag (set from /config on load).
+const smartProvider = document.getElementById('smartProvider');
+const smartLang = document.getElementById('smartLang');
+const smartDisabledEl = document.getElementById('smartDisabled');
+const smartEnabledEl = document.getElementById('smartEnabled');
+let smartEnabled = false;
 
 // Metadata editor elements.
 const ctaRow = document.getElementById('ctaRow');
@@ -90,7 +97,9 @@ function applyMode(m){
   // The metadata editor has its own form + save button, so it hides the generic
   // options header and the global "go" CTA.
   const isMeta = m === 'metadata';
-  ctaRow.classList.toggle('hide', isMeta);
+  // Smart Import hides the upload CTA until a provider key is configured.
+  const smartLocked = (m === 'smart') && !smartEnabled;
+  ctaRow.classList.toggle('hide', isMeta || smartLocked);
   optsH.classList.toggle('hide', isMeta);
   if (!isMeta) {
     optsH.setAttribute('data-i18n', cfg.hKey);      optsH.textContent = T(cfg.hKey);
@@ -123,6 +132,9 @@ function updateOptionVisibility(){
   });
   // The 3.4 explainer shows only when Optimize + 3.4 is selected.
   if (ver34note) ver34note.classList.toggle('hide', !(mode === 'optimize' && ver === '3.4'));
+  // Smart Import: show the "add an API key" notice or the provider controls.
+  if (smartDisabledEl) smartDisabledEl.classList.toggle('hide', smartEnabled);
+  if (smartEnabledEl) smartEnabledEl.classList.toggle('hide', !smartEnabled);
 }
 
 modeswitch.querySelectorAll('.mode').forEach(b => {
@@ -195,6 +207,9 @@ go.addEventListener('click', async () => {
       }
     } else if (mode === 'import'){
       if (importLang) fd.append('language', importLang.value);
+    } else if (mode === 'smart'){
+      if (smartProvider) fd.append('provider', smartProvider.value);
+      if (smartLang) fd.append('language', smartLang.value);
     }
     // archive sends only the file.
     const res = await fetch(cfg.endpoint, { method:'POST', body: fd });
@@ -258,7 +273,7 @@ function renderResult(m, data){
       c: '<b>' + data.compressed_entries + '</b>',
       s: '<b>' + data.stored_entries + '</b>',
     });
-  } else if (m === 'import'){
+  } else if (m === 'import' || m === 'smart'){
     // Markdown imports report images; PDF imports report paragraphs.
     if (data.kind === 'markdown'){
       resultSub.innerHTML = fill('sub_import_md', {
@@ -362,6 +377,21 @@ fetch('/version').then(r => r.json()).then(d => {
   }
 }).catch(() => { /* version is non-essential; ignore */ });
 
+// Smart Import capability: ask the server whether a provider key is configured.
+// The key never reaches the browser — only whether one exists, and the provider
+// list. Until this resolves, Smart Import shows its "add an API key" notice.
+fetch('/config').then(r => r.json()).then(cfg => {
+  const si = cfg && cfg.smart_import;
+  smartEnabled = !!(si && si.enabled);
+  if (smartProvider && si && Array.isArray(si.providers) && si.providers.length){
+    smartProvider.innerHTML = si.providers
+      .map(p => '<option value="' + p.id + '">' + p.label + '</option>')
+      .join('');
+  }
+  updateOptionVisibility();
+  if (mode === 'smart') applyMode('smart'); // re-evaluate the CTA gating
+}).catch(() => { /* config is non-essential; Smart Import stays locked */ });
+
 // ---- metadata editor ---------------------------------------------------------
 async function errMsg(res){
   let m = T('err_failed') + ' (HTTP ' + res.status + ').';
@@ -388,15 +418,17 @@ function curLang(){ return (window.i18n && window.i18n.lang) ? window.i18n.lang 
 // Uses the browser's built-in Intl.DisplayNames (no translation tables); older
 // browsers keep the native-name fallbacks baked into the HTML.
 function localizeBookLangs(){
-  if (!importLang) return;
   let dn;
   try { dn = new Intl.DisplayNames([curLang()], { type: 'language' }); }
   catch (_) { return; }
-  Array.from(importLang.options).forEach(o => {
-    try {
-      const name = dn.of(o.value);
-      if (name) o.textContent = name.charAt(0).toLocaleUpperCase(curLang()) + name.slice(1);
-    } catch (_) { /* keep the HTML fallback for this option */ }
+  [importLang, smartLang].forEach(sel => {
+    if (!sel) return;
+    Array.from(sel.options).forEach(o => {
+      try {
+        const name = dn.of(o.value);
+        if (name) o.textContent = name.charAt(0).toLocaleUpperCase(curLang()) + name.slice(1);
+      } catch (_) { /* keep the HTML fallback for this option */ }
+    });
   });
 }
 

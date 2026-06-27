@@ -112,6 +112,23 @@ struct AppState {
     pending: Mutex<HashMap<String, Pending>>,
     /// Per-IP request rate limiter.
     limiter: RateLimiter,
+    /// AI "Smart Import" providers whose API key is configured in the server's
+    /// environment. Empty = the feature stays locked in the UI. The keys
+    /// themselves live only in the process env and are never sent to clients.
+    smart_providers: Vec<epublift::smart_import::Provider>,
+}
+
+/// Which Smart Import providers have an API key set in the environment.
+fn available_smart_providers() -> Vec<epublift::smart_import::Provider> {
+    epublift::smart_import::Provider::all()
+        .iter()
+        .copied()
+        .filter(|p| {
+            std::env::var(p.env_var())
+                .map(|v| !v.trim().is_empty())
+                .unwrap_or(false)
+        })
+        .collect()
 }
 
 #[tokio::main]
@@ -128,10 +145,18 @@ async fn main() {
         .map(|n| n.get())
         .unwrap_or(2)
         .max(2);
+    let smart_providers = available_smart_providers();
+    if smart_providers.is_empty() {
+        tracing::info!("Smart Import: no provider API key set — feature stays locked");
+    } else {
+        let ids: Vec<&str> = smart_providers.iter().map(|p| p.id()).collect();
+        tracing::info!("Smart Import enabled for: {}", ids.join(", "));
+    }
     let state = Arc::new(AppState {
         convert_slots: Semaphore::new(slots),
         pending: Mutex::new(HashMap::new()),
         limiter: RateLimiter::default(),
+        smart_providers,
     });
 
     // Sweep expired downloads and idle rate-limit buckets.
@@ -157,8 +182,10 @@ async fn main() {
         .route("/i18n.js", get(i18n_js))
         .route("/healthz", get(|| async { "ok" }))
         .route("/version", get(version))
+        .route("/config", get(config))
         .route("/convert", post(convert))
         .route("/import", post(import))
+        .route("/smart-import", post(smart_import))
         .route("/archive", post(archive))
         .route("/restore", post(restore))
         .route("/meta/read", post(meta_read))
@@ -640,6 +667,149 @@ struct ImportResponse {
     images: usize,
     final_size: u64,
     download_token: String,
+}
+
+#[derive(Serialize)]
+struct ProviderInfo {
+    id: &'static str,
+    label: &'static str,
+}
+
+#[derive(Serialize)]
+struct SmartConfig {
+    /// True when at least one provider key is configured server-side.
+    enabled: bool,
+    providers: Vec<ProviderInfo>,
+}
+
+#[derive(Serialize)]
+struct ConfigResponse {
+    smart_import: SmartConfig,
+}
+
+/// Capability endpoint the SPA reads on load to decide whether to unlock Smart
+/// Import. It reports only *whether* a provider key exists (and which providers)
+/// — never the key itself.
+async fn config(State(state): State<Arc<AppState>>) -> Json<ConfigResponse> {
+    let providers: Vec<ProviderInfo> = state
+        .smart_providers
+        .iter()
+        .map(|p| ProviderInfo {
+            id: p.id(),
+            label: p.label(),
+        })
+        .collect();
+    Json(ConfigResponse {
+        smart_import: SmartConfig {
+            enabled: !providers.is_empty(),
+            providers,
+        },
+    })
+}
+
+/// [EXPERIMENTAL] Smart Import: send the uploaded PDF to an AI OCR provider
+/// (server-side key) to get Markdown, then build an EPUB from it. The API key is
+/// read from the environment and never leaves the server.
+async fn smart_import(
+    State(state): State<Arc<AppState>>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    mut multipart: Multipart,
+) -> Result<Json<ImportResponse>, ApiError> {
+    if !state.limiter.allow(client_ip(&headers, peer)) {
+        return Err(ApiError(
+            StatusCode::TOO_MANY_REQUESTS,
+            "Too many requests — please wait a moment and try again.".into(),
+        ));
+    }
+    if state.smart_providers.is_empty() {
+        return Err(ApiError(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Smart Import is not configured on this server.".into(),
+        ));
+    }
+
+    let (file_bytes, raw_name, fields) = read_upload(&mut multipart).await?;
+
+    // Resolve the provider: the requested one if available, else the first
+    // configured provider.
+    let provider = fields
+        .get("provider")
+        .map(|s| s.trim())
+        .and_then(epublift::smart_import::Provider::from_id)
+        .filter(|p| state.smart_providers.contains(p))
+        .or_else(|| state.smart_providers.first().copied())
+        .ok_or_else(|| bad_request("no Smart Import provider available".to_string()))?;
+
+    let api_key = std::env::var(provider.env_var()).unwrap_or_default();
+    if api_key.trim().is_empty() {
+        return Err(ApiError(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Smart Import is not configured for the selected provider.".into(),
+        ));
+    }
+
+    let language = fields
+        .get("language")
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    let base = Path::new(&raw_name)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .map(|s| s.to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "book".to_string());
+
+    let _permit = state
+        .convert_slots
+        .acquire()
+        .await
+        .map_err(|_| ApiError(StatusCode::SERVICE_UNAVAILABLE, "server busy".into()))?;
+
+    let result =
+        tokio::task::spawn_blocking(move || -> anyhow::Result<(ImportResponse, Vec<u8>)> {
+            let tmp = tempfile::Builder::new()
+                .prefix("epublift_smart_")
+                .tempdir()?;
+            let out_path = tmp.path().join(format!("{base}.epub"));
+            let opts = epublift::smart_import::SmartOptions {
+                provider,
+                api_key,
+                language,
+            };
+            let s = epublift::smart_import::import(&file_bytes, &out_path, tmp.path(), &opts)?;
+            let out_bytes = std::fs::read(&out_path)?;
+            Ok((
+                ImportResponse {
+                    output_name: format!("{base}.epub"),
+                    kind: "markdown",
+                    chapters: s.chapters,
+                    paragraphs: 0,
+                    images: s.images,
+                    final_size: out_bytes.len() as u64,
+                    download_token: String::new(),
+                },
+                out_bytes,
+            ))
+        })
+        .await
+        .map_err(|_| {
+            ApiError(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "smart import crashed".into(),
+            )
+        })?;
+
+    let (mut resp, out_bytes) =
+        result.map_err(|e| bad_request(format!("Smart Import failed: {e}")))?;
+
+    resp.download_token = stash(
+        &state,
+        resp.output_name.clone(),
+        out_bytes,
+        "application/epub+zip",
+    );
+    Ok(Json(resp))
 }
 
 /// Safely unpack an uploaded `.zip` into `dest` and return the path of the

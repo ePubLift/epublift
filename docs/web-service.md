@@ -75,6 +75,7 @@ docker compose up -d
 | Variable | Purpose |
 | :--- | :--- |
 | `GOOGLE_BOOKS_API_KEY` | A [Google Books API key](https://console.cloud.google.com/) for the **Metadata** editor's ISBN enrichment when you pick the *Google Books* provider. Anonymous requests share a small daily quota (HTTP 429 when exhausted); a key raises it. **Optional** — leave it blank to use Open Library only (the default provider needs no key). |
+| `MISTRAL_API_KEY` | A [Mistral API key](https://console.mistral.ai/) that enables the **[EXPERIMENTAL] Smart Import** mode (AI OCR: PDF → EPUB, including scans/photos). **Optional** — leave it blank and Smart Import stays switched off (the UI shows an "add an API key" notice). The key stays on the server and is never sent to browsers; with it set, uploaded PDFs are sent to Mistral for OCR and **this key pays for the calls**. See [Smart Import](smart-import.md). |
 
 Your real `.env` is git-ignored, so your key stays private.
 

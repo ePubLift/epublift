@@ -26,7 +26,7 @@ pub mod eparc;
 // Shared minimal EPUB writer used by the PDF and Markdown importers.
 #[cfg(any(feature = "pdf", feature = "markdown"))]
 mod epub_writer;
-#[cfg(any(feature = "metadata", feature = "pdf-ocr"))]
+#[cfg(any(feature = "metadata", feature = "pdf-ocr", feature = "smart-import"))]
 pub mod http;
 mod images;
 mod kepub;
@@ -37,7 +37,10 @@ mod nav;
 mod opf;
 #[cfg(feature = "pdf")]
 pub mod pdf;
+// AI "Smart Import": cloud OCR (PDF → Markdown) feeding the offline Markdown core.
 mod report;
+#[cfg(feature = "smart-import")]
+pub mod smart_import;
 mod util;
 #[cfg(feature = "zstd-experimental")]
 pub mod zstd_ocf;

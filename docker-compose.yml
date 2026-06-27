@@ -17,8 +17,13 @@ services:
     # Anonymous Google Books calls share a small daily quota (HTTP 429); set
     # GOOGLE_BOOKS_API_KEY in your environment (or a .env file) to use your own.
     # Leave it unset to use Open Library (the default provider) only.
+    #
+    # Optional: a Mistral API key enables [EXPERIMENTAL] "Smart Import" (AI OCR,
+    # PDF → EPUB). Leave it unset to keep Smart Import switched off. With it set,
+    # uploaded PDFs are sent to Mistral and this key pays for the calls.
     environment:
       - GOOGLE_BOOKS_API_KEY=${GOOGLE_BOOKS_API_KEY:-}
+      - MISTRAL_API_KEY=${MISTRAL_API_KEY:-}
 
     # --- hardening ---
     read_only: true            # immutable root filesystem
