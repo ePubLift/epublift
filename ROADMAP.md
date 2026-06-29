@@ -9,9 +9,9 @@ specification and the surrounding tooling evolve. Versioning follows
 
 A fast, fully open, **pure-Rust** toolkit that modernizes EPUB files — upgrading
 legacy structures to current standards and shrinking file size with modern image
-codecs — and now also **imports PDFs into reflowable EPUBs**, usable both from the
-command line and, eventually, from a friendly drag-and-drop desktop app. No C
-toolchain, no system libraries, no surprises.
+codecs — and now also **imports PDFs and Markdown into reflowable EPUBs** (with an
+optional AI-OCR path for scans), usable both from the command line and the hosted
+web app. No C toolchain, no system libraries, no surprises.
 
 ---
 
@@ -122,31 +122,15 @@ prioritised ahead of the desktop GUI.
       blank images. `--keep-images` keeps the original JPEG/PNG (still upgrading
       structure); `--kepub` forces it. The same WebP output renders fine in Apple
       Books, so the files are correct — it's a Kobo decoder gap.
+- [x] **Kobo WebP — opt back in** *(cli-v1.8.0/1.8.1, web-v1.9.0 → 1.10.0)*.
+      Root-caused the blank-WebP gap (Kobo's Nickel uses Qt 5.2.1, before Qt added
+      its WebP plugin in 5.3.0) and **self-built a backported `libqwebp.so`**
+      (device-verified on the Forma), shipped in `kobo-webp-plugin/` and reported
+      upstream (epub-specs#74). With the plugin installed, an opt-in **`--kepub-webp`**
+      flag / web toggle emits WebP on the `.kepub` path (output named
+      `_v3.3.kepub.epub`). The web image controls were unified into a single
+      **image-format pill selector** (Keep · WebP · AVIF · JPEG XL).
 - [ ] *(Optional, later)* Compare against Calibre's KePub output for parity.
-
----
-
-## 🖥️ Demand-gated — Desktop app (ePubLift GUI)
-
-Deferred from v1.3. The hosted web service already covers the no-install case,
-and a desktop GUI carries a **recurring per-platform cost** (three OSes,
-installers, code signing). Rather than build it speculatively, we prioritise it
-on real demand signals — GitHub stars, feature requests/issues, community
-feedback on the web launch.
-
-> **Demand so far points elsewhere.** Early requests cluster around
-> **library-scale batch** work and **pipeline pre-processing** (bulk
-> optimize/archive, cover/image stripping, metadata repair, clean text/metadata
-> extraction for downstream tools) — not a prettier single-file converter, which
-> the web app already is. So the GUI stays demand-gated; the more likely next
-> front-end work is batch/library-oriented.
-
-- [ ] **`epublift-gui`** — a native, drag-and-drop desktop app built on `egui`,
-      consuming the core library directly (stays pure-Rust, single small binary,
-      no Electron/runtime).
-- [ ] Drop one or many EPUBs → convert → show before/after size and a result log.
-- [ ] Quality slider and an "ASCII filenames" toggle mirroring the CLI flags.
-- [ ] Packaged builds per platform (`.app` / `.exe` / AppImage).
 
 ---
 
@@ -278,8 +262,9 @@ build feature. Design & usage: [`docs/pdf-import.md`](docs/pdf-import.md).
       rather than emit a broken EPUB when a PDF can't be decoded.
 - [x] **Figures** — born-digital figures are carried into the EPUB (JPEG
       verbatim, raw → PNG; JPEG2000/CCITT/JBIG2/CMYK skipped), placed per page.
-- [ ] *(Next)* **OCR for image-only scans** (`pdf-ocr` feature) — pure-Rust OCR
-      with on-demand model download, for PDFs that carry no text layer at all.
+- [x] **OCR for image-only scans** (`pdf-ocr` feature) *(shipped cli-v1.7.2)* —
+      pure-Rust OCR (ocrs + rten) with on-demand model download, for PDFs that
+      carry no text layer at all. CLI-only for now (web OCR needs async jobs).
 - [ ] *(Later)* **Tables & equations** — keep them as images (structured tables
       / MathML eventually); plus exact figure placement + proper cover metadata.
 - [ ] *(Later)* **Optimize extracted figures** — figures are carried VERBATIM
@@ -294,6 +279,51 @@ build feature. Design & usage: [`docs/pdf-import.md`](docs/pdf-import.md).
       upgrade (0.42 fixes resolution but panics on CMaps + regresses spacing).
       Needs an upstream lopdf fix or a custom ObjStm parser. Detected and
       reported for now (no broken output).
+
+---
+
+## ✅ Shipped — Markdown → EPUB import — cli-v1.9.0 · web-v1.11.0
+
+Goal: turn a Markdown file — e.g. the output of an AI OCR tool, plus its images —
+into a reflowable EPUB, and provide the offline core that **Smart Import** (below)
+builds on. Behind the opt-in `markdown` build feature; pure-Rust and fully
+offline. Design & usage: [`docs/markdown-import.md`](docs/markdown-import.md).
+
+- [x] **Routed by extension** — the same `import` command takes `.md` / `.markdown`
+      (this path) or `.pdf` (the PDF importer above).
+- [x] **CommonMark → well-formed XHTML** (`pulldown-cmark`), splitting chapters at
+      top-level `#` headings; supports headings, emphasis, lists, blockquotes,
+      tables, code blocks, links and rules. Raw HTML is dropped to keep output valid.
+- [x] **Local image embedding** — `![](path)` images are resolved relative to the
+      Markdown file and embedded into the EPUB.
+- [x] **Web** *(web-v1.11.0)* — the Import mode accepts a `.md` file or a **`.zip`
+      of Markdown + its images folder** (the real AI-OCR workflow), unpacked safely
+      (zip-slip guarded) with images embedded. All 13 UI languages.
+- [x] **Shared writer** — the minimal EPUB packager was extracted to a shared
+      module (`src/epub_writer.rs`) so the PDF and Markdown importers feed one engine.
+
+---
+
+## ✅ Shipped — Smart Import: AI OCR (experimental) — web-v1.12.0 → 1.12.1
+
+Goal: turn a PDF — **including scans and photos with no text layer** — into an EPUB
+via an AI OCR provider that returns Markdown, which the offline Markdown engine then
+builds. Came from a community request (issue #40). Web-only, behind the opt-in
+`smart-import` build feature. Design: [`docs/smart-import.md`](docs/smart-import.md).
+
+- [x] **Provider abstraction** — **Mistral OCR** (`POST /v1/ocr`) today, behind a
+      dropdown so more providers plug in without UI rework.
+- [x] **Config-gated, bring-your-own-key** — the mode stays locked until a provider
+      key (`MISTRAL_API_KEY`) is set in the server's environment; the key never
+      reaches the browser (`GET /config` exposes only *whether* one exists + the
+      provider list). The only mode that sends content off the machine.
+- [x] **Reuses the offline core** — the AI returns Markdown + images; everything
+      after the OCR call is the same local Markdown → EPUB path. All 13 UI languages.
+- [x] **Operational** *(web-v1.12.1)* — a 5-minute download-link TTL and optional
+      WARN+ file logging (`EPUBLIFT_LOG_DIR`, default `logs/`) for self-host
+      debugging (no keys or content logged).
+- [ ] *(Later)* More providers (Claude / GPT); a self-hosted / OpenAI-compatible OCR
+      endpoint option (watching open-source OCR models); a CLI surface.
 
 ---
 
@@ -321,6 +351,31 @@ Tracked separately from the shipping product.
 
 ---
 
+## 🖥️ Demand-gated — Desktop app (ePubLift GUI)
+
+Deferred indefinitely. The hosted web service already covers the no-install case,
+and a desktop GUI carries a **recurring per-platform cost** (three OSes,
+installers, code signing). Rather than build it speculatively, we prioritise it
+on real demand signals — GitHub stars, feature requests/issues, community
+feedback on the web launch. **Its shape below is not finalized** — a sketch, not a
+committed plan.
+
+> **Demand so far points elsewhere.** Early requests cluster around
+> **library-scale batch** work and **pipeline pre-processing** (bulk
+> optimize/archive, cover/image stripping, metadata repair, clean text/metadata
+> extraction for downstream tools) — not a prettier single-file converter, which
+> the web app already is. So the GUI stays demand-gated; the more likely next
+> front-end work is batch/library-oriented.
+
+- [ ] **`epublift-gui`** — a native, drag-and-drop desktop app built on `egui`,
+      consuming the core library directly (stays pure-Rust, single small binary,
+      no Electron/runtime).
+- [ ] Drop one or many EPUBs → convert → show before/after size and a result log.
+- [ ] Quality slider and an "ASCII filenames" toggle mirroring the CLI flags.
+- [ ] Packaged builds per platform (`.app` / `.exe` / AppImage).
+
+---
+
 ## 📋 Backlog — small, unprioritized
 
 The shipping product is in a complete place. What remains is a pool of
@@ -337,8 +392,10 @@ same logic — the web app already serves the no-install case.)
   `--image-format best` in the web UI; re-check the W3C change log toward the 2027
   spec release.
 - **Kobo** — optional parity comparison vs Calibre's KePub output.
-- **Web build-info footer** — version + commit link (built, on a branch; ship it
-  bundled with the next web change).
+- **PDF import polish** — optimize carried-over figures (size-safe re-encode),
+  finer chapter detection, object-stream PDFs (see the PDF import section).
+- **Smart Import — more providers** — Claude / GPT and a self-hosted /
+  OpenAI-compatible OCR endpoint, as open-source OCR models mature.
 
 ---
 
