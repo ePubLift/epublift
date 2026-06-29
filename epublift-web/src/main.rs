@@ -34,7 +34,7 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(120);
 const WEB_AVIF_SPEED: u8 = 6;
 /// How long a converted file waits in memory for its one download before it is
 /// evicted. Files live only in RAM and are never written to disk or logged.
-const DOWNLOAD_TTL: Duration = Duration::from_secs(120);
+const DOWNLOAD_TTL: Duration = Duration::from_secs(300);
 
 /// Token-bucket rate limit per client IP: a burst of `RL_BURST` conversions,
 /// refilling at `RL_REFILL_PER_SEC`.
@@ -133,12 +133,43 @@ fn available_smart_providers() -> Vec<epublift::smart_import::Provider> {
 
 #[tokio::main]
 async fn main() {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "epublift_web=info,tower_http=warn".into()),
-        )
-        .init();
+    use tracing_subscriber::filter::LevelFilter;
+    use tracing_subscriber::prelude::*;
+    use tracing_subscriber::{EnvFilter, fmt};
+
+    let env_filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| "epublift_web=info,tower_http=warn".into());
+    // Always log to stdout (so `docker logs` works); additionally write WARN+ to a
+    // rolling daily file in EPUBLIFT_LOG_DIR (default `logs/`) for local debugging.
+    // If that dir can't be created/written (e.g. the container's read-only cwd),
+    // fall back to stdout only rather than failing to start.
+    let log_dir = std::env::var("EPUBLIFT_LOG_DIR").unwrap_or_else(|_| "logs".into());
+    let _file_guard = match std::fs::create_dir_all(&log_dir) {
+        Ok(()) => {
+            let (writer, guard) = tracing_appender::non_blocking(tracing_appender::rolling::daily(
+                &log_dir,
+                "epublift-web.log",
+            ));
+            tracing_subscriber::registry()
+                .with(fmt::layer().with_filter(env_filter))
+                .with(
+                    fmt::layer()
+                        .with_ansi(false)
+                        .with_writer(writer)
+                        .with_filter(LevelFilter::WARN),
+                )
+                .init();
+            tracing::info!("writing WARN+ logs to {log_dir}/epublift-web.log");
+            Some(guard)
+        }
+        Err(e) => {
+            tracing_subscriber::registry()
+                .with(fmt::layer().with_filter(env_filter))
+                .init();
+            tracing::warn!("could not open log dir '{log_dir}' ({e}); logging to stdout only");
+            None
+        }
+    };
 
     // One conversion per core, minimum two; keeps the box responsive.
     let slots = std::thread::available_parallelism()
@@ -760,6 +791,11 @@ async fn smart_import(
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| "book".to_string());
 
+    tracing::info!(
+        provider = provider.id(),
+        bytes = file_bytes.len(),
+        "smart import started"
+    );
     let _permit = state
         .convert_slots
         .acquire()
@@ -800,9 +836,18 @@ async fn smart_import(
             )
         })?;
 
-    let (mut resp, out_bytes) =
-        result.map_err(|e| bad_request(format!("Smart Import failed: {e}")))?;
+    let (mut resp, out_bytes) = result.map_err(|e| {
+        tracing::warn!("smart import failed: {e}");
+        bad_request(format!("Smart Import failed: {e}"))
+    })?;
 
+    tracing::info!(
+        provider = provider.id(),
+        chapters = resp.chapters,
+        images = resp.images,
+        bytes = out_bytes.len(),
+        "smart import completed"
+    );
     resp.download_token = stash(
         &state,
         resp.output_name.clone(),
@@ -1473,11 +1518,17 @@ async fn download(State(state): State<Arc<AppState>>, UrlPath(token): UrlPath<St
             )
                 .into_response()
         }
-        None => (
-            StatusCode::NOT_FOUND,
-            "This download link has expired or was already used.",
-        )
-            .into_response(),
+        None => {
+            tracing::warn!(
+                "download token not found (expired after {}s, already used, or invalid): {token}",
+                DOWNLOAD_TTL.as_secs()
+            );
+            (
+                StatusCode::NOT_FOUND,
+                "This download link has expired or was already used.",
+            )
+                .into_response()
+        }
     }
 }
 

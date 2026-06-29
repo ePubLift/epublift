@@ -79,6 +79,11 @@ docker compose up -d
 
 Your real `.env` is git-ignored, so your key stays private.
 
+| `EPUBLIFT_LOG_DIR` | Directory for the rolling **WARN+** log file (default `logs/`). The service always logs to stdout too (`docker logs`). In Docker the container's working dir isn't writable, so to keep file logs point this at a mounted directory (e.g. `EPUBLIFT_LOG_DIR=/logs` with a `./logs:/logs` volume). If the directory can't be created, it falls back to stdout only. |
+| `RUST_LOG` | Log verbosity, e.g. `RUST_LOG=epublift_web=debug,tower_http=debug` (default `epublift_web=info,tower_http=warn`). |
+
+No API keys or uploaded content are ever logged.
+
 ## Put it behind a reverse proxy (TLS)
 
 The service speaks plain HTTP on port `8080` and binds to localhost, so terminate

@@ -10,6 +10,22 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+## [web-v1.12.1] - 2026-06-29
+
+### Fixed
+- **Download links no longer expire too soon.** A finished file is kept in memory
+  for **5 minutes** (was 2) before its one-time download link is evicted, so a
+  slow **Smart Import** followed by a moment's delay before clicking no longer
+  returns a 404. Results are still RAM-only and never written to disk.
+
+### Added
+- **Optional file logging for self-host debugging.** In addition to stdout, the
+  service writes **WARN and above** to a rolling daily file under
+  `EPUBLIFT_LOG_DIR` (default `logs/`); set `RUST_LOG` to tune verbosity (e.g.
+  `RUST_LOG=epublift_web=debug`). If the log directory can't be created it falls
+  back to stdout only. No API keys or user content are logged. Smart Import start/
+  finish, failures, and expired-download-link lookups are now logged.
+
 ## [web-v1.12.0] - 2026-06-27
 
 ### Added

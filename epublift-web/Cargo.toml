@@ -18,8 +18,10 @@ name = "epublift-web"
 # 1.11.0 broadens Import to accept Markdown (.md) and a .zip of Markdown+images
 # (the local, offline core behind a future AI "Smart Import"), 13 langs;
 # 1.12.0 adds the [EXPERIMENTAL] "Smart Import" mode: AI OCR (Mistral, PDF → EPUB)
-# behind a config-gated, bring-your-own-key flow (MISTRAL_API_KEY), 13 langs.
-version = "1.12.0"
+# behind a config-gated, bring-your-own-key flow (MISTRAL_API_KEY), 13 langs;
+# 1.12.1 lengthens the download-link TTL (2→5 min) so slow Smart Imports don't
+# 404, and adds WARN+ file logging under EPUBLIFT_LOG_DIR (default logs/).
+version = "1.12.1"
 edition = "2024"
 license = "AGPL-3.0-or-later"
 description = "Web front-end for epublift: convert, archive, restore & edit EPUB metadata in the browser"
@@ -50,3 +52,6 @@ zip = { version = "8", default-features = false, features = ["deflate"] }
 uuid = { version = "1", features = ["v4"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+# Rolling daily file appender so WARN+ logs land in a local `logs/` dir for
+# self-host debugging (in addition to stdout). Pure Rust.
+tracing-appender = "0.2"
