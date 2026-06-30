@@ -10,6 +10,22 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+## [cli-v1.10.1] - 2026-06-30
+
+### Fixed
+- **macOS Finder zips no longer break Markdown import.** A `.zip` made with
+  Finder's "Compress" carries a `__MACOSX/` tree of AppleDouble `._name`
+  sidecars; the `._chapter.md` files looked like Markdown but aren't UTF-8, so
+  the import failed with `could not import this file: failed to read … ._….md`.
+  These (and anything under `__MACOSX/`) are now skipped.
+
+## [web-v1.13.1] - 2026-06-30
+
+### Fixed
+- **macOS Finder zips no longer break Markdown import.** Uploading a `.zip`
+  created with Finder's "Compress" failed because its `__MACOSX/` AppleDouble
+  `._name` sidecars were mistaken for chapters. They're now ignored.
+
 ## [cli-v1.10.0] - 2026-06-30
 
 ### Added

@@ -232,7 +232,7 @@ fn collect_markdown_dir(dir: &Path) -> Result<(Vec<PathBuf>, Option<PathBuf>)> {
         .with_context(|| format!("failed to read folder {}", dir.display()))?
     {
         let path = entry?.path();
-        if !path.is_file() {
+        if !path.is_file() || is_macos_junk(&path) {
             continue;
         }
         if is_markdown(&path) {
@@ -243,6 +243,19 @@ fn collect_markdown_dir(dir: &Path) -> Result<(Vec<PathBuf>, Option<PathBuf>)> {
     }
     files.sort();
     Ok((files, cover))
+}
+
+/// True if `path` is macOS Finder zip cruft: an AppleDouble `._name` sidecar, or
+/// anything under a `__MACOSX/` directory. These aren't real content — and the
+/// AppleDouble files aren't even UTF-8 — so they must be skipped (a `._x.md`
+/// otherwise looks like a Markdown file and breaks the import).
+fn is_macos_junk(path: &Path) -> bool {
+    path.components().any(|c| c.as_os_str() == "__MACOSX")
+        || path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .map(|n| n.starts_with("._"))
+            .unwrap_or(false)
 }
 
 /// True if `path` has a Markdown extension.
@@ -301,7 +314,7 @@ fn extract_markdown_zip(bytes: &[u8], dest: &Path) -> Result<(Vec<PathBuf>, Opti
             Some(p) => p.to_path_buf(),
             None => continue,
         };
-        if entry.is_dir() {
+        if entry.is_dir() || is_macos_junk(&rel) {
             continue;
         }
         total = total.saturating_add(entry.size());
@@ -811,6 +824,36 @@ mod tests {
         assert!(opf.contains("<dc:title>My Book</dc:title>"));
         assert!(read_entry(&out, "OEBPS/ch001.xhtml").contains("alpha body"));
         assert!(read_entry(&out, "OEBPS/ch002.xhtml").contains("beta body"));
+
+        let _ = std::fs::remove_file(&out);
+    }
+
+    #[test]
+    fn zip_skips_macos_finder_cruft() {
+        use std::io::Write;
+        // A zip made by macOS Finder carries a __MACOSX/ tree of AppleDouble
+        // `._name` sidecars that aren't UTF-8 — they must not be treated as
+        // chapters (a `._x.md` would otherwise break read_to_string).
+        let mut buf = Vec::new();
+        {
+            let mut zw = zip::ZipWriter::new(std::io::Cursor::new(&mut buf));
+            let opts = zip::write::SimpleFileOptions::default();
+            zw.start_file("book/00_a.md", opts).unwrap();
+            zw.write_all(b"# Real\n\nreal body\n").unwrap();
+            // AppleDouble sidecar: binary, .md-suffixed, under __MACOSX.
+            zw.start_file("__MACOSX/book/._00_a.md", opts).unwrap();
+            zw.write_all(&[0x00, 0x05, 0x16, 0x07, 0xff, 0xfe]).unwrap();
+            zw.finish().unwrap();
+        }
+
+        let out = std::env::temp_dir().join(format!(
+            "epublift_md_macosx_test_{}.epub",
+            std::process::id()
+        ));
+        let summary = import_zip(&buf, &out, Some("Book"), &ImportOptions::default()).unwrap();
+        // Only the real file becomes a chapter; the sidecar is skipped.
+        assert_eq!(summary.chapters, 1);
+        assert!(read_entry(&out, "OEBPS/ch001.xhtml").contains("real body"));
 
         let _ = std::fs::remove_file(&out);
     }

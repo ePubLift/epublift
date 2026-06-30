@@ -21,7 +21,8 @@ name = "epublift-web"
 # behind a config-gated, bring-your-own-key flow (MISTRAL_API_KEY), 13 langs;
 # 1.13.0 makes a `.zip` Markdown import combine every `.md` inside into one book
 # (filename order) and use a cover.png/jpg/webp as the EPUB cover.
-version = "1.13.0"
+# 1.13.1 skips macOS Finder __MACOSX/._ AppleDouble cruft in those zips.
+version = "1.13.1"
 edition = "2024"
 license = "AGPL-3.0-or-later"
 description = "Web front-end for epublift: convert, archive, restore & edit EPUB metadata in the browser"
