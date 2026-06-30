@@ -31,12 +31,15 @@
 //! image embedding. Raw HTML blocks are dropped (to keep the output valid XHTML);
 //! footnotes and task lists are not enabled yet.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 
 use crate::epub_writer::{ImageAsset, RenderedChapter, esc, package_epub};
+
+/// WebP quality used when re-encoding a cover image (matches the convert default).
+const COVER_QUALITY: u8 = 80;
 
 /// Options controlling a Markdown import.
 #[derive(Debug, Clone, Default)]
@@ -52,19 +55,84 @@ pub struct ImportSummary {
     pub images: usize,
 }
 
-/// Import the Markdown file at `input`, writing a reflow EPUB to `output`.
+/// Import the single Markdown file at `input`, writing a reflow EPUB to `output`.
+/// The book title is taken from the first `#` heading, falling back to the
+/// filename. (A thin wrapper over [`import_collection`].)
 pub fn import(input: &Path, output: &Path, opts: &ImportOptions) -> Result<ImportSummary> {
-    let text = std::fs::read_to_string(input)
-        .with_context(|| format!("failed to read {}", input.display()))?;
-    let base_dir = input.parent().unwrap_or_else(|| Path::new("."));
-    let title_fallback = input
-        .file_stem()
+    import_collection(
+        std::slice::from_ref(&input.to_path_buf()),
+        None,
+        output,
+        None,
+        opts,
+    )
+}
+
+/// Import a *folder* of Markdown: every `.md`/`.markdown` file in `dir` (sorted
+/// by filename, so `00_…`, `01_… ` chapter prefixes order correctly) is appended
+/// in turn, and a `cover.*` image in the folder becomes the EPUB cover. The book
+/// title defaults to the folder name.
+pub fn import_dir(dir: &Path, output: &Path, opts: &ImportOptions) -> Result<ImportSummary> {
+    let (files, cover) = collect_markdown_dir(dir)?;
+    if files.is_empty() {
+        bail!("no .md / .markdown files in {}", dir.display());
+    }
+    let title = dir
+        .file_name()
         .map(|s| s.to_string_lossy().into_owned())
-        .unwrap_or_else(|| "Imported book".into());
+        .filter(|s| !s.is_empty());
+    import_collection(&files, cover.as_deref(), output, title.as_deref(), opts)
+}
+
+/// Import an in-memory `.zip` of Markdown-plus-images: it's safely unpacked
+/// (hardened against zip-slip and zip bombs), every `.md`/`.markdown` is appended
+/// in filename order, and a `cover.*` image becomes the EPUB cover. `title` sets
+/// the book title (typically the uploaded zip's name).
+pub fn import_zip(
+    bytes: &[u8],
+    output: &Path,
+    title: Option<&str>,
+    opts: &ImportOptions,
+) -> Result<ImportSummary> {
+    let tmp = tempfile::Builder::new()
+        .prefix("epublift_md_zip_")
+        .tempdir()
+        .context("failed to create a temp dir for the zip")?;
+    let (files, cover) = extract_markdown_zip(bytes, tmp.path())?;
+    if files.is_empty() {
+        bail!("the .zip has no .md / .markdown file");
+    }
+    import_collection(&files, cover.as_deref(), output, title, opts)
+}
+
+/// Import one or more Markdown `files` (appended in the given order) into a single
+/// reflow EPUB at `output`, optionally embedding `cover` as the EPUB cover image.
+///
+/// `title` sets the book title; when `None` it falls back to the first `#` heading
+/// across all files, then to the first file's name. Local images referenced by
+/// each file resolve relative to *that file's* folder, so a multi-folder zip works.
+pub fn import_collection(
+    files: &[PathBuf],
+    cover: Option<&Path>,
+    output: &Path,
+    title: Option<&str>,
+    opts: &ImportOptions,
+) -> Result<ImportSummary> {
+    if files.is_empty() {
+        bail!("no markdown files to import");
+    }
     let language = opts.language.as_deref().unwrap_or("en").to_string();
 
-    let mut r = Renderer::new(base_dir);
-    r.run(&text);
+    let mut r = Renderer::new();
+    for file in files {
+        let text = std::fs::read_to_string(file)
+            .with_context(|| format!("failed to read {}", file.display()))?;
+        r.base_dir = file
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| PathBuf::from("."));
+        r.run(&text);
+    }
     let Renderer {
         chapters,
         images,
@@ -73,10 +141,20 @@ pub fn import(input: &Path, output: &Path, opts: &ImportOptions) -> Result<Impor
     } = r;
 
     if chapters.is_empty() {
-        bail!("no content found in {}", input.display());
+        bail!("no content found in the markdown input");
     }
 
-    let book_title = first_h1.unwrap_or(title_fallback);
+    let title_fallback = || {
+        files[0]
+            .file_stem()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "Imported book".into())
+    };
+    let book_title = title
+        .map(str::to_string)
+        .or(first_h1)
+        .unwrap_or_else(title_fallback);
+
     let n = chapters.len();
     let rendered: Vec<RenderedChapter> = chapters
         .into_iter()
@@ -93,11 +171,161 @@ pub fn import(input: &Path, output: &Path, opts: &ImportOptions) -> Result<Impor
         })
         .collect();
 
-    package_epub(output, &book_title, &language, &rendered, &images)?;
+    let cover_asset = match cover {
+        Some(path) => load_cover(path)?,
+        None => None,
+    };
+
+    package_epub(
+        output,
+        &book_title,
+        &language,
+        &rendered,
+        &images,
+        cover_asset.as_ref(),
+    )?;
     Ok(ImportSummary {
         chapters: rendered.len(),
-        images: images.len(),
+        images: images.len() + cover_asset.is_some() as usize,
     })
+}
+
+/// Read a cover image and prepare it for embedding, re-encoding to WebP when that
+/// comes out smaller (size-safe — same rule as the EPUB optimizer). Returns
+/// `None` (with a warning) if the file can't be read or isn't a known image type.
+fn load_cover(path: &Path) -> Result<Option<ImageAsset>> {
+    let data = std::fs::read(path)
+        .with_context(|| format!("failed to read cover image {}", path.display()))?;
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(str::to_ascii_lowercase);
+    if let Some(webp) = crate::images::optimize_to_webp(&data, COVER_QUALITY) {
+        return Ok(Some(ImageAsset {
+            name: "cover.webp".into(),
+            media_type: "image/webp".into(),
+            data: webp,
+        }));
+    }
+    match ext.as_deref().and_then(media_type_for) {
+        Some(media_type) => Ok(Some(ImageAsset {
+            name: format!("cover.{}", ext.unwrap()),
+            media_type: media_type.to_string(),
+            data,
+        })),
+        None => {
+            eprintln!(
+                "[EXPERIMENTAL] warning: ignoring cover '{}' (unsupported image type)",
+                path.display()
+            );
+            Ok(None)
+        }
+    }
+}
+
+/// Find the `.md`/`.markdown` files (sorted by path) and an optional `cover.*`
+/// image directly inside `dir` (non-recursive for files; cover is the shallowest).
+fn collect_markdown_dir(dir: &Path) -> Result<(Vec<PathBuf>, Option<PathBuf>)> {
+    let mut files = Vec::new();
+    let mut cover = None;
+    for entry in std::fs::read_dir(dir)
+        .with_context(|| format!("failed to read folder {}", dir.display()))?
+    {
+        let path = entry?.path();
+        if !path.is_file() {
+            continue;
+        }
+        if is_markdown(&path) {
+            files.push(path);
+        } else if cover.is_none() && is_cover(&path) {
+            cover = Some(path);
+        }
+    }
+    files.sort();
+    Ok((files, cover))
+}
+
+/// True if `path` has a Markdown extension.
+fn is_markdown(path: &Path) -> bool {
+    matches!(
+        path.extension()
+            .and_then(|e| e.to_str())
+            .map(str::to_ascii_lowercase)
+            .as_deref(),
+        Some("md" | "markdown" | "mdown" | "mkd" | "mkdn")
+    )
+}
+
+/// True if `path` is a `cover.<img-ext>` file (the conventional cover name).
+fn is_cover(path: &Path) -> bool {
+    let stem_is_cover = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .map(|s| s.eq_ignore_ascii_case("cover"))
+        .unwrap_or(false);
+    let is_image = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(str::to_ascii_lowercase)
+        .as_deref()
+        .and_then(media_type_for)
+        .is_some();
+    stem_is_cover && is_image
+}
+
+/// Safely unpack a `.zip` into `dest`, returning the Markdown files (sorted by
+/// in-archive path) and an optional `cover.*` image (the shallowest one).
+///
+/// Hardened against zip-slip (entries that escape `dest` are skipped) and zip
+/// bombs (caps on entry count and total uncompressed size).
+fn extract_markdown_zip(bytes: &[u8], dest: &Path) -> Result<(Vec<PathBuf>, Option<PathBuf>)> {
+    use std::io::Cursor;
+
+    const MAX_ENTRIES: usize = 5_000;
+    const MAX_TOTAL_BYTES: u64 = 200 * 1024 * 1024; // 200 MiB uncompressed
+
+    let mut zip = zip::ZipArchive::new(Cursor::new(bytes))
+        .map_err(|e| anyhow::anyhow!("not a valid .zip: {e}"))?;
+    if zip.len() > MAX_ENTRIES {
+        bail!("the .zip has too many entries");
+    }
+
+    let mut total: u64 = 0;
+    let mut md_files: Vec<PathBuf> = Vec::new();
+    let mut covers: Vec<PathBuf> = Vec::new();
+    for i in 0..zip.len() {
+        let mut entry = zip.by_index(i)?;
+        // `enclosed_name` returns None for entries that would escape the target
+        // (absolute paths, `..`) — the zip-slip guard.
+        let rel = match entry.enclosed_name() {
+            Some(p) => p.to_path_buf(),
+            None => continue,
+        };
+        if entry.is_dir() {
+            continue;
+        }
+        total = total.saturating_add(entry.size());
+        if total > MAX_TOTAL_BYTES {
+            bail!("the .zip's contents are too large");
+        }
+        let out = dest.join(&rel);
+        if let Some(parent) = out.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let mut f = std::fs::File::create(&out)?;
+        std::io::copy(&mut entry, &mut f)?;
+
+        if is_markdown(&rel) {
+            md_files.push(out);
+        } else if is_cover(&rel) {
+            covers.push(out);
+        }
+    }
+
+    // Markdown in filename order; cover = the shallowest (fewest path components).
+    md_files.sort();
+    covers.sort_by_key(|p| p.components().count());
+    Ok((md_files, covers.into_iter().next()))
 }
 
 /// A `![alt](url)` being collected: we buffer the alt text, then resolve & embed
@@ -107,9 +335,13 @@ struct PendingImage {
     alt: String,
 }
 
-/// Renders a CommonMark event stream into per-chapter XHTML bodies.
-struct Renderer<'a> {
-    base_dir: &'a Path,
+/// Renders a CommonMark event stream into per-chapter XHTML bodies. A single
+/// renderer can process several files in turn (set [`Renderer::base_dir`] before
+/// each [`Renderer::run`]); chapters and images accumulate across them, so image
+/// names stay globally unique.
+struct Renderer {
+    /// Folder the *current* file's relative image paths resolve against.
+    base_dir: PathBuf,
     /// XHTML accumulated for the current chapter's `<body>`.
     body: String,
     /// Finished chapters: (optional title, body XHTML).
@@ -129,10 +361,10 @@ struct Renderer<'a> {
     in_table_head: bool,
 }
 
-impl<'a> Renderer<'a> {
-    fn new(base_dir: &'a Path) -> Self {
+impl Renderer {
+    fn new() -> Self {
         Renderer {
-            base_dir,
+            base_dir: PathBuf::from("."),
             body: String::new(),
             chapters: Vec::new(),
             images: Vec::new(),
@@ -429,8 +661,8 @@ fn media_type_for(ext: &str) -> Option<&'static str> {
 mod tests {
     use super::*;
 
-    fn render(md: &str) -> Renderer<'static> {
-        let mut r = Renderer::new(Path::new("."));
+    fn render(md: &str) -> Renderer {
+        let mut r = Renderer::new();
         r.run(md);
         r
     }
@@ -506,5 +738,80 @@ mod tests {
         assert_eq!(&bytes[..2], b"PK");
         assert!(bytes.windows(20).any(|w| w == b"application/epub+zip"));
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Read one entry out of a written EPUB (a zip) as a UTF-8 string.
+    fn read_entry(epub: &Path, name: &str) -> String {
+        use std::io::Read;
+        let f = std::fs::File::open(epub).unwrap();
+        let mut zip = zip::ZipArchive::new(f).unwrap();
+        let mut e = zip.by_name(name).unwrap();
+        let mut s = String::new();
+        e.read_to_string(&mut s).unwrap();
+        s
+    }
+
+    #[test]
+    fn folder_of_markdown_becomes_one_book_with_a_cover() {
+        // A non-trivial PNG that actually shrinks when re-encoded to WebP, so the
+        // cover exercises the size-safe optimization path.
+        let img = image::RgbImage::from_fn(256, 256, |x, y| {
+            image::Rgb([(x % 256) as u8, (y % 256) as u8, 128])
+        });
+        let dir = std::env::temp_dir().join(format!("epublift_md_dir_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        image::DynamicImage::ImageRgb8(img)
+            .save(dir.join("cover.png"))
+            .unwrap();
+        // Filenames intentionally out of read order; the import sorts them.
+        std::fs::write(dir.join("01_second.md"), "# Beta\n\nsecond chapter\n").unwrap();
+        std::fs::write(dir.join("00_first.md"), "# Alpha\n\nfirst chapter\n").unwrap();
+
+        let out = dir.join("DEHB.epub");
+        let summary = import_dir(&dir, &out, &ImportOptions::default()).unwrap();
+        // Two `#` chapters + the cover image.
+        assert_eq!(summary.chapters, 2);
+        assert_eq!(summary.images, 1);
+
+        let opf = read_entry(&out, "OEBPS/content.opf");
+        // Title defaults to the folder name, and the cover is wired up both ways.
+        assert!(opf.contains("<dc:title>") && opf.contains("epublift_md_dir"));
+        assert!(opf.contains("properties=\"cover-image\""));
+        assert!(opf.contains("<meta name=\"cover\" content=\"cover-image\"/>"));
+        // Chapters are appended in sorted filename order.
+        assert!(read_entry(&out, "OEBPS/ch001.xhtml").contains("first chapter"));
+        assert!(read_entry(&out, "OEBPS/ch002.xhtml").contains("second chapter"));
+        // The cover page is present and the cover was optimized to WebP.
+        assert!(read_entry(&out, "OEBPS/cover.xhtml").contains("images/cover.webp"));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn zip_of_markdown_imports_every_file() {
+        use std::io::Write;
+        // Build an in-memory zip with two chapters under a top-level folder.
+        let mut buf = Vec::new();
+        {
+            let mut zw = zip::ZipWriter::new(std::io::Cursor::new(&mut buf));
+            let opts = zip::write::SimpleFileOptions::default();
+            zw.start_file("book/00_a.md", opts).unwrap();
+            zw.write_all(b"# One\n\nalpha body\n").unwrap();
+            zw.start_file("book/01_b.md", opts).unwrap();
+            zw.write_all(b"# Two\n\nbeta body\n").unwrap();
+            zw.finish().unwrap();
+        }
+
+        let out =
+            std::env::temp_dir().join(format!("epublift_md_zip_test_{}.epub", std::process::id()));
+        let summary = import_zip(&buf, &out, Some("My Book"), &ImportOptions::default()).unwrap();
+        assert_eq!(summary.chapters, 2);
+
+        let opf = read_entry(&out, "OEBPS/content.opf");
+        assert!(opf.contains("<dc:title>My Book</dc:title>"));
+        assert!(read_entry(&out, "OEBPS/ch001.xhtml").contains("alpha body"));
+        assert!(read_entry(&out, "OEBPS/ch002.xhtml").contains("beta body"));
+
+        let _ = std::fs::remove_file(&out);
     }
 }

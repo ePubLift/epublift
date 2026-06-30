@@ -19,9 +19,9 @@ name = "epublift-web"
 # (the local, offline core behind a future AI "Smart Import"), 13 langs;
 # 1.12.0 adds the [EXPERIMENTAL] "Smart Import" mode: AI OCR (Mistral, PDF → EPUB)
 # behind a config-gated, bring-your-own-key flow (MISTRAL_API_KEY), 13 langs;
-# 1.12.1 lengthens the download-link TTL (2→5 min) so slow Smart Imports don't
-# 404, and adds WARN+ file logging under EPUBLIFT_LOG_DIR (default logs/).
-version = "1.12.1"
+# 1.13.0 makes a `.zip` Markdown import combine every `.md` inside into one book
+# (filename order) and use a cover.png/jpg/webp as the EPUB cover.
+version = "1.13.0"
 edition = "2024"
 license = "AGPL-3.0-or-later"
 description = "Web front-end for epublift: convert, archive, restore & edit EPUB metadata in the browser"

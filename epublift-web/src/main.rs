@@ -6,7 +6,7 @@
 
 use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -646,10 +646,9 @@ async fn import(
                     }
                 }
                 "zip" => {
-                    let root = tmp.path().join("src");
-                    let md_path = extract_zip_find_md(&file_bytes, &root)?;
                     let opts = epublift::markdown::ImportOptions { language };
-                    let s = epublift::markdown::import(&md_path, &out_path, &opts)?;
+                    let s =
+                        epublift::markdown::import_zip(&file_bytes, &out_path, Some(&base), &opts)?;
                     ImportResponse {
                         output_name,
                         kind: "markdown",
@@ -855,72 +854,6 @@ async fn smart_import(
         "application/epub+zip",
     );
     Ok(Json(resp))
-}
-
-/// Safely unpack an uploaded `.zip` into `dest` and return the path of the
-/// Markdown file to import (the shallowest `.md` / `.markdown`).
-///
-/// Hardened against zip-slip (entries that escape `dest` are skipped) and zip
-/// bombs (caps on entry count and total uncompressed size).
-fn extract_zip_find_md(bytes: &[u8], dest: &Path) -> anyhow::Result<PathBuf> {
-    use std::io::Cursor;
-
-    const MAX_ENTRIES: usize = 5_000;
-    const MAX_TOTAL_BYTES: u64 = 200 * 1024 * 1024; // 200 MiB uncompressed
-
-    let mut zip = zip::ZipArchive::new(Cursor::new(bytes))
-        .map_err(|e| anyhow::anyhow!("not a valid .zip: {e}"))?;
-    if zip.len() > MAX_ENTRIES {
-        anyhow::bail!("the .zip has too many entries");
-    }
-
-    let mut total: u64 = 0;
-    let mut md_candidates: Vec<PathBuf> = Vec::new();
-    for i in 0..zip.len() {
-        let mut entry = zip.by_index(i)?;
-        // `enclosed_name` returns None for entries that would escape the target
-        // (absolute paths, `..`) — the zip-slip guard.
-        let rel = match entry.enclosed_name() {
-            Some(p) => p.to_path_buf(),
-            None => continue,
-        };
-        if entry.is_dir() {
-            continue;
-        }
-        total = total.saturating_add(entry.size());
-        if total > MAX_TOTAL_BYTES {
-            anyhow::bail!("the .zip's contents are too large");
-        }
-        let out = dest.join(&rel);
-        if let Some(parent) = out.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-        let mut f = std::fs::File::create(&out)?;
-        std::io::copy(&mut entry, &mut f)?;
-
-        if matches!(
-            rel.extension()
-                .and_then(|e| e.to_str())
-                .map(|e| e.to_ascii_lowercase())
-                .as_deref(),
-            Some("md") | Some("markdown")
-        ) {
-            md_candidates.push(rel);
-        }
-    }
-
-    // Prefer the shallowest .md (fewest path components), then lexically first.
-    md_candidates.sort_by(|a, b| {
-        a.components()
-            .count()
-            .cmp(&b.components().count())
-            .then_with(|| a.cmp(b))
-    });
-    let rel = md_candidates
-        .into_iter()
-        .next()
-        .ok_or_else(|| anyhow::anyhow!("the .zip has no .md / .markdown file"))?;
-    Ok(dest.join(rel))
 }
 
 /// Stash a finished file in memory for one short-lived token download.

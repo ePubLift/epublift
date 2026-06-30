@@ -199,6 +199,7 @@ The full hardening profile, reverse-proxy/TLS setup, and the privacy/security mo
 
 - **[Usage guide](docs/usage.md)** — every flag, per-situation recipes, sandbox testing.
 - **[PDF import guide](docs/pdf-import.md)** — `import`: turn a PDF into a reflowable EPUB (experimental).
+- **[Markdown import guide](docs/markdown-import.md)** — `import`: turn a `.md` file, folder, or `.zip` (multi-chapter + cover) into a reflowable EPUB (experimental).
 - **[Metadata guide](docs/metadata.md)** — `meta` show / set / enrich (ISBN auto-fill, language-aware).
 - **[Archiving guide](docs/archiving.md)** — `archive` / `restore` and the `.eparc` format.
 - **[Web service guide](docs/web-service.md)** — self-hosting `epublift-web`.

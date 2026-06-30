@@ -28,6 +28,11 @@ choose a mode from the switcher at the top of the panel:
   text layer (born-digital books and already-searchable scans), including modern
   Type0/CID fonts. Scanned-only PDFs need OCR, a later phase — they're detected
   and reported, never silently broken.
+- **Import Markdown** *(experimental)* — turn [Markdown into a reflowable
+  EPUB](markdown-import.md): drop a single `.md`, or a **`.zip`** of a whole
+  book. Every `.md` in the zip becomes a chapter (in filename order), referenced
+  images are embedded, and a `cover.png` / `cover.jpg` is used as the cover
+  (re-encoded to WebP when smaller). Fully offline — no API, no network.
 
 It's powered by the same pure-Rust core, and every upload is processed **in memory
 and deleted immediately** — nothing is ever stored or logged, in any mode. The

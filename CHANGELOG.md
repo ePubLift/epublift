@@ -10,6 +10,41 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+## [cli-v1.10.0] - 2026-06-30
+
+### Added
+- **Markdown import now builds a whole book from a folder or `.zip`.** Point
+  `epublift import` at a **directory** of Markdown — or a **`.zip`** of one — and
+  every `.md` / `.markdown` file is imported and **appended in filename order**
+  (so `00_…`, `01_…` chapter prefixes order correctly), instead of just one file.
+  Each file is still split at its own top-level `#` headings.
+- **Cover image support.** A file named `cover.png` / `cover.jpg` / `cover.webp`
+  in the folder/zip becomes the EPUB **cover** (a `cover-image` manifest entry,
+  an EPUB2 `<meta name="cover">` fallback, and a cover page first in the spine).
+  The cover is re-encoded to WebP when that comes out smaller — the same
+  size-safe rule the optimizer uses — so a large source cover doesn't bloat the
+  book. See [docs/markdown-import.md](docs/markdown-import.md).
+
+### Fixed
+- **Zip import no longer drops all but one chapter.** Previously a `.zip` of
+  several `.md` files imported only the shallowest single file (and ignored any
+  cover); a 10-chapter book came out as one. All files are now combined.
+
+## [web-v1.13.0] - 2026-06-30
+
+### Added
+- **Import a whole multi-chapter book (with a cover) from one `.zip`.** Dropping
+  a `.zip` of Markdown now combines **every `.md` inside** into a single EPUB, in
+  filename order, and uses a `cover.png` / `cover.jpg` / `cover.webp` as the book
+  **cover** (re-encoded to WebP when smaller). The UI text is updated in all 13
+  languages.
+
+### Fixed
+- **Zip import no longer keeps only one chapter.** A `.zip` of several Markdown
+  files previously imported just one of them and ignored the cover, so a
+  multi-chapter book arrived as a single short chapter. Every file is now
+  imported and the cover is embedded.
+
 ## [web-v1.12.1] - 2026-06-29
 
 ### Fixed

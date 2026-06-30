@@ -300,6 +300,29 @@ pub fn optimize_images(
     Ok(result)
 }
 
+/// Re-encode a standalone raster image (e.g. an import cover) to WebP at
+/// `quality`, returning the WebP bytes **only if they're smaller** than the
+/// original (the same size-safe rule the EPUB optimizer uses). `None` means
+/// "keep the original" — decode failed, or the re-encode wasn't smaller.
+///
+/// Unlike [`optimize_images`], this works on in-memory bytes with no manifest,
+/// so the Markdown importer can shrink a cover before embedding it.
+#[cfg(feature = "markdown")]
+pub fn optimize_to_webp(original: &[u8], quality: u8) -> Option<Vec<u8>> {
+    let dynimg = decode_image(original).ok()?;
+    // Don't re-encode a JPEG above its source quality (it would only inflate).
+    let is_jpeg = matches!(image::guess_format(original), Ok(image::ImageFormat::Jpeg));
+    let q = if is_jpeg {
+        estimate_jpeg_quality(original)
+            .map(|src| quality.min(src))
+            .unwrap_or(quality)
+    } else {
+        quality
+    };
+    let webp = encode_webp(&dynimg, q).ok()?;
+    (webp.len() < original.len()).then_some(webp)
+}
+
 fn push_unique(pairs: &mut Vec<(String, String)>, old: String, new: String) {
     if !pairs.iter().any(|(o, _)| *o == old) {
         pairs.push((old, new));

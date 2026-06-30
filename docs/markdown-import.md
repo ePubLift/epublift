@@ -22,13 +22,19 @@ never depends on any cloud service.
 ## Usage
 
 ```sh
-# routed by extension; .md / .markdown → this path
+# A single Markdown file (routed by extension; .md / .markdown → this path)
 epublift import -i book.md -o book.epub --language en
+
+# A folder of Markdown — every .md becomes a chapter, cover.png becomes the cover
+epublift import -i ./my-book -o my-book.epub --language en
+
+# A .zip of the same (handy for the web service, or sharing)
+epublift import -i my-book.zip -o my-book.epub --language en
 ```
 
 | Flag | Meaning | Default |
 | ---- | ------- | ------- |
-| `-i, --input` | Path to the `.md` / `.markdown` file | *(required)* |
+| `-i, --input` | A `.md` / `.markdown` file, a **folder** of them, or a **`.zip`** | *(required)* |
 | `-o, --output` | Where to write the EPUB | alongside the input |
 | `--language` | Content language (BCP-47, e.g. `tr`); sets `dc:language` | `en` |
 
@@ -40,6 +46,28 @@ A valid **EPUB 3.3** synthesised from scratch (the same writer the PDF import
 uses). Chapters are split at **top-level `#` headings**; the first `#` becomes
 the book title (falling back to the file name). Content before the first `#`
 becomes a leading section.
+
+## Multiple files & a cover (folder / `.zip` input)
+
+A whole book rarely lives in one `.md`. Point `import` at a **folder** — or a
+**`.zip`** of one — and it builds a single EPUB from everything inside:
+
+- **Every `.md` / `.markdown` file** is imported and appended in **filename
+  order**, so a `00_intro.md`, `01_chapter.md`, … naming scheme orders the book
+  correctly. (Each file is still split at its own top-level `#` headings, so one
+  file can contribute several chapters.)
+- **`cover.png` / `cover.jpg` / `cover.webp`** (a file literally named `cover.*`)
+  becomes the EPUB **cover image** — a `cover-image` manifest entry, an
+  EPUB2-style `<meta name="cover">` fallback, and a cover page first in the
+  spine. The cover is re-encoded to WebP when that comes out smaller (the same
+  size-safe rule the optimizer uses), so a huge source cover doesn't bloat the
+  book.
+- The **book title** defaults to the folder / zip name.
+- Each file's images resolve relative to **that file's** own folder, so a zip
+  that keeps per-chapter image subfolders still works.
+
+`.zip` unpacking is hardened against zip-slip and zip bombs (entry-count and
+total-size caps).
 
 ### Supported Markdown
 

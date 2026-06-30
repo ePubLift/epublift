@@ -45,13 +45,17 @@ pub(crate) struct ImageAsset {
     pub data: Vec<u8>,
 }
 
-/// Write `chapters` (+ their `images`) as a reflow EPUB 3.3 to `out`.
+/// Write `chapters` (+ their `images`) as a reflow EPUB 3.3 to `out`. When
+/// `cover` is set, it's embedded as the EPUB cover image: a `cover-image`
+/// manifest entry, an EPUB2-fallback `<meta name="cover">`, and a `cover.xhtml`
+/// page placed first in the spine.
 pub(crate) fn package_epub(
     out: &Path,
     title: &str,
     language: &str,
     chapters: &[RenderedChapter],
     images: &[ImageAsset],
+    cover: Option<&ImageAsset>,
 ) -> Result<()> {
     let file = std::fs::File::create(out)
         .with_context(|| format!("failed to create {}", out.display()))?;
@@ -74,6 +78,36 @@ pub(crate) fn package_epub(
     let mut manifest = String::new();
     let mut spine = String::new();
     let mut nav_items = String::new();
+    let mut cover_meta = String::new();
+
+    // Cover (optional): the image, a cover page, and the spine entry come first so
+    // it opens the book. Already-compressed image bytes are stored, not deflated.
+    if let Some(c) = cover {
+        zip.start_file(format!("OEBPS/images/{}", c.name), stored)?;
+        zip.write_all(&c.data)?;
+
+        let cover_xhtml = format!(
+            r#"<?xml version="1.0" encoding="utf-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="{lang}"><head><title>Cover</title>
+<style>html,body{{margin:0;padding:0;height:100%;text-align:center}}img{{max-width:100%;max-height:100%}}</style></head>
+<body><div><img src="images/{name}" alt="Cover"/></div></body></html>"#,
+            lang = esc(language),
+            name = c.name,
+        );
+        zip.start_file("OEBPS/cover.xhtml", deflated)?;
+        zip.write_all(cover_xhtml.as_bytes())?;
+
+        manifest.push_str(&format!(
+            "  <item id=\"cover-image\" href=\"images/{}\" media-type=\"{}\" properties=\"cover-image\"/>\n",
+            c.name, c.media_type,
+        ));
+        manifest.push_str(
+            "  <item id=\"cover\" href=\"cover.xhtml\" media-type=\"application/xhtml+xml\"/>\n",
+        );
+        spine.push_str("  <itemref idref=\"cover\"/>\n");
+        // EPUB2-style cover hint, still honoured by many reading systems / KDP.
+        cover_meta.push_str("  <meta name=\"cover\" content=\"cover-image\"/>\n");
+    }
 
     // Images are already compressed (JPEG/PNG/WebP/…) → store, don't deflate.
     for (i, img) in images.iter().enumerate() {
@@ -135,7 +169,7 @@ pub(crate) fn package_epub(
   <dc:title>{title}</dc:title>
   <dc:language>{lang}</dc:language>
   <meta property="dcterms:modified">2026-01-01T00:00:00Z</meta>
- </metadata>
+{cover_meta} </metadata>
  <manifest>
   <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
 {manifest} </manifest>
@@ -145,6 +179,7 @@ pub(crate) fn package_epub(
             n = chapters.len(),
             title = esc(title),
             lang = esc(language),
+            cover_meta = cover_meta,
         )
         .as_bytes(),
     )?;
@@ -187,7 +222,7 @@ mod tests {
         }];
         let out =
             std::env::temp_dir().join(format!("epublift_pkg_test_{}.epub", std::process::id()));
-        package_epub(&out, "My Title", "en", &chapters, &[]).unwrap();
+        package_epub(&out, "My Title", "en", &chapters, &[], None).unwrap();
         let bytes = std::fs::read(&out).unwrap();
         let _ = std::fs::remove_file(&out);
 

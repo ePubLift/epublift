@@ -390,13 +390,28 @@ fn run_import(args: &ImportArgs) -> Result<()> {
         .unwrap_or("")
         .to_ascii_lowercase();
 
+    // A folder of Markdown, or a `.zip` of Markdown-plus-images, becomes one book:
+    // every `.md` is appended in filename order and a `cover.*` image is used as
+    // the cover. A single `.md` file imports just that file.
     #[cfg(feature = "markdown")]
-    if matches!(ext.as_str(), "md" | "markdown" | "mdown" | "mkd" | "mkdn") {
+    if args.input.is_dir()
+        || ext == "zip"
+        || matches!(ext.as_str(), "md" | "markdown" | "mdown" | "mkd" | "mkdn")
+    {
         use epublift::markdown::{self, ImportOptions};
         let opts = ImportOptions {
             language: args.language.clone(),
         };
-        let summary = markdown::import(&args.input, &output, &opts)?;
+        let summary = if args.input.is_dir() {
+            markdown::import_dir(&args.input, &output, &opts)?
+        } else if ext == "zip" {
+            let bytes = std::fs::read(&args.input)
+                .with_context(|| format!("failed to read {}", args.input.display()))?;
+            let title = args.input.file_stem().and_then(|s| s.to_str());
+            markdown::import_zip(&bytes, &output, title, &opts)?
+        } else {
+            markdown::import(&args.input, &output, &opts)?
+        };
         eprintln!(
             "[EXPERIMENTAL] imported {} → {} ({} chapters, {} images)",
             args.input.display(),

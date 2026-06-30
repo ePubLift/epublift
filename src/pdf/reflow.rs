@@ -48,7 +48,7 @@ pub(crate) fn write_epub(
         });
     }
 
-    package_epub(out, title, language, &rendered, &images)
+    package_epub(out, title, language, &rendered, &images, None)
 }
 
 #[cfg(test)]

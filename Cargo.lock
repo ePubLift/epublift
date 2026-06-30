@@ -817,7 +817,7 @@ checksum = "f8e1bd41ecce82c300d0c84fa35b080fa6db50a5398b18f1abf0357bb067549e"
 
 [[package]]
 name = "epublift"
-version = "1.9.0"
+version = "1.10.0"
 dependencies = [
  "almost-enough",
  "any_ascii",
@@ -858,7 +858,7 @@ dependencies = [
 
 [[package]]
 name = "epublift-web"
-version = "1.12.1"
+version = "1.13.0"
 dependencies = [
  "anyhow",
  "axum",
