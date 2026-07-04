@@ -124,6 +124,29 @@ own. The lookup uses a **pure-Rust** HTTPS client (rustls + RustCrypto, no C), s
 (`cargo build --features metadata`); `show` and `set` are always available and
 need no network. Full details: [Metadata](metadata.md).
 
+### Validate an EPUB (`check`)
+
+The `check` subcommand validates one or more EPUBs against the spec and reports
+problems with epubcheck-compatible message IDs. It uses
+[epubveri](https://github.com/ePubLift/epubveri) — our own **pure-Rust, JVM-free**
+alternative to W3C `epubcheck` — so there's no Java and no external process.
+
+```sh
+epublift check book.epub                 # human-readable report
+epublift check *.epub --quiet            # only print files with problems
+epublift check book.epub --json          # machine-readable, one object per file
+epublift check dict.epub --profile dict  # validate against an extension profile
+```
+
+The exit code follows grep's convention — `0` if every input is valid (zero
+ERROR-severity messages), `1` if any has problems or can't be read — so it drops
+straight into a build script: `epublift check dist/*.epub || exit 1`. It's
+compiled only with the opt-in `validate` feature
+(`cargo build --features validate`; included in the release binaries). epubveri
+is **pre-1.0** (~98.8% message-ID recall vs epubcheck — not yet full parity), so
+treat a clean check as strong evidence, not a conformance certificate. Full
+details: [Validation](validate.md).
+
 ### Keep original images (`--keep-images`)
 
 By default epublift converts JPEG/PNG to **WebP**, which most readers (Apple Books, Calibre, and other apps) render fine and which gives the biggest size win. But some devices advertise EPUB 3.3 support yet **do not actually render WebP** — notably **Kobo e-ink readers** (Forma, Sage, …), where a WebP-converted book shows blank images. For those, use `--keep-images` to leave images in their original format while still modernizing the structure:

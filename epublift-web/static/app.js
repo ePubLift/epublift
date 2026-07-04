@@ -49,6 +49,8 @@ const MODE_CFG = {
   import:   { accept: '.pdf,.md,.markdown,.zip', dropKey: 'drop_title_pdf', hKey: 'opt_h_import', ctaKey: 'cta_import', workKey: 'cta_working_import', readyKey: 'res_ready_import', endpoint: '/import' },
   smart:    { accept: '.pdf', dropKey: 'drop_title_smart', hKey: 'opt_h_import', ctaKey: 'cta_import', workKey: 'cta_working_import', readyKey: 'res_ready_import', endpoint: '/smart-import' },
   metadata: { accept: '.epub',  dropKey: 'drop_title' },
+  // Validate runs entirely client-side (WASM) — no endpoint, no upload.
+  validate: { accept: '.epub',  dropKey: 'drop_title', hKey: 'opt_h_validate', ctaKey: 'cta_validate', workKey: 'cta_working_validate' },
 };
 const importLang = document.getElementById('importLang');
 // Smart Import (AI OCR) elements + capability flag (set from /config on load).
@@ -186,6 +188,12 @@ go.addEventListener('click', async () => {
   const prev = ctaLabel.textContent;
   go.disabled = true; go.style.opacity = .7; ctaLabel.textContent = T(cfg.workKey);
   try {
+    // Validate is fully client-side: load the WASM validator and run it here —
+    // the file never leaves the browser (no fetch, no upload).
+    if (mode === 'validate') {
+      await runValidate();
+      return;
+    }
     const fd = new FormData();
     fd.append('file', selectedFile);
     if (mode === 'optimize'){
@@ -256,6 +264,11 @@ function renderResult(m, data){
   resReady.textContent = T(MODE_CFG[m].readyKey);
 
   const dl = document.getElementById('dl');
+  // Restore the shared result-top after a Validate run may have altered it.
+  dl.classList.remove('hide');
+  resReady.style.color = '';
+  const badge = document.querySelector('.result-top .badge');
+  if (badge) badge.style.display = '';
   dl.href = '/download/' + encodeURIComponent(data.download_token);
   dl.download = data.output_name;
 
@@ -292,6 +305,73 @@ function renderResult(m, data){
     const sizeStr = '<b>' + fmtBytes(data.output_size) + '</b>';
     const key = data.modernized ? 'sub_restore_modernized' : 'sub_restore_exact';
     resultSub.innerHTML = fill(key, { n: '<b>' + data.entries + '</b>', size: sizeStr });
+  }
+
+  result.classList.remove('show'); void result.offsetWidth; result.classList.add('show');
+  result.scrollIntoView({ behavior:'smooth', block:'center' });
+}
+
+// ---- validate (client-side WASM) ---------------------------------------------
+// The epubveri validator is a ~1 MB WASM module; load it lazily the first time
+// the user validates, then cache it. Dynamic import of a same-origin module is
+// allowed under `script-src 'self'`; WASM compilation needs `'wasm-unsafe-eval'`
+// (both set in the CSP — see the server's main.rs).
+let _epubveri = null;
+async function loadEpubveri(){
+  if (_epubveri) return _epubveri;
+  const mod = await import('/vendor/epubveri.js');
+  await mod.default(); // wasm-pack `--target web` init(): fetch + compile the .wasm
+  _epubveri = mod;
+  return mod;
+}
+
+async function runValidate(){
+  const mod = await loadEpubveri();
+  const bytes = new Uint8Array(await selectedFile.arrayBuffer());
+  const report = mod.validate(bytes, undefined); // profile: default (base EPUB 3)
+  renderValidate(report, selectedFile.name);
+}
+
+function renderValidate(report, filename){
+  const ok = report.valid;
+  outname.textContent = filename;
+  // No download for a validation run: hide the button, repurpose the headline
+  // and badge to carry the pass/fail verdict.
+  const dl = document.getElementById('dl');
+  dl.classList.add('hide');
+  resReady.removeAttribute('data-i18n'); // verdict is set directly, not a static key
+  resReady.textContent = (ok ? '✓ ' : '✗ ') + T(ok ? 'val_valid' : 'val_invalid');
+  resReady.style.color = ok ? '' : '#b4540a';
+  const badge = document.querySelector('.result-top .badge');
+  if (badge) badge.style.display = ok ? '' : 'none'; // a green check would contradict a fail
+
+  applyResultVisibility('validate');
+  resultSub.hidden = true;
+
+  document.getElementById('valCounts').textContent =
+    fill('val_counts', { e: report.errors, w: report.warnings, n: report.messages.length });
+
+  const table = document.getElementById('valTable');
+  const clean = document.getElementById('valClean');
+  const tbody = document.getElementById('valTbody');
+  tbody.textContent = '';
+  if (report.messages.length === 0){
+    table.hidden = true; clean.classList.remove('hide');
+  } else {
+    clean.classList.add('hide'); table.hidden = false;
+    for (const m of report.messages){
+      const tr = document.createElement('tr');
+      // Colour class stays keyed on the raw severity (ERROR/WARNING/INFO); the
+      // visible label is localized (e.g. "HATA", "エラー").
+      const sev = document.createElement('td'); sev.className = 'sev ' + m.severity;
+      sev.textContent = T('val_sev_' + m.severity.toLowerCase());
+      const id = document.createElement('td'); id.className = 'vid';
+      const c = document.createElement('code'); c.style.fontFamily = 'inherit'; c.textContent = m.id; id.appendChild(c);
+      const txt = document.createElement('td'); txt.textContent = m.text;
+      const loc = document.createElement('td'); loc.className = 'vloc'; loc.textContent = m.location || '';
+      tr.append(sev, id, txt, loc);
+      tbody.appendChild(tr);
+    }
   }
 
   result.classList.remove('show'); void result.offsetWidth; result.classList.add('show');

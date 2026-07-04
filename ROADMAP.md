@@ -327,6 +327,33 @@ builds. Came from a community request (issue #40). Web-only, behind the opt-in
 
 ---
 
+## ✅ Shipped — EPUB validation (`check`) — cli-v1.11.0 · web-v1.14.0
+
+Goal: let ePubLift validate an EPUB against the spec, and validate its own output.
+Powered by [**epubveri**](https://github.com/ePubLift/epubveri) — our own
+**pure-Rust, JVM-free** alternative to W3C's Java `epubcheck` — consumed as the
+published crates.io crate (dogfooding). Design: [`docs/validate.md`](docs/validate.md).
+
+- [x] **CLI `epublift check`** — validate one or more EPUBs with epubcheck-compatible
+      message IDs (`RSC-005`, `OPF-…`), grep-style exit code (`0` valid / `1` problems)
+      for CI, `--json` / `--quiet` / `--profile`. Behind the opt-in `validate` feature
+      (shipped in the release binaries).
+- [x] **Web "Validate" mode** — the *same* engine as **WebAssembly, entirely
+      client-side**: the file is **never uploaded**, no server round-trip. Verdict +
+      a table of spec problems, beta-labelled, honest about epubveri's pre-1.0 maturity.
+      UI, verdict and severity labels (ERROR → HATA, エラー, …) localized in all 13
+      languages; message IDs are universal and message text stays English for now.
+- [x] **Dogfooding** — depends on the published `epubveri` crate exactly like any
+      other user would ("if we don't consume our own published crate, why would anyone
+      else?").
+- [ ] *(Later, being scoped)* Localize the message **text** itself (an epubveri-side
+      feature: emit message ID + params, or accept a locale); a **"fix common issues"**
+      release that repairs the problems it finds (dedupe spine itemrefs, drop empty /
+      legacy metadata, strip dangling references) — which also closes the optimizer's
+      OPF-cleaning gap.
+
+---
+
 ## 🔬 Experimental / research
 
 Tracked separately from the shipping product.

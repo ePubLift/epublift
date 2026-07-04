@@ -211,6 +211,8 @@ async fn main() {
         .route("/", get(index))
         .route("/app.js", get(app_js))
         .route("/i18n.js", get(i18n_js))
+        .route("/vendor/epubveri.js", get(epubveri_js))
+        .route("/vendor/epubveri_bg.wasm", get(epubveri_wasm))
         .route("/healthz", get(|| async { "ok" }))
         .route("/version", get(version))
         .route("/config", get(config))
@@ -240,6 +242,9 @@ async fn main() {
         // Content-Security-Policy: deny everything by default, then allow only
         // what the single page actually loads. The front-end script lives at
         // its own `/app.js` so we can use `script-src 'self'` (no inline JS).
+        // `'wasm-unsafe-eval'` is added so the client-side Validate mode can
+        // compile the same-origin epubveri WASM module (it allows WebAssembly
+        // compilation only — not arbitrary `eval`, unlike `'unsafe-eval'`).
         // `'unsafe-inline'` is only granted to styles (the inline <style> block
         // and many style="..." attributes); there is no HTML-injection sink, so
         // this is low-risk. Fonts come from Google Fonts; everything else is
@@ -248,7 +253,7 @@ async fn main() {
             header::CONTENT_SECURITY_POLICY,
             header::HeaderValue::from_static(
                 "default-src 'none'; \
-                 script-src 'self'; \
+                 script-src 'self' 'wasm-unsafe-eval'; \
                  style-src 'unsafe-inline' https://fonts.googleapis.com; \
                  font-src https://fonts.gstatic.com; \
                  img-src 'self' data:; \
@@ -336,6 +341,33 @@ async fn app_js() -> impl IntoResponse {
             header::HeaderValue::from_static("text/javascript; charset=utf-8"),
         )],
         include_str!("../static/app.js"),
+    )
+}
+
+/// Serve the epubveri WASM glue (the `wasm-pack --target web` ES module) as a
+/// same-origin module, so the client-side Validate mode loads it under
+/// `script-src 'self'`. The glue fetches `epubveri_bg.wasm` relative to its own
+/// URL, so both live under `/vendor/`. See the Validate mode in app.js.
+async fn epubveri_js() -> impl IntoResponse {
+    (
+        [(
+            header::CONTENT_TYPE,
+            header::HeaderValue::from_static("text/javascript; charset=utf-8"),
+        )],
+        include_str!("../static/vendor/epubveri.js"),
+    )
+}
+
+/// Serve the epubveri WASM binary (pure-Rust EPUB validator, ~1 MB) as a
+/// same-origin `application/wasm` asset. EPUB validation runs entirely in the
+/// browser from this module — the file is never uploaded.
+async fn epubveri_wasm() -> impl IntoResponse {
+    (
+        [(
+            header::CONTENT_TYPE,
+            header::HeaderValue::from_static("application/wasm"),
+        )],
+        include_bytes!("../static/vendor/epubveri_bg.wasm").as_slice(),
     )
 }
 

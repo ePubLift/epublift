@@ -162,6 +162,33 @@ enum Command {
     /// [EXPERIMENTAL] Import a PDF or Markdown file into a reflowable EPUB.
     #[cfg(any(feature = "pdf", feature = "markdown"))]
     Import(ImportArgs),
+    /// Validate EPUB(s) against the spec (pure-Rust epubcheck alternative).
+    #[cfg(feature = "validate")]
+    Check(CheckArgs),
+}
+
+/// `epublift check …` — validate EPUB file(s) against the EPUB spec using our
+/// pure-Rust epubveri engine (a JVM-free epubcheck alternative). Exits non-zero
+/// when any input has ERROR-severity problems. See docs/validate.md.
+#[cfg(feature = "validate")]
+#[derive(clap::Args, Debug)]
+struct CheckArgs {
+    /// EPUB file(s) to validate.
+    #[arg(required = true, value_name = "EPUB")]
+    paths: Vec<PathBuf>,
+
+    /// Validate against an EPUB extension profile: `dict` (dictionaries),
+    /// `edupub`, `idx` (indexes) or `preview`. Default: base EPUB 3 only.
+    #[arg(long, value_name = "dict|edupub|idx|preview")]
+    profile: Option<String>,
+
+    /// Emit machine-readable JSON instead of the human-readable report.
+    #[arg(long)]
+    json: bool,
+
+    /// Only report files that have problems; stay silent on clean passes.
+    #[arg(short, long)]
+    quiet: bool,
 }
 
 /// `epublift import …` — [EXPERIMENTAL] convert a PDF or Markdown file to a reflow
@@ -370,6 +397,8 @@ fn run(args: Args) -> Result<()> {
         Some(Command::Restore(r)) => return run_restore(r),
         #[cfg(any(feature = "pdf", feature = "markdown"))]
         Some(Command::Import(i)) => return run_import(i),
+        #[cfg(feature = "validate")]
+        Some(Command::Check(c)) => return run_check(c),
         None => {}
     }
     run_convert(args)
@@ -455,6 +484,169 @@ fn run_import(args: &ImportArgs) -> Result<()> {
         args.input.display(),
         kinds.join(", "),
     )
+}
+
+/// `epublift check …` — validate EPUB file(s) with the pure-Rust epubveri
+/// engine. Prints a per-file report (human-readable or `--json`) and exits
+/// non-zero if any input has ERROR-severity problems.
+#[cfg(feature = "validate")]
+fn run_check(args: &CheckArgs) -> Result<()> {
+    use std::io::Write;
+
+    let profile = args.profile.as_deref();
+    // Collect each file's outcome so we can emit one JSON array, and so the
+    // process exit code reflects the whole batch (non-zero if any book fails).
+    struct FileResult {
+        path: PathBuf,
+        report: Option<epubveri::report::Report>,
+        error: Option<String>,
+    }
+    let mut results: Vec<FileResult> = Vec::new();
+    for path in &args.paths {
+        match epubveri::validate_path_with_profile(path, profile) {
+            Ok(report) => results.push(FileResult {
+                path: path.clone(),
+                report: Some(report),
+                error: None,
+            }),
+            Err(e) => results.push(FileResult {
+                path: path.clone(),
+                report: None,
+                error: Some(e.to_string()),
+            }),
+        }
+    }
+
+    // A book "passed" only if it was read and has zero ERROR-severity messages.
+    let any_failed = results
+        .iter()
+        .any(|r| r.error.is_some() || r.report.as_ref().is_none_or(|rep| !rep.is_valid()));
+
+    if args.json {
+        let mut out = String::from("[");
+        for (i, r) in results.iter().enumerate() {
+            if i > 0 {
+                out.push(',');
+            }
+            out.push_str("\n  {");
+            out.push_str(&format!(
+                "\"file\": {}",
+                json_str(&r.path.display().to_string())
+            ));
+            match (&r.report, &r.error) {
+                (Some(rep), _) => {
+                    out.push_str(&format!(
+                        ", \"valid\": {}, \"errors\": {}, \"warnings\": {}, \"messages\": [",
+                        rep.is_valid(),
+                        rep.errors(),
+                        rep.warnings()
+                    ));
+                    for (j, m) in rep.messages.iter().enumerate() {
+                        if j > 0 {
+                            out.push(',');
+                        }
+                        out.push_str(&format!(
+                            "{{\"id\": {}, \"severity\": {}, \"text\": {}, \"location\": {}}}",
+                            json_str(m.id),
+                            json_str(&m.severity.to_string()),
+                            json_str(&m.text),
+                            match &m.location {
+                                Some(l) => json_str(l),
+                                None => "null".to_string(),
+                            }
+                        ));
+                    }
+                    out.push(']');
+                }
+                (None, Some(err)) => {
+                    out.push_str(&format!(", \"valid\": false, \"error\": {}", json_str(err)));
+                }
+                (None, None) => {}
+            }
+            out.push('}');
+        }
+        out.push_str("\n]");
+        println!("{out}");
+    } else {
+        let mut stdout = std::io::stdout().lock();
+        for r in &results {
+            let name = r.path.display();
+            match (&r.report, &r.error) {
+                (Some(rep), _) => {
+                    let (errs, warns) = (rep.errors(), rep.warnings());
+                    let pass = rep.is_valid();
+                    if pass && warns == 0 && args.quiet {
+                        continue;
+                    }
+                    let status = if pass { "PASS" } else { "FAIL" };
+                    let _ = writeln!(
+                        stdout,
+                        "{status}  {name}  ({errs} error{}, {warns} warning{})",
+                        plural(errs),
+                        plural(warns)
+                    );
+                    for m in &rep.messages {
+                        let loc = m.location.as_deref().unwrap_or("");
+                        let sep = if loc.is_empty() { "" } else { "  " };
+                        let _ = writeln!(
+                            stdout,
+                            "    {:<7} {}  {}{sep}{}",
+                            m.severity.to_string(),
+                            m.id,
+                            loc,
+                            m.text
+                        );
+                    }
+                }
+                (None, Some(err)) => {
+                    let _ = writeln!(stdout, "ERROR {name}  (could not read: {err})");
+                }
+                (None, None) => {}
+            }
+        }
+        // Honest footer: epubveri is pre-1.0 and not yet full epubcheck parity.
+        if !args.quiet || any_failed {
+            eprintln!(
+                "\nValidated with epubveri (pure-Rust, JVM-free; pre-1.0, ~98.8% \
+                 message-ID recall vs epubcheck — not yet full parity)."
+            );
+        }
+    }
+
+    if any_failed {
+        // Distinct, grep-like exit code: the command ran fine, but validation
+        // found problems. Not an anyhow error (that would print "Fatal Error").
+        std::io::stdout().flush().ok();
+        std::process::exit(1);
+    }
+    Ok(())
+}
+
+/// Minimal JSON string encoder for `check --json` (avoids pulling serde_json
+/// into the `validate` feature). Escapes the characters JSON requires.
+#[cfg(feature = "validate")]
+fn json_str(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 2);
+    out.push('"');
+    for c in s.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    out
+}
+
+/// `""` or `"s"` for singular/plural counts.
+#[cfg(feature = "validate")]
+fn plural(n: usize) -> &'static str {
+    if n == 1 { "" } else { "s" }
 }
 
 /// `epublift meta …` — read or edit a book's metadata.

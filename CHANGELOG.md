@@ -10,6 +10,35 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+## [cli-v1.11.0] - 2026-07-04
+
+### Added
+- **Validate an EPUB against the spec (`epublift check`).** New subcommand that
+  checks one or more EPUBs and reports problems with epubcheck-compatible
+  message IDs (`RSC-005`, `OPF-053`, `PKG-016`, …). Powered by
+  [epubveri](https://github.com/ePubLift/epubveri) — our own **pure-Rust,
+  JVM-free** alternative to W3C `epubcheck` (no Java, no external process),
+  consumed as the published crates.io crate. Grep-style exit code (`0` valid,
+  `1` problems found) for CI gating; `--json` for tooling; `--quiet` to show
+  only failing files; `--profile dict|edupub|idx|preview` for extension specs.
+  Behind the opt-in `validate` build feature (shipped in the release binaries).
+  epubveri is pre-1.0 (~98.8% message-ID recall vs epubcheck — not yet full
+  parity), and `check` says so. See [docs/validate.md](docs/validate.md).
+
+## [web-v1.14.0] - 2026-07-04
+
+### Added
+- **"Validate" mode — client-side EPUB validation (WASM).** The web UI gains a
+  Validate tab that runs epubveri **entirely in the browser** as WebAssembly —
+  the file is **never uploaded**, no server round-trip. Shows the pass/fail
+  verdict and a table of spec problems with epubcheck-compatible message IDs.
+  The `wasm-pack --target web` build is vendored and served same-origin; CSP adds
+  `'wasm-unsafe-eval'` so the WASM can compile. Beta-labelled, honest about
+  epubveri's pre-1.0 maturity. UI, verdict and **severity labels** (ERROR → HATA,
+  エラー, …) are localized in all 13 languages; message IDs are universal
+  (`RSC-005`) and the message text stays in English for now. See
+  [docs/validate.md](docs/validate.md).
+
 ## [cli-v1.10.1] - 2026-06-30
 
 ### Fixed
