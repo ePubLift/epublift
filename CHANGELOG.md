@@ -10,6 +10,43 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+## [cli-v1.12.0] - 2026-07-06
+
+### Added
+- **Fix common EPUB issues (`epublift repair`).** New CLI subcommand that
+  automatically fixes three specific structural defects in an EPUB's package
+  document — nothing else, and no per-issue prompts, all applicable fixes are
+  applied in one pass:
+  - **Duplicate spine entries** — the same chapter listed twice in the
+    reading order; the first occurrence is kept, later ones are dropped.
+  - **Empty or legacy metadata fields** — blank `dc:title`, `dc:date`,
+    `dc:publisher`, etc. are removed. Safety guard: the book's only
+    title/identifier/language, or its unique-identifier anchor, is never
+    removed even if empty.
+  - **Dangling references** — a manifest entry pointing at a file that
+    doesn't exist in the archive, or a spine entry pointing at a manifest
+    entry that doesn't exist (including one just removed above).
+
+  This is deliberately narrow — it doesn't touch content documents (chapter
+  XHTML), and it's not a substitute for `check`/Validate, which still covers
+  far more of the spec. Writes a new file; the input is never modified.
+  `--dry-run` previews the fix without writing anything. Ships in the
+  default build (no new dependencies). See [docs/repair.md](docs/repair.md).
+
+## [web-v1.15.0] - 2026-07-06
+
+### Added
+- **"Repair" web mode.** A new tab, separate from Validate, that runs the same
+  fix server-side (the three issue types described above) and offers the
+  repaired file for download. A failing Validate result now shows a
+  **"Fix these issues →"** link that hands the already-selected file to
+  Repair without re-uploading. The result always notes that repair only
+  covers those three issue types today — run Validate for the full picture.
+  All 13 UI languages.
+- **Mode tab bar reorganized.** Tabs now wrap onto 2 rows instead of shrinking
+  into one cramped line as more are added, and are grouped logically: Optimize
+  → Validate → Repair → Metadata → Archive → Restore → Import → Smart.
+
 ## [cli-v1.11.0] - 2026-07-04
 
 ### Added

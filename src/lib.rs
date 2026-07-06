@@ -37,6 +37,7 @@ mod nav;
 mod opf;
 #[cfg(feature = "pdf")]
 pub mod pdf;
+pub mod repair;
 // AI "Smart Import": cloud OCR (PDF → Markdown) feeding the offline Markdown core.
 mod report;
 #[cfg(feature = "smart-import")]
@@ -47,7 +48,7 @@ pub mod zstd_ocf;
 
 use anyhow::{Context, Result, bail};
 use chrono::Utc;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs::{self, File};
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
@@ -388,6 +389,83 @@ pub fn write_metadata(
     writer.finish()?;
 
     meta::parse_metadata(&new_opf)
+}
+
+/// Open `input`, collect the full set of archive entry names (needed for the
+/// dangling-href check), and read the OPF's own text. Shared by
+/// [`write_repaired`] and [`plan_repair`].
+fn open_for_repair(input: &Path) -> Result<(ZipArchive<File>, String, HashSet<String>, String)> {
+    let file = File::open(input).with_context(|| format!("EPUB not found: {}", input.display()))?;
+    let mut zip = ZipArchive::new(file).context("Input is not a valid EPUB (zip) archive")?;
+    let opf_name = opf_entry_name(&mut zip)?;
+
+    let entry_names: HashSet<String> = (0..zip.len())
+        .map(|i| Ok::<_, anyhow::Error>(zip.by_index(i)?.name().to_string()))
+        .collect::<Result<_>>()?;
+
+    let opf_xml = {
+        let mut s = String::new();
+        zip.by_name(&opf_name)
+            .with_context(|| format!("OPF package document not found in EPUB: {opf_name}"))?
+            .read_to_string(&mut s)?;
+        s
+    };
+
+    Ok((zip, opf_name, entry_names, opf_xml))
+}
+
+/// Report what [`write_repaired`] would fix, without writing anything.
+pub fn plan_repair(input: &Path) -> Result<repair::RepairReport> {
+    let (_zip, opf_name, entry_names, opf_xml) = open_for_repair(input)?;
+    let (_new_opf, report) = repair::repair_opf(&opf_xml, &opf_name, &entry_names)?;
+    Ok(report)
+}
+
+/// Fix common OPF structural defects in `input`, writing the result to
+/// `output` (the input is never modified). Only the OPF entry is rewritten;
+/// every other entry is copied through. See [`repair::RepairReport`].
+pub fn write_repaired(input: &Path, output: &Path) -> Result<repair::RepairReport> {
+    let (mut zip, opf_name, entry_names, opf_xml) = open_for_repair(input)?;
+    let (new_opf, report) = repair::repair_opf(&opf_xml, &opf_name, &entry_names)?;
+
+    let out =
+        File::create(output).with_context(|| format!("Failed to create {}", output.display()))?;
+    let mut writer = ZipWriter::new(out);
+    let stored = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
+    let deflated = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
+
+    // mimetype first, stored.
+    let mimetype = match zip.by_name("mimetype") {
+        Ok(mut e) => {
+            let mut b = Vec::new();
+            e.read_to_end(&mut b)?;
+            b
+        }
+        Err(_) => b"application/epub+zip".to_vec(),
+    };
+    writer.start_file("mimetype", stored)?;
+    io::Write::write_all(&mut writer, &mimetype)?;
+
+    // Everything else deflated, with the OPF entry swapped for the repaired XML.
+    for i in 0..zip.len() {
+        let mut entry = zip.by_index(i)?;
+        let name = entry.name().to_string();
+        if name == "mimetype" || entry.is_dir() {
+            continue;
+        }
+        let data = if name == opf_name {
+            new_opf.clone().into_bytes()
+        } else {
+            let mut b = Vec::new();
+            entry.read_to_end(&mut b)?;
+            b
+        };
+        writer.start_file(name, deflated)?;
+        io::Write::write_all(&mut writer, &data)?;
+    }
+    writer.finish()?;
+
+    Ok(report)
 }
 
 /// Modernize `input` and write an optimized EPUB.

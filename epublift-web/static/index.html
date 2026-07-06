@@ -205,8 +205,8 @@
     text-transform:uppercase; font-weight:500; margin-top:3px; }
 
   /* mode switch (Optimize · Archive · Restore) */
-  .modeswitch { display:flex; gap:8px; padding:18px 18px 0; }
-  .modeswitch .mode { flex:1; display:flex; flex-direction:column; align-items:center; gap:2px;
+  .modeswitch { display:grid; grid-template-columns: repeat(4, 1fr); gap:8px; padding:18px 18px 0; }
+  .modeswitch .mode { display:flex; flex-direction:column; align-items:center; gap:2px;
     font:inherit; font-weight:600; font-size:14.5px; color: var(--muted);
     background: var(--paper); border:1.5px solid var(--line); border-radius:12px;
     padding:10px 8px; cursor:pointer; transition: border-color .15s, color .15s, background .15s, box-shadow .15s; }
@@ -216,7 +216,10 @@
   .modeswitch .mode.on { background: var(--ink); color: var(--paper); border-color: var(--ink);
     box-shadow: 3px 3px 0 var(--accent); }
   .modeswitch .mode.on small { opacity:.85; }
-  @media (max-width:560px){ .modeswitch .mode small { display:none; } }
+  @media (max-width:560px){
+    .modeswitch { grid-template-columns: repeat(2, 1fr); }
+    .modeswitch .mode small { display:none; }
+  }
 
   /* mode-specific intro copy in the options column */
   .modeinfo { display:flex; flex-direction:column; gap:12px; }
@@ -402,14 +405,17 @@
       <button type="button" class="mode" data-mode="validate" role="tab" aria-selected="false">
         <span data-i18n="mode_validate">Validate</span><small data-i18n="mode_validate_sub">.epub → report</small>
       </button>
+      <button type="button" class="mode" data-mode="repair" role="tab" aria-selected="false">
+        <span data-i18n="mode_repair">Repair</span><small data-i18n="mode_repair_sub">.epub → fixed</small>
+      </button>
+      <button type="button" class="mode" data-mode="metadata" role="tab" aria-selected="false">
+        <span data-i18n="mode_metadata">Metadata</span><small data-i18n="mode_metadata_sub">edit · ISBN</small>
+      </button>
       <button type="button" class="mode" data-mode="archive" role="tab" aria-selected="false">
         <span data-i18n="mode_archive">Archive</span><small data-i18n="mode_archive_sub">.epub → .eparc</small>
       </button>
       <button type="button" class="mode" data-mode="restore" role="tab" aria-selected="false">
         <span data-i18n="mode_restore">Restore</span><small data-i18n="mode_restore_sub">.eparc → .epub</small>
-      </button>
-      <button type="button" class="mode" data-mode="metadata" role="tab" aria-selected="false">
-        <span data-i18n="mode_metadata">Metadata</span><small data-i18n="mode_metadata_sub">edit · ISBN</small>
       </button>
       <button type="button" class="mode" data-mode="import" role="tab" aria-selected="false">
         <span data-i18n="mode_import">Import</span><small data-i18n="mode_import_sub">.pdf · .md → .epub</small>
@@ -613,6 +619,10 @@
           <p class="opt-note" data-i18n-html="validate_privacy">🔒 <b>Validated entirely in your browser</b> with WebAssembly — your file is never uploaded. A quick pre-check, not an official conformance certificate.</p>
           <p class="opt-note" data-i18n-html="validate_beta">Beta · epubveri is pre-1.0 (~98.8% message-ID recall vs epubcheck). For an authoritative result, cross-check with <a href="https://www.w3.org/publishing/epubcheck/" target="_blank" rel="noopener">epubcheck</a>.</p>
         </div>
+        <div class="modeinfo" data-modes="repair">
+          <p data-i18n-html="repair_lede">Fix common <b>structural issues</b> in an EPUB's package document: duplicate spine entries, empty or legacy metadata, and dangling manifest/spine references. Scoped to the package document — content chapters aren't touched. Your original file is never modified.</p>
+          <p class="opt-note" data-i18n="repair_note">Not a substitute for Validate — repair only fixes the handful of issues above. Run Validate afterward to confirm the result.</p>
+        </div>
         <div id="metaForm" class="metaform hide">
           <p class="opt-h" style="margin:0" data-i18n="meta_isbn_h">Auto-fill by ISBN</p>
           <div class="meta-isbn-row">
@@ -718,6 +728,7 @@
     </style>
     <div class="result-body valresult hide" id="valResult" data-result-modes="validate">
       <div class="valcounts" id="valCounts"></div>
+      <button type="button" class="btn-sm hide" id="valFixBtn" style="margin:2px 0 12px" data-i18n="val_fix_cta">Fix these issues →</button>
       <p class="valclean hide" id="valClean" data-i18n="val_clean">No problems found — this EPUB looks spec-valid. ✓</p>
       <table class="itable valtable" id="valTable" hidden>
         <thead><tr>

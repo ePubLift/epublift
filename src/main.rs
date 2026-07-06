@@ -165,6 +165,24 @@ enum Command {
     /// Validate EPUB(s) against the spec (pure-Rust epubcheck alternative).
     #[cfg(feature = "validate")]
     Check(CheckArgs),
+    /// Fix common OPF structural issues (duplicate spine entries, empty/legacy
+    /// metadata, dangling manifest/spine references).
+    Repair(RepairArgs),
+}
+
+/// `epublift repair …` — fix common OPF structural issues (writes a new EPUB;
+/// input untouched). See docs/repair.md.
+#[derive(clap::Args, Debug)]
+struct RepairArgs {
+    /// EPUB file to repair (never modified; a new file is written).
+    #[arg(value_name = "EPUB")]
+    input: PathBuf,
+    /// Output path (default: `<name>_repaired.epub` next to the input).
+    #[arg(short, long)]
+    output: Option<PathBuf>,
+    /// Report what would be fixed without writing anything.
+    #[arg(long)]
+    dry_run: bool,
 }
 
 /// `epublift check …` — validate EPUB file(s) against the EPUB spec using our
@@ -399,6 +417,7 @@ fn run(args: Args) -> Result<()> {
         Some(Command::Import(i)) => return run_import(i),
         #[cfg(feature = "validate")]
         Some(Command::Check(c)) => return run_check(c),
+        Some(Command::Repair(r)) => return run_repair(r),
         None => {}
     }
     run_convert(args)
@@ -714,6 +733,75 @@ fn run_meta_set(s: &MetaSetArgs) -> Result<()> {
     println!("[+] Wrote updated metadata to: {}", output.display());
     print!("{}", md.to_text());
     Ok(())
+}
+
+/// Default output for a repair: `<name>_repaired.epub` next to the input.
+fn default_repair_output(input: &Path) -> PathBuf {
+    let stem = epublift::output_stem(input, false);
+    input
+        .parent()
+        .unwrap_or_else(|| Path::new("."))
+        .join(format!("{stem}_repaired.epub"))
+}
+
+/// `epublift repair …` — fix common OPF structural issues.
+fn run_repair(args: &RepairArgs) -> Result<()> {
+    let input = args
+        .input
+        .canonicalize()
+        .with_context(|| format!("Input file not found: {}", args.input.display()))?;
+
+    if args.dry_run {
+        let report = epublift::plan_repair(&input)?;
+        print_repair_report(&report, None);
+        return Ok(());
+    }
+
+    let output = args
+        .output
+        .clone()
+        .unwrap_or_else(|| default_repair_output(&input));
+    let report = epublift::write_repaired(&input, &output)?;
+    print_repair_report(&report, Some(&output));
+    Ok(())
+}
+
+/// Print a human-readable summary of a repair pass.
+fn print_repair_report(report: &epublift::repair::RepairReport, output: Option<&Path>) {
+    if let Some(out) = output {
+        println!("[+] Wrote repaired EPUB to: {}", out.display());
+    }
+    if report.is_clean() {
+        println!("[=] No issues found — this EPUB's package document is already clean.");
+        return;
+    }
+    if report.duplicate_spine_itemrefs > 0 {
+        println!(
+            "  - {} duplicate spine itemref(s) removed",
+            report.duplicate_spine_itemrefs
+        );
+    }
+    if report.empty_metadata_dropped > 0 {
+        println!(
+            "  - {} empty/legacy metadata element(s) removed",
+            report.empty_metadata_dropped
+        );
+    }
+    if report.dangling_manifest_items > 0 {
+        println!(
+            "  - {} dangling manifest item(s) removed",
+            report.dangling_manifest_items
+        );
+    }
+    if report.dangling_spine_itemrefs > 0 {
+        println!(
+            "  - {} dangling spine itemref(s) removed",
+            report.dangling_spine_itemrefs
+        );
+    }
+    for f in &report.findings {
+        println!("    · {}", f.detail);
+    }
 }
 
 /// `epublift meta enrich …` — fill missing metadata from an online catalogue.

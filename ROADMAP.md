@@ -347,10 +347,29 @@ published crates.io crate (dogfooding). Design: [`docs/validate.md`](docs/valida
       other user would ("if we don't consume our own published crate, why would anyone
       else?").
 - [ ] *(Later, being scoped)* Localize the message **text** itself (an epubveri-side
-      feature: emit message ID + params, or accept a locale); a **"fix common issues"**
-      release that repairs the problems it finds (dedupe spine itemrefs, drop empty /
-      legacy metadata, strip dangling references) — which also closes the optimizer's
-      OPF-cleaning gap.
+      feature: emit message ID + params, or accept a locale).
+
+---
+
+## ✅ Shipped — EPUB repair (`repair`) — cli-v1.12.0 · web-v1.15.0
+
+Goal: fix the handful of common OPF structural defects that show up as
+validation problems and that the optimizer doesn't already clean up — closing
+the "fix common issues" gap noted when `check` shipped. Design:
+[`docs/repair.md`](docs/repair.md).
+
+- [x] **CLI `epublift repair`** — dedupes duplicate `<spine>` itemrefs (keeps
+      the first occurrence), drops empty/legacy `dc:*` metadata, and strips
+      dangling manifest items (hrefs that don't resolve to a real file in the
+      archive) and dangling spine itemrefs (idrefs with no matching manifest
+      item) — cascading correctly when removing a dangling manifest item
+      orphans a spine reference to it. `--dry-run` previews the fix without
+      writing anything; ships in the default build (no new dependencies).
+- [x] **Web "Repair" mode** — a separate tab from Validate; a **"Fix these
+      issues"** link on a failing Validate result hands the already-selected
+      file over to Repair without re-uploading. All 13 UI languages.
+- [ ] *(Later)* Content-document-level link checking (broken hrefs inside
+      chapter XHTML) — out of scope for this OPF-only pass.
 
 ---
 

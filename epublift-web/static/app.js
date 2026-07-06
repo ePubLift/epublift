@@ -51,6 +51,7 @@ const MODE_CFG = {
   metadata: { accept: '.epub',  dropKey: 'drop_title' },
   // Validate runs entirely client-side (WASM) — no endpoint, no upload.
   validate: { accept: '.epub',  dropKey: 'drop_title', hKey: 'opt_h_validate', ctaKey: 'cta_validate', workKey: 'cta_working_validate' },
+  repair:   { accept: '.epub',  dropKey: 'drop_title', hKey: 'opt_h_repair', ctaKey: 'cta_repair', workKey: 'cta_working_repair', readyKey: 'res_ready_repair', endpoint: '/repair' },
 };
 const importLang = document.getElementById('importLang');
 // Smart Import (AI OCR) elements + capability flag (set from /config on load).
@@ -67,6 +68,7 @@ const mStatus = document.getElementById('m_status');
 const mDone = document.getElementById('m_done');
 const mFetch = document.getElementById('m_fetch');
 const mSave = document.getElementById('m_save');
+const valFixBtn = document.getElementById('valFixBtn');
 let mode = 'optimize';
 
 ['dragenter','dragover'].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.add('drag'); }));
@@ -219,7 +221,7 @@ go.addEventListener('click', async () => {
       if (smartProvider) fd.append('provider', smartProvider.value);
       if (smartLang) fd.append('language', smartLang.value);
     }
-    // archive sends only the file.
+    // archive and repair send only the file.
     const res = await fetch(cfg.endpoint, { method:'POST', body: fd });
     if (!res.ok) {
       let msg = T('err_failed') + ' (HTTP ' + res.status + ').';
@@ -301,7 +303,25 @@ function renderResult(m, data){
         size: '<b>' + fmtBytes(data.final_size) + '</b>',
       });
     }
-  } else { // restore
+  } else if (m === 'repair'){
+    const total = data.duplicate_spine_itemrefs + data.empty_metadata_dropped
+                + data.dangling_manifest_items + data.dangling_spine_itemrefs;
+    let summary;
+    if (total === 0) {
+      summary = fill('sub_repair_clean', {});
+    } else {
+      const parts = [];
+      if (data.duplicate_spine_itemrefs) parts.push(fill('sub_repair_dup_spine', { n: '<b>' + data.duplicate_spine_itemrefs + '</b>' }));
+      if (data.empty_metadata_dropped) parts.push(fill('sub_repair_empty_meta', { n: '<b>' + data.empty_metadata_dropped + '</b>' }));
+      if (data.dangling_manifest_items) parts.push(fill('sub_repair_dangling_manifest', { n: '<b>' + data.dangling_manifest_items + '</b>' }));
+      if (data.dangling_spine_itemrefs) parts.push(fill('sub_repair_dangling_spine', { n: '<b>' + data.dangling_spine_itemrefs + '</b>' }));
+      summary = parts.join(' · ');
+    }
+    // Always shown, whether something was fixed or not — repair's scope is
+    // narrow (3 issue types), so a clean/fixed result here says nothing about
+    // the book's overall validity.
+    resultSub.innerHTML = summary + '<div style="margin-top:8px;opacity:.65;font-size:11.5px;line-height:1.5;">' + T('repair_disclaimer') + '</div>';
+  } else if (m === 'restore'){
     const sizeStr = '<b>' + fmtBytes(data.output_size) + '</b>';
     const key = data.modernized ? 'sub_restore_modernized' : 'sub_restore_exact';
     resultSub.innerHTML = fill(key, { n: '<b>' + data.entries + '</b>', size: sizeStr });
@@ -344,6 +364,8 @@ function renderValidate(report, filename){
   resReady.style.color = ok ? '' : '#b4540a';
   const badge = document.querySelector('.result-top .badge');
   if (badge) badge.style.display = ok ? '' : 'none'; // a green check would contradict a fail
+  // Only a failing verdict gets a "fix these issues" hand-off to Repair.
+  if (valFixBtn) valFixBtn.classList.toggle('hide', ok);
 
   applyResultVisibility('validate');
   resultSub.hidden = true;
@@ -377,6 +399,19 @@ function renderValidate(report, filename){
   result.classList.remove('show'); void result.offsetWidth; result.classList.add('show');
   result.scrollIntoView({ behavior:'smooth', block:'center' });
 }
+
+// Hand the already-selected file over to the Repair tab (no re-upload) after
+// a failing Validate run. Preloads the file but doesn't auto-run — the user
+// still clicks the Repair CTA explicitly, like every other mode.
+function goToRepair(){
+  const f = selectedFile;
+  if (!f) return;
+  applyMode('repair'); // resets selectedFile/chip/result — re-applied below
+  selectedFile = f;
+  chipname.textContent = f.name;
+  chip.classList.add('show');
+}
+if (valFixBtn) valFixBtn.addEventListener('click', goToRepair);
 
 // Human format name for the report header, from the current 3.3/3.4 selection.
 function reportFmtName(){

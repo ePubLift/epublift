@@ -220,6 +220,7 @@ async fn main() {
         .route("/import", post(import))
         .route("/smart-import", post(smart_import))
         .route("/archive", post(archive))
+        .route("/repair", post(repair))
         .route("/restore", post(restore))
         .route("/meta/read", post(meta_read))
         .route("/meta/enrich", post(meta_enrich))
@@ -1032,6 +1033,72 @@ async fn archive(
         resp.output_name.clone(),
         out_bytes,
         "application/octet-stream",
+    );
+    Ok(Json(resp))
+}
+
+#[derive(Serialize)]
+struct RepairResponse {
+    output_name: String,
+    duplicate_spine_itemrefs: usize,
+    empty_metadata_dropped: usize,
+    dangling_manifest_items: usize,
+    dangling_spine_itemrefs: usize,
+    download_token: String,
+}
+
+/// Fix common OPF structural issues in an uploaded EPUB; return counts + a
+/// download token. Sends only the file — no extra form fields.
+async fn repair(
+    State(state): State<Arc<AppState>>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    mut multipart: Multipart,
+) -> Result<Json<RepairResponse>, ApiError> {
+    if !state.limiter.allow(client_ip(&headers, peer)) {
+        return Err(too_many_requests());
+    }
+    let (file_bytes, raw_name, _fields) = read_upload(&mut multipart).await?;
+    let file_name = if raw_name.trim().is_empty() {
+        "book.epub".to_string()
+    } else {
+        raw_name
+    };
+
+    let _permit = state
+        .convert_slots
+        .acquire()
+        .await
+        .map_err(|_| ApiError(StatusCode::SERVICE_UNAVAILABLE, "server busy".into()))?;
+
+    let result =
+        tokio::task::spawn_blocking(move || -> anyhow::Result<(RepairResponse, Vec<u8>)> {
+            let tmp = tempfile::Builder::new().prefix("epublift_web_").tempdir()?;
+            let input = tmp.path().join(&file_name);
+            std::fs::write(&input, &file_bytes)?;
+            let output = tmp.path().join("output.epub");
+            let report = epublift::write_repaired(&input, &output)?;
+            let bytes = std::fs::read(&output)?;
+            let resp = RepairResponse {
+                output_name: format!("{}_repaired.epub", file_stem_or(&file_name, "book")),
+                duplicate_spine_itemrefs: report.duplicate_spine_itemrefs,
+                empty_metadata_dropped: report.empty_metadata_dropped,
+                dangling_manifest_items: report.dangling_manifest_items,
+                dangling_spine_itemrefs: report.dangling_spine_itemrefs,
+                download_token: String::new(),
+            };
+            Ok((resp, bytes))
+        })
+        .await
+        .map_err(|_| ApiError(StatusCode::INTERNAL_SERVER_ERROR, "crashed".into()))?
+        .map_err(|e| bad_request(format!("could not repair this EPUB: {e}")))?;
+
+    let (mut resp, out_bytes) = result;
+    resp.download_token = stash(
+        &state,
+        resp.output_name.clone(),
+        out_bytes,
+        "application/epub+zip",
     );
     Ok(Json(resp))
 }

@@ -24,7 +24,11 @@ name = "epublift-web"
 # 1.13.1 skips macOS Finder __MACOSX/._ AppleDouble cruft in those zips.
 # 1.14.0 adds the "Validate" mode: client-side EPUB validation via the epubveri
 # WASM engine (no upload), with localized UI + severity labels (13 langs).
-version = "1.14.0"
+# 1.15.0 adds the "Repair" mode (fixes duplicate spine entries, empty/legacy
+# metadata, dangling manifest/spine references server-side; a failing Validate
+# result links straight into it), reorders the mode tabs into logical groups,
+# and wraps them onto 2 rows so the bar doesn't cram as tabs are added, 13 langs.
+version = "1.15.0"
 edition = "2024"
 license = "AGPL-3.0-or-later"
 description = "Web front-end for epublift: convert, archive, restore & edit EPUB metadata in the browser"
