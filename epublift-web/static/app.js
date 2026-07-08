@@ -390,7 +390,13 @@ function renderValidate(report, filename){
       const id = document.createElement('td'); id.className = 'vid';
       const c = document.createElement('code'); c.style.fontFamily = 'inherit'; c.textContent = m.id; id.appendChild(c);
       const txt = document.createElement('td'); txt.textContent = m.text;
-      const loc = document.createElement('td'); loc.className = 'vloc'; loc.textContent = m.location || '';
+      // Show epubveri's exact source spot when it pinned one — `file.xhtml:12:5`,
+      // mirroring the CLI's diagnostic-style location (a bare path when there's
+      // a location but no position, empty when there's neither).
+      const loc = document.createElement('td'); loc.className = 'vloc';
+      loc.textContent = m.position
+        ? `${m.location || ''}:${m.position.line}:${m.position.column}`
+        : (m.location || '');
       tr.append(sev, id, txt, loc);
       tbody.appendChild(tr);
     }

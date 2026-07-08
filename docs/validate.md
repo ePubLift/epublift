@@ -65,14 +65,18 @@ Human-readable (default):
 
 ```
 FAIL  book.epub  (2 errors, 1 warning)
-    ERROR   RSC-005  content.opf  spine references manifest item id 'id43' more than once
-    ERROR   RSC-007  text/ch1.html  reference to a resource missing from the publication: '…'
-    WARNING OPF-053  content.opf  dc:date value '…' does not follow recommended syntax
+    ERROR   OPF-034  content.opf:103:5  spine references manifest item id 'id43' more than once
+    ERROR   RSC-007  text/ch1.html:13:24  reference to a resource missing from the publication: '…'
+    WARNING OPF-053  content.opf:9:3  dc:date value '…' does not follow recommended syntax
 ```
 
 Each line is `SEVERITY  ID  [location]  message`, where the ID is
 epubcheck-compatible (e.g. `RSC-005`, `OPF-053`, `PKG-016`) so existing
-epubcheck knowledge and tooling carry over.
+epubcheck knowledge and tooling carry over. When the engine can pin the exact
+spot, the location reads like a compiler diagnostic — `file:line:column` (e.g.
+`content.opf:103:5`) — so a producer can jump straight to it; checks that have
+no single line to point at (whole-container/ZIP-structure problems) show just
+the file, or nothing.
 
 JSON (`--json`) — one object per input file:
 
@@ -99,7 +103,9 @@ The hosted web UI has a **Validate** mode that runs the *same* epubveri engine
 `wasm-pack --target web` build is vendored under `epublift-web/static/vendor/`
 and served same-origin (`/vendor/epubveri.js` + `/vendor/epubveri_bg.wasm`); the
 SPA lazy-loads it the first time you open the Validate tab, then validates in the
-browser and renders the report inline. The server never sees the book.
+browser and renders the report inline. The server never sees the book. The
+report table's location column shows the same `file:line:column` spot as the
+CLI when the engine pinned one.
 
 Two CSP notes make this work under the site's strict `default-src 'none'` policy:
 `script-src` includes `'wasm-unsafe-eval'` (to compile the WASM — this allows

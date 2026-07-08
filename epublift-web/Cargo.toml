@@ -28,7 +28,10 @@ name = "epublift-web"
 # metadata, dangling manifest/spine references server-side; a failing Validate
 # result links straight into it), reorders the mode tabs into logical groups,
 # and wraps them onto 2 rows so the bar doesn't cram as tabs are added, 13 langs.
-version = "1.15.0"
+# 1.16.0 re-vendors the client-side validator to epubveri 0.4.4 (materially fewer
+# false positives: legacy <meta name>, full-timestamp dates, @media, non-linear
+# nav) and shows the exact file:line:column in the Validate report, matching the CLI.
+version = "1.16.0"
 edition = "2024"
 license = "AGPL-3.0-or-later"
 description = "Web front-end for epublift: convert, archive, restore & edit EPUB metadata in the browser"

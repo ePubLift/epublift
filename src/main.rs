@@ -605,7 +605,15 @@ fn run_check(args: &CheckArgs) -> Result<()> {
                         plural(warns)
                     );
                     for m in &rep.messages {
-                        let loc = m.location.as_deref().unwrap_or("");
+                        // Show the exact source spot when epubveri pinned one:
+                        // `file.xhtml:12:5` reads like a compiler diagnostic and
+                        // lets a fixer jump straight to it.
+                        let loc = match (&m.location, &m.position) {
+                            (Some(l), Some(p)) => format!("{l}:{}:{}", p.line, p.column),
+                            (Some(l), None) => l.clone(),
+                            (None, Some(p)) => format!("{}:{}", p.line, p.column),
+                            (None, None) => String::new(),
+                        };
                         let sep = if loc.is_empty() { "" } else { "  " };
                         let _ = writeln!(
                             stdout,

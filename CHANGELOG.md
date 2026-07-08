@@ -10,6 +10,39 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+## [cli-v1.13.0] - 2026-07-08
+
+### Changed
+- **Upgraded the validator engine (`epubveri` 0.1 → 0.4.4).** Validation is now
+  materially more accurate — several common false positives are gone, so books
+  that wrongly failed before now pass:
+  - Legacy OPF2-style `<meta name="cover" content="…"/>` no longer flagged
+    `RSC-005` ("property must not be empty").
+  - Full-timestamp `dc:date` values (e.g. `2025-04-24T17:00:00Z`) no longer
+    flagged `OPF-054` — a valid W3C-DTF timestamp is accepted.
+  - `@media` / `@supports` / `@container` stylesheets no longer flooded with
+    spurious `CSS-008` "syntax error" (common in Vellum-produced books).
+  - `OPF-096` non-linear reachability now matches epubcheck's self-link rule
+    (a nav that links to itself passes; a genuinely unreachable one is flagged).
+
+### Added
+- **`check` now reports the exact source position.** When the engine can pin
+  one, a finding's location reads like a compiler diagnostic —
+  `file:line:column` (e.g. `content.opf:103:5`) — making problems directly
+  actionable. Checks with no single line to point at still show just the file.
+
+## [web-v1.16.0] - 2026-07-08
+
+### Changed
+- **Re-vendored the client-side validator to `epubveri` 0.4.4** (WASM). The
+  browser "Validate" mode now runs the same upgraded engine as the CLI, so it
+  no longer reports the false positives fixed above (legacy `<meta name>`,
+  full-timestamp dates, `@media` stylesheets, non-linear nav).
+
+### Added
+- **Validate report shows the exact `file:line:column`** in the location
+  column, matching the CLI, when the engine pinned a position.
+
 ## [cli-v1.12.0] - 2026-07-06
 
 ### Added

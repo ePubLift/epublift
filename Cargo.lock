@@ -842,7 +842,7 @@ checksum = "f8e1bd41ecce82c300d0c84fa35b080fa6db50a5398b18f1abf0357bb067549e"
 
 [[package]]
 name = "epublift"
-version = "1.12.0"
+version = "1.13.0"
 dependencies = [
  "almost-enough",
  "any_ascii",
@@ -884,7 +884,7 @@ dependencies = [
 
 [[package]]
 name = "epublift-web"
-version = "1.15.0"
+version = "1.16.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -904,9 +904,9 @@ dependencies = [
 
 [[package]]
 name = "epubveri"
-version = "0.1.0"
+version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5fbdf9a4b58cd31591a4fd58955913e1244f8c4ab1a92ff374c3b737e2db9183"
+checksum = "349e68170d71bbbef74b4aea74a42c480089291e42f02bb313c91f2ad2729a4c"
 dependencies = [
  "roxmltree 0.20.0",
  "styloria",
@@ -2809,9 +2809,9 @@ dependencies = [
 
 [[package]]
 name = "styloria"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "553516576d3ae64d81764f4f999573e7087115085484c53aad5b52b1ab088faf"
+checksum = "384c71d1682020e3c4847eb30478b3f021a9a3b055b2a99ecfa2fc33ac8f319b"
 
 [[package]]
 name = "subtle"

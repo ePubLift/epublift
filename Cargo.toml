@@ -7,7 +7,7 @@ resolver = "2"
 
 [package]
 name = "epublift"
-version = "1.12.0"
+version = "1.13.0"
 edition = "2024"
 license = "AGPL-3.0-or-later"
 description = "Modernize and optimize EPUB files — upgrade structure and re-encode images"
@@ -94,7 +94,7 @@ rten = { version = "0.24", optional = true }
 # crate exactly like any other user would. Pure Rust (only pulls roxmltree,
 # which we already use, plus a small CSS parser). Opt-in so the default build
 # stays lean; shipped in release binaries (see release.yml). See docs/validate.md.
-epubveri = { version = "0.1", optional = true }
+epubveri = { version = "0.4.4", optional = true }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 tempfile = "3"
 walkdir = "2"
