@@ -10,6 +10,66 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+### Changed
+- **Upgraded the validator engine to `epubveri` 0.5.9 (from 0.4.4) — on both the
+  CLI and the browser.** `epublift check` and the web app's client-side Validate
+  mode were re-pointed together, so the two cannot disagree about the same book.
+  Five releases of fixes driven by MobileRead forum reports land here, most of
+  them **EPUB 2 false positives** — books that were wrongly failing now pass:
+  - `&nbsp;`, `&eacute;`, `&copy;` and the other standard HTML named entities no
+    longer raise a spurious **fatal** `RSC-016` in EPUB 2 content. (The most
+    painful of the set: `&nbsp;` is everywhere, especially in French books.)
+  - An EPUB 2 package with several `dc:date` elements — the creation/modification
+    pair Sigil and Calibre write — is no longer flagged `RSC-005`, and a legacy
+    OpenType font no longer draws `OPF-090`. Both are EPUB 3-only concepts.
+  - A valid `<meta http-equiv="Content-Type">` in EPUB 2 content is no longer
+    flagged: the exact-value rule is HTML5's, so it applies to EPUB 3 only.
+  - Ordinary `META-INF/` metadata (Apple's `com.apple.ibooks.display-options.xml`,
+    calibre's bookmark files) no longer draws `PKG-025`.
+  - A nav `index` landmark no longer draws a false `RSC-005`.
+  - Genuinely malformed content documents (e.g. an unclosed `<p>`) are no longer
+    **silently accepted** — they now fail with `RSC-016` at the exact spot.
+  - `RSC-005` now names *what* is wrong ("element \"p\" is not allowed here")
+    instead of a blanket schema message, reports every offending node rather than
+    only the first, and `RSC-011` points at the source `<a>` rather than the OPF
+    root.
+  - The engine also stops pulling second copies of `zip` and `roxmltree` into the
+    build: it now shares the versions epublift already uses.
+- **BREAKING: `check --json` now emits the shared veripublica machine envelope**
+  ([FORMATS.md](https://github.com/veripublica/conventions/blob/main/FORMATS.md))
+  instead of a bespoke array, so epublift's validation output can be consumed by
+  anything that already reads epubveri's or epubsana's — no per-tool parsing. One
+  object per run: `{tool, tool_version, convention, status, inputs[]}`. Findings
+  gain `rule` (a stable semantic sub-code such as `opf.spine.duplicate_itemref`,
+  distinguishing the many unrelated violations one ID like `RSC-005` can mean),
+  `data.params`, and `data.element_path` — an XPath-style path to the offending
+  node, resolvable with the accompanying `namespaces` map. See
+  [docs/validate.md](docs/validate.md#json) for the shape and a migration note.
+- **BREAKING: an input that cannot be read now exits `2`, not `1`.** Exit `1`
+  means every input was graded and at least one book is invalid; exit `2` means
+  at least one input could not be processed at all (a missing file, an unreadable
+  one) — so a typo in a path is no longer indistinguishable from a bad book. Both
+  are non-zero, so an ordinary `check … || exit 1` gate is unaffected. Every
+  input is still processed and reported even when an earlier one fails.
+
+- **Web: the Validate report now shows all five severity levels.** Findings carry
+  epubcheck's full vocabulary — `fatal`, `error`, `warning`, `info`, `usage` —
+  instead of folding fatals into errors and usage notes into info. `fatal` is
+  ranked above `error` with a tinted chip. Localized in all 13 UI languages.
+
+### Fixed
+- **A fatally broken book no longer reports `(0 errors, 0 warnings)`.** epubveri
+  counts fatal-severity findings apart from errors, so a book stopped dead by a
+  corrupt container — the whole reason it failed — summarised as a failure that
+  named nothing. Both surfaces now name them only when there are any: the CLI
+  reads `FAIL book.epub (1 fatal, 0 errors, 0 warnings)`, and the web report's
+  count line matches.
+- **Web: the Validate severity colours are legible again.** They were the light
+  theme's values, but the result panel is dark — `INFO` sat at **1.86:1**
+  contrast (invisible), and `ERROR`/`WARNING` at 3.3–3.6:1 both missed WCAG AA
+  for body text. All five levels now use the veripublica family's measured dark
+  ramp and clear AA (6.4:1 – 9.2:1) on that panel.
+
 ## [cli-v1.13.0] - 2026-07-08
 
 ### Changed

@@ -1,7 +1,8 @@
 /* @ts-self-types="./epubveri.d.ts" */
 
 /**
- * Validate raw EPUB bytes and return a typed [`Report`].
+ * Validate raw EPUB bytes and return the typed [`Report`] (an envelope
+ * `inputs[i]` object).
  *
  * `profile` mirrors the CLI `--profile` flag — pass `"dict"`, `"edupub"`,
  * `"idx"`, `"preview"`, or `undefined`/`null` for default behavior. Unknown
@@ -24,7 +25,9 @@ export function validate(bytes, profile) {
 }
 
 /**
- * The `epubveri-wasm` crate version (matches this crate's `Cargo.toml`).
+ * The validator version — [`epubveri::VERSION`], the one string the CLI's
+ * `-V` and the demo footer also print, with git build metadata
+ * (`+<short-hash>[.dirty]`) when built from a checkout.
  * @returns {string}
  */
 export function version() {

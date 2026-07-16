@@ -170,9 +170,6 @@ name = "arbitrary"
 version = "1.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3d036a3c4ab069c7b410a2ce876bd74808d2d0888a82667669f8e783a898bf1"
-dependencies = [
- "derive_arbitrary",
-]
 
 [[package]]
 name = "archmage"
@@ -727,17 +724,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7cd812cc2bc1d69d4764bd80df88b4317eaef9e773c75226407d9bc0876b211c"
 
 [[package]]
-name = "derive_arbitrary"
-version = "1.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e567bd82dcff979e4b03460c307b3cdc9e96fde3d73bed1496d2bc75d9dd62a"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "digest"
 version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -747,17 +733,6 @@ dependencies = [
  "const-oid",
  "crypto-common",
  "subtle",
-]
-
-[[package]]
-name = "displaydoc"
-version = "0.2.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1ac70aa55017e108007fbaf5aa0f54b021c98f92ff8af59d42eda9da96e3dd4f"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
 ]
 
 [[package]]
@@ -863,7 +838,7 @@ dependencies = [
  "quick-xml",
  "regex",
  "rgb",
- "roxmltree 0.21.1",
+ "roxmltree",
  "rten",
  "rustls",
  "rustls-rustcrypto",
@@ -878,7 +853,7 @@ dependencies = [
  "zenavif",
  "zenjxl",
  "zenwebp",
- "zip 8.6.0",
+ "zip",
  "zstd",
 ]
 
@@ -899,19 +874,21 @@ dependencies = [
  "tracing-appender",
  "tracing-subscriber",
  "uuid",
- "zip 8.6.0",
+ "zip",
 ]
 
 [[package]]
 name = "epubveri"
-version = "0.4.4"
+version = "0.5.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "349e68170d71bbbef74b4aea74a42c480089291e42f02bb313c91f2ad2729a4c"
+checksum = "4cc39d44c986718930db207e8a179ea9e0adfcecc3bbc80fb41a0dc4c7815ba4"
 dependencies = [
- "roxmltree 0.20.0",
+ "roxmltree",
+ "serde",
+ "serde_json",
  "styloria",
  "unicode-normalization",
- "zip 2.4.2",
+ "zip",
 ]
 
 [[package]]
@@ -2299,12 +2276,6 @@ dependencies = [
  "untrusted",
  "windows-sys 0.52.0",
 ]
-
-[[package]]
-name = "roxmltree"
-version = "0.20.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c20b6793b5c2fa6553b250154b78d6d0db37e72700ae35fad9387a46f487c97"
 
 [[package]]
 name = "roxmltree"
@@ -3876,23 +3847,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "zip"
-version = "2.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fabe6324e908f85a1c52063ce7aa26b68dcb7eb6dbc83a2d148403c9bc3eba50"
-dependencies = [
- "arbitrary",
- "crc32fast",
- "crossbeam-utils",
- "displaydoc",
- "flate2",
- "indexmap",
- "memchr",
- "thiserror",
- "zopfli",
 ]
 
 [[package]]

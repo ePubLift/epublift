@@ -719,10 +719,21 @@
       .valtable { width:100%; }
       .valtable th, .valtable td { text-align:left !important; white-space:normal; vertical-align:top; padding:7px 8px; }
       .valtable th:first-child, .valtable td:first-child { width:1%; white-space:nowrap; }
+      /* Severity ramp, in rank order. The class name is the engine's `severity`
+         string written straight into the DOM — lowercase, no aliases.
+         These are the *dark* values of the veripublica family's measured ramp,
+         because this result panel is dark (--ink): the light ones we used before
+         failed WCAG AA on it (INFO sat at 1.86:1 — invisible). All five clear AA
+         here (6.4:1 – 9.2:1). `fatal` is deliberately *lighter* than `error`: on
+         a dark ground no red outranks error on intensity, so rank is carried by
+         the wash, not the colour. Don't "fix" it by darkening. */
       .valtable td.sev { font-weight:700; white-space:nowrap; }
-      .valtable td.sev.ERROR { color:#cf222e; }
-      .valtable td.sev.WARNING { color:#b4540a; }
-      .valtable td.sev.INFO { color:var(--ink-soft); }
+      .valtable td.sev.fatal { color:#ffa198; background:color-mix(in srgb, #ffa198 8%, transparent);
+        padding:.05rem .35rem; border-radius:5px; }
+      .valtable td.sev.error { color:#ff6b74; }
+      .valtable td.sev.warning { color:#d9a441; }
+      .valtable td.sev.info { color:#9a9aa2; }
+      .valtable td.sev.usage { color:#8aa8b0; }
       .valtable td.vid { white-space:nowrap; color:var(--paper); }
       .valtable td.vloc { font-size:11px; color:rgba(244,238,225,0.55); white-space:nowrap; }
     </style>

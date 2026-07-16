@@ -91,10 +91,12 @@ ocrs = { version = "0.12", optional = true }
 rten = { version = "0.24", optional = true }
 # EPUB validation (`epublift check`, `validate` feature): our own pure-Rust,
 # JVM-free alternative to W3C epubcheck. Dogfooding — we consume the published
-# crate exactly like any other user would. Pure Rust (only pulls roxmltree,
-# which we already use, plus a small CSS parser). Opt-in so the default build
-# stays lean; shipped in release binaries (see release.yml). See docs/validate.md.
-epubveri = { version = "0.4.4", optional = true }
+# crate exactly like any other user would. Pure Rust, and shares our own `zip` 8
+# and `roxmltree` 0.21 rather than pulling second copies (0.5.4 aligned the
+# veripublica family on one zip major for exactly this reason). Opt-in so the
+# default build stays lean; shipped in release binaries (see release.yml).
+# See docs/validate.md.
+epubveri = { version = "0.5.9", optional = true }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 tempfile = "3"
 walkdir = "2"
@@ -167,8 +169,9 @@ metadata = [
 epub34 = ["dep:zenavif", "dep:zenjxl", "dep:rgb", "dep:imgref", "dep:almost-enough"]
 # EPUB validation (`epublift check`): validate an EPUB against the spec using our
 # own pure-Rust epubveri (JVM-free epubcheck alternative). Opt-in so `cargo build`
-# stays lean; included in release binaries. Pure Rust, no C.
-validate = ["dep:epubveri"]
+# stays lean; included in release binaries. Pure Rust, no C. serde_json serializes
+# epubveri's shared veripublica envelope under `--json` (see docs/validate.md).
+validate = ["dep:epubveri", "dep:serde_json"]
 # [EXPERIMENTAL] PDF → EPUB import (`epublift import`). `pdf` = the text tiers
 # (born-digital PDFs + scans that already carry a text layer); pure Rust, light.
 # `pdf-ocr` will add OCR for scans with no text layer (a later phase: ocrs +

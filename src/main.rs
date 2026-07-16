@@ -186,8 +186,10 @@ struct RepairArgs {
 }
 
 /// `epublift check …` — validate EPUB file(s) against the EPUB spec using our
-/// pure-Rust epubveri engine (a JVM-free epubcheck alternative). Exits non-zero
-/// when any input has ERROR-severity problems. See docs/validate.md.
+/// pure-Rust epubveri engine (a JVM-free epubcheck alternative).
+///
+/// Exit: 0 = every input is valid; 1 = every input was validated and at least
+/// one is invalid; 2 = an input could not be read at all. See docs/validate.md.
 #[cfg(feature = "validate")]
 #[derive(clap::Args, Debug)]
 struct CheckArgs {
@@ -200,7 +202,8 @@ struct CheckArgs {
     #[arg(long, value_name = "dict|edupub|idx|preview")]
     profile: Option<String>,
 
-    /// Emit machine-readable JSON instead of the human-readable report.
+    /// Emit the machine-readable veripublica envelope (one JSON object per run)
+    /// instead of the human-readable report.
     #[arg(long)]
     json: bool,
 
@@ -506,133 +509,94 @@ fn run_import(args: &ImportArgs) -> Result<()> {
 }
 
 /// `epublift check …` — validate EPUB file(s) with the pure-Rust epubveri
-/// engine. Prints a per-file report (human-readable or `--json`) and exits
-/// non-zero if any input has ERROR-severity problems.
+/// engine. Prints a per-file report (human-readable or `--json`, the shared
+/// veripublica envelope). Exit: `0` clean, `1` a book is invalid, `2` an input
+/// could not be read at all. See docs/validate.md.
 #[cfg(feature = "validate")]
 fn run_check(args: &CheckArgs) -> Result<()> {
+    use epubveri::envelope::{Envelope, Input};
     use std::io::Write;
 
     let profile = args.profile.as_deref();
-    // Collect each file's outcome so we can emit one JSON array, and so the
-    // process exit code reflects the whole batch (non-zero if any book fails).
-    struct FileResult {
-        path: PathBuf,
-        report: Option<epubveri::report::Report>,
-        error: Option<String>,
-    }
-    let mut results: Vec<FileResult> = Vec::new();
-    for path in &args.paths {
-        match epubveri::validate_path_with_profile(path, profile) {
-            Ok(report) => results.push(FileResult {
-                path: path.clone(),
-                report: Some(report),
-                error: None,
-            }),
-            Err(e) => results.push(FileResult {
-                path: path.clone(),
-                report: None,
-                error: Some(e.to_string()),
-            }),
-        }
-    }
-
-    // A book "passed" only if it was read and has zero ERROR-severity messages.
-    let any_failed = results
+    // One Input per path, in command-line order, each self-contained — the shape
+    // the envelope wants. Every input is processed even if an earlier one could
+    // not be read: a broken book must not hide the reports for the rest.
+    let inputs: Vec<Input> = args
+        .paths
         .iter()
-        .any(|r| r.error.is_some() || r.report.as_ref().is_none_or(|rep| !rep.is_valid()));
+        .map(|path| {
+            let name = path.display().to_string();
+            match epubveri::validate_path_with_profile(path, profile) {
+                Ok(report) => Input::from_report(name, &report),
+                // Not a verdict: we never got far enough to grade the book.
+                Err(e) => Input::from_error(name, e.to_string()),
+            }
+        })
+        .collect();
+
+    // `for_tool` derives the aggregate status with the exit code's precedence,
+    // so the status we print and the code we exit with cannot disagree.
+    let envelope = Envelope::for_tool("epublift", env!("CARGO_PKG_VERSION"), None, inputs);
 
     if args.json {
-        let mut out = String::from("[");
-        for (i, r) in results.iter().enumerate() {
-            if i > 0 {
-                out.push(',');
-            }
-            out.push_str("\n  {");
-            out.push_str(&format!(
-                "\"file\": {}",
-                json_str(&r.path.display().to_string())
-            ));
-            match (&r.report, &r.error) {
-                (Some(rep), _) => {
-                    out.push_str(&format!(
-                        ", \"valid\": {}, \"errors\": {}, \"warnings\": {}, \"messages\": [",
-                        rep.is_valid(),
-                        rep.errors(),
-                        rep.warnings()
-                    ));
-                    for (j, m) in rep.messages.iter().enumerate() {
-                        if j > 0 {
-                            out.push(',');
-                        }
-                        out.push_str(&format!(
-                            "{{\"id\": {}, \"severity\": {}, \"text\": {}, \"location\": {}}}",
-                            json_str(m.id),
-                            json_str(&m.severity.to_string()),
-                            json_str(&m.text),
-                            match &m.location {
-                                Some(l) => json_str(l),
-                                None => "null".to_string(),
-                            }
-                        ));
-                    }
-                    out.push(']');
-                }
-                (None, Some(err)) => {
-                    out.push_str(&format!(", \"valid\": false, \"error\": {}", json_str(err)));
-                }
-                (None, None) => {}
-            }
-            out.push('}');
-        }
-        out.push_str("\n]");
-        println!("{out}");
+        println!("{}", serde_json::to_string_pretty(&envelope)?);
     } else {
         let mut stdout = std::io::stdout().lock();
-        for r in &results {
-            let name = r.path.display();
-            match (&r.report, &r.error) {
-                (Some(rep), _) => {
-                    let (errs, warns) = (rep.errors(), rep.warnings());
-                    let pass = rep.is_valid();
-                    if pass && warns == 0 && args.quiet {
-                        continue;
-                    }
-                    let status = if pass { "PASS" } else { "FAIL" };
-                    let _ = writeln!(
-                        stdout,
-                        "{status}  {name}  ({errs} error{}, {warns} warning{})",
-                        plural(errs),
-                        plural(warns)
-                    );
-                    for m in &rep.messages {
-                        // Show the exact source spot when epubveri pinned one:
-                        // `file.xhtml:12:5` reads like a compiler diagnostic and
-                        // lets a fixer jump straight to it.
-                        let loc = match (&m.location, &m.position) {
-                            (Some(l), Some(p)) => format!("{l}:{}:{}", p.line, p.column),
-                            (Some(l), None) => l.clone(),
-                            (None, Some(p)) => format!("{}:{}", p.line, p.column),
-                            (None, None) => String::new(),
-                        };
-                        let sep = if loc.is_empty() { "" } else { "  " };
-                        let _ = writeln!(
-                            stdout,
-                            "    {:<7} {}  {}{sep}{}",
-                            m.severity.to_string(),
-                            m.id,
-                            loc,
-                            m.text
-                        );
-                    }
-                }
-                (None, Some(err)) => {
-                    let _ = writeln!(stdout, "ERROR {name}  (could not read: {err})");
-                }
-                (None, None) => {}
+        for input in &envelope.inputs {
+            let name = &input.path;
+            if let Some(err) = &input.error {
+                let _ = writeln!(stdout, "ERROR {name}  (could not read: {err})");
+                continue;
+            }
+            let (fatals, errs, warns) = match &input.summary {
+                Some(s) => (s.fatals, s.errors, s.warnings),
+                None => (0, 0, 0),
+            };
+            let pass = input.status == "ok";
+            if pass && warns == 0 && args.quiet {
+                continue;
+            }
+            // Fatals are counted apart from errors, so a book stopped dead by a
+            // corrupt container would otherwise read "FAIL (0 errors)". Name them
+            // when there are any; stay quiet in the ordinary case.
+            let fatal_part = if fatals > 0 {
+                format!("{fatals} fatal{}, ", plural(fatals))
+            } else {
+                String::new()
+            };
+            let status = if pass { "PASS" } else { "FAIL" };
+            let _ = writeln!(
+                stdout,
+                "{status}  {name}  ({fatal_part}{errs} error{}, {warns} warning{})",
+                plural(errs),
+                plural(warns)
+            );
+            for m in &input.items {
+                // Show the exact source spot when epubveri pinned one:
+                // `file.xhtml:12:5` reads like a compiler diagnostic and
+                // lets a fixer jump straight to it.
+                let loc = match (&m.location, &m.position) {
+                    (Some(l), Some(p)) => format!("{l}:{}:{}", p.line, p.column),
+                    (Some(l), None) => l.clone(),
+                    (None, Some(p)) => format!("{}:{}", p.line, p.column),
+                    (None, None) => String::new(),
+                };
+                let sep = if loc.is_empty() { "" } else { "  " };
+                // The envelope carries the wire value (lowercase, per FORMATS.md);
+                // the human report has always shouted it, and it scans better in a
+                // wall of findings. The JSON is the contract — this line isn't.
+                let _ = writeln!(
+                    stdout,
+                    "    {:<7} {}  {}{sep}{}",
+                    m.severity.to_uppercase(),
+                    m.code,
+                    loc,
+                    m.message
+                );
             }
         }
         // Honest footer: epubveri is pre-1.0 and not yet full epubcheck parity.
-        if !args.quiet || any_failed {
+        if !args.quiet || envelope.status != "ok" {
             eprintln!(
                 "\nValidated with epubveri (pure-Rust, JVM-free; pre-1.0, ~98.8% \
                  message-ID recall vs epubcheck — not yet full parity)."
@@ -640,34 +604,20 @@ fn run_check(args: &CheckArgs) -> Result<()> {
         }
     }
 
-    if any_failed {
-        // Distinct, grep-like exit code: the command ran fine, but validation
-        // found problems. Not an anyhow error (that would print "Fatal Error").
+    // The envelope's status is defined as a mirror of the exit code, so read it
+    // back rather than re-deriving: `problems` = a book is invalid (a verdict),
+    // `error` = an input could not be processed at all. Exiting directly (not via
+    // anyhow) keeps a verdict from printing as "Fatal Error".
+    let code = match envelope.status {
+        "ok" => 0,
+        "problems" => 1,
+        _ => 2,
+    };
+    if code != 0 {
         std::io::stdout().flush().ok();
-        std::process::exit(1);
+        std::process::exit(code);
     }
     Ok(())
-}
-
-/// Minimal JSON string encoder for `check --json` (avoids pulling serde_json
-/// into the `validate` feature). Escapes the characters JSON requires.
-#[cfg(feature = "validate")]
-fn json_str(s: &str) -> String {
-    let mut out = String::with_capacity(s.len() + 2);
-    out.push('"');
-    for c in s.chars() {
-        match c {
-            '"' => out.push_str("\\\""),
-            '\\' => out.push_str("\\\\"),
-            '\n' => out.push_str("\\n"),
-            '\r' => out.push_str("\\r"),
-            '\t' => out.push_str("\\t"),
-            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
-            c => out.push(c),
-        }
-    }
-    out.push('"');
-    out
 }
 
 /// `""` or `"s"` for singular/plural counts.

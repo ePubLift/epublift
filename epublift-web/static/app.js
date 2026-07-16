@@ -353,7 +353,11 @@ async function runValidate(){
 }
 
 function renderValidate(report, filename){
-  const ok = report.valid;
+  // The engine returns the veripublica envelope's `inputs[i]` shape: a `status`
+  // verdict, a `summary` of counts, and `items` (not `messages`). Bytes in memory
+  // are always readable, so "error" (unprocessable) never reaches us here — only
+  // "ok" or "problems".
+  const ok = report.status === 'ok';
   outname.textContent = filename;
   // No download for a validation run: hide the button, repurpose the headline
   // and badge to carry the pass/fail verdict.
@@ -370,26 +374,34 @@ function renderValidate(report, filename){
   applyResultVisibility('validate');
   resultSub.hidden = true;
 
-  document.getElementById('valCounts').textContent =
-    fill('val_counts', { e: report.errors, w: report.warnings, n: report.messages.length });
+  // `fatals` is omitted from the summary when it's zero, so read it defensively.
+  // Name fatals only when there are any: a fatal stops processing and is counted
+  // apart from errors, so a book killed by a corrupt container would otherwise
+  // report "0 error(s), 0 warning(s)" — a failure that names nothing.
+  const fatals = report.summary.fatals ?? 0;
+  const counts = { e: report.summary.errors, w: report.summary.warnings, n: report.items.length };
+  document.getElementById('valCounts').textContent = fatals > 0
+    ? fill('val_counts_fatal', { f: fatals, ...counts })
+    : fill('val_counts', counts);
 
   const table = document.getElementById('valTable');
   const clean = document.getElementById('valClean');
   const tbody = document.getElementById('valTbody');
   tbody.textContent = '';
-  if (report.messages.length === 0){
+  if (report.items.length === 0){
     table.hidden = true; clean.classList.remove('hide');
   } else {
     clean.classList.add('hide'); table.hidden = false;
-    for (const m of report.messages){
+    for (const m of report.items){
       const tr = document.createElement('tr');
-      // Colour class stays keyed on the raw severity (ERROR/WARNING/INFO); the
-      // visible label is localized (e.g. "HATA", "エラー").
+      // Colour class is the engine's lowercase severity written straight through
+      // (fatal|error|warning|info|usage); the visible label is localized (e.g.
+      // "HATA", "エラー").
       const sev = document.createElement('td'); sev.className = 'sev ' + m.severity;
-      sev.textContent = T('val_sev_' + m.severity.toLowerCase());
+      sev.textContent = T('val_sev_' + m.severity);
       const id = document.createElement('td'); id.className = 'vid';
-      const c = document.createElement('code'); c.style.fontFamily = 'inherit'; c.textContent = m.id; id.appendChild(c);
-      const txt = document.createElement('td'); txt.textContent = m.text;
+      const c = document.createElement('code'); c.style.fontFamily = 'inherit'; c.textContent = m.code; id.appendChild(c);
+      const txt = document.createElement('td'); txt.textContent = m.message;
       // Show epubveri's exact source spot when it pinned one — `file.xhtml:12:5`,
       // mirroring the CLI's diagnostic-style location (a bare path when there's
       // a location but no position, empty when there's neither).
