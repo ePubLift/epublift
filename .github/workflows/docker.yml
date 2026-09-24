@@ -57,7 +57,7 @@ jobs:
 
       - name: Image labels
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.IMAGE }}
 
@@ -114,7 +114,7 @@ jobs:
 
       - name: Derive image tags
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.IMAGE }}
           # Extract the version from the `web-vX.Y.Z` tag (-> image tag `X.Y.Z`),
