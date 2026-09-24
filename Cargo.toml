@@ -131,7 +131,7 @@ almost-enough = { version = "0.4", optional = true }
 # Bench-only reference backend: the C libzstd. NEVER part of a shipped artifact —
 # gated behind `zstd-c-bench`, used only by the local benchmark to report the
 # pure-Rust floor vs the C ceiling. Keeps Guiding Principle #1 (pure Rust, no C).
-zstd = { version = "0.13", optional = true }
+zstd = { version = "0.14", optional = true }
 # Bench-only pure-Rust Brotli backend for the ARCHIVAL research track: brotli-11
 # has a web/HTML-tuned static dictionary, a strong candidate for the solid-stream
 # `.eparc` archive. Pure Rust (rust-brotli), bench-gated for now — it does not
