@@ -28,7 +28,7 @@ COPY epublift-web ./epublift-web
 RUN cargo build --release --locked -p epublift-web
 
 # ---- runtime -------------------------------------------------------------
-FROM alpine:3.20
+FROM alpine:3.24
 
 # Run as an unprivileged user.
 RUN adduser -D -u 10001 epublift

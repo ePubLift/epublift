@@ -70,6 +70,12 @@ are tagged with the component they belong to.
   for body text. All five levels now use the veripublica family's measured dark
   ramp and clear AA (6.4:1 – 9.2:1) on that panel.
 
+### Security
+- **Docker: the runtime image is now based on Alpine 3.24 (was 3.20).** Alpine
+  3.20 reached end of support on 2026-04-01 and no longer receives security
+  fixes; 3.24 is supported until 2028-06. The server binary is fully static, so
+  nothing else changes.
+
 ## [cli-v1.13.0] - 2026-07-08
 
 ### Changed
