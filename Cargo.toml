@@ -113,7 +113,7 @@ structured-zstd = { version = "0.0.40", optional = true, features = ["dict_build
 crc32fast = { version = "1", optional = true }
 # Archival mode (`.eparc`) — see docs/design/eparc-format.md. Pure Rust. SHA-256
 # for whole-file provenance/fixity; serde(_json) for the human-readable manifest.
-sha2 = { version = "0.10", optional = true }
+sha2 = { version = "0.11", optional = true }
 serde = { version = "1", features = ["derive"], optional = true }
 serde_json = { version = "1", optional = true }
 # Experimental EPUB 3.4 image codecs (opt-in, `epub34` feature). Pure Rust, no
