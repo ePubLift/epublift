@@ -83,7 +83,7 @@ fn json_is_the_shared_envelope_and_flags_invalid() {
     // The veripublica envelope skeleton (FORMATS.md §1.1): exactly one object,
     // naming the tool that produced it and the convention it conforms to.
     assert_eq!(v["tool"], "epublift");
-    assert_eq!(v["convention"], "0.4");
+    assert_eq!(v["convention"], "0.6");
     assert!(v["tool_version"].is_string());
     // `status` mirrors the exit code: a graded book with fatal findings is
     // "problems" (exit 1), never "error" (which means no report was possible).
@@ -105,7 +105,21 @@ fn json_is_the_shared_envelope_and_flags_invalid() {
     assert!(!items.is_empty(), "a malformed EPUB must produce a finding");
     assert_eq!(items[0]["type"], "finding");
     assert!(items[0]["code"].is_string());
-    assert_eq!(items[0]["severity"], "fatal");
+    // As in epubcheck, a file that isn't a ZIP draws PKG-003 (error) and then
+    // PKG-008 (fatal); the fatal one is what stops the book.
+    assert!(
+        items
+            .iter()
+            .any(|i| i["code"] == "PKG-008" && i["severity"] == "fatal"),
+        "expected a fatal PKG-008 among: {items:?}"
+    );
+    // Every summary counter is present, zeros included (FORMATS §1.4), so an
+    // absent key never stands in for "none"; and nothing was filtered.
+    let summary = &inputs[0]["summary"];
+    for key in ["fatal", "error", "warning", "info", "usage"] {
+        assert!(summary[key].is_u64(), "summary.{key} missing: {summary}");
+    }
+    assert!(summary.get("suppressed").is_none());
 }
 
 #[test]

@@ -96,7 +96,7 @@ rten = { version = "0.24", optional = true }
 # veripublica family on one zip major for exactly this reason). Opt-in so the
 # default build stays lean; shipped in release binaries (see release.yml).
 # See docs/validate.md.
-epubveri = { version = "0.5.9", optional = true }
+epubveri = { version = "0.17.5", optional = true }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 tempfile = "3"
 walkdir = "2"

@@ -332,7 +332,7 @@ function renderResult(m, data){
 }
 
 // ---- validate (client-side WASM) ---------------------------------------------
-// The epubveri validator is a ~1 MB WASM module; load it lazily the first time
+// The epubveri validator is a ~2 MB WASM module; load it lazily the first time
 // the user validates, then cache it. Dynamic import of a same-origin module is
 // allowed under `script-src 'self'`; WASM compilation needs `'wasm-unsafe-eval'`
 // (both set in the CSP — see the server's main.rs).
@@ -340,7 +340,7 @@ let _epubveri = null;
 async function loadEpubveri(){
   if (_epubveri) return _epubveri;
   const mod = await import('/vendor/epubveri.js');
-  await mod.default(); // wasm-pack `--target web` init(): fetch + compile the .wasm
+  await mod.default(); // our loader's init(): fetch + instantiate the .wasm (see vendor/VENDOR.md)
   _epubveri = mod;
   return mod;
 }
@@ -374,12 +374,12 @@ function renderValidate(report, filename){
   applyResultVisibility('validate');
   resultSub.hidden = true;
 
-  // `fatals` is omitted from the summary when it's zero, so read it defensively.
   // Name fatals only when there are any: a fatal stops processing and is counted
   // apart from errors, so a book killed by a corrupt container would otherwise
-  // report "0 error(s), 0 warning(s)" — a failure that names nothing.
-  const fatals = report.summary.fatals ?? 0;
-  const counts = { e: report.summary.errors, w: report.summary.warnings, n: report.items.length };
+  // report "0 error(s), 0 warning(s)" — a failure that names nothing. (The
+  // summary keys are singular — `fatal`, `error`, `warning` — and always present.)
+  const fatals = report.summary.fatal;
+  const counts = { e: report.summary.error, w: report.summary.warning, n: report.items.length };
   document.getElementById('valCounts').textContent = fatals > 0
     ? fill('val_counts_fatal', { f: fatals, ...counts })
     : fill('val_counts', counts);

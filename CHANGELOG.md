@@ -11,11 +11,20 @@ are tagged with the component they belong to.
 ## [Unreleased]
 
 ### Changed
-- **Upgraded the validator engine to `epubveri` 0.5.9 (from 0.4.4) — on both the
+- **Upgraded the validator engine to `epubveri` 0.17.5 (from 0.4.4) — on both the
   CLI and the browser.** `epublift check` and the web app's client-side Validate
-  mode were re-pointed together, so the two cannot disagree about the same book.
-  Five releases of fixes driven by MobileRead forum reports land here, most of
-  them **EPUB 2 false positives** — books that were wrongly failing now pass:
+  mode were re-pointed together, and on the 474-book test shelf they report
+  identical findings — status, counts, and every finding's ID, severity, file,
+  line, column and message — for every book. Against epubcheck's own test suite
+  epubveri now catches 99.7% of the cases that should be flagged with the same
+  message ID and raises no false alarm on the valid ones. On the shelf, 115
+  books change verdict compared with 0.5.9, and epubcheck 5.3.0 was run on each
+  of them as referee: 86 books that wrongly failed now pass (85 confirmed by
+  epubcheck), 29 that wrongly passed now fail (all 29 confirmed), and the one
+  disagreement is a documented, deliberate epubveri departure — a stray `;` in a
+  CSS declaration list, which the CSS specification allows and epubcheck's
+  older parser rejects. Among the fixes, many from MobileRead forum reports,
+  mostly **EPUB 2 false positives**:
   - `&nbsp;`, `&eacute;`, `&copy;` and the other standard HTML named entities no
     longer raise a spurious **fatal** `RSC-016` in EPUB 2 content. (The most
     painful of the set: `&nbsp;` is everywhere, especially in French books.)
@@ -35,6 +44,14 @@ are tagged with the component they belong to.
     root.
   - The engine also stops pulling second copies of `zip` and `roxmltree` into the
     build: it now shares the versions epublift already uses.
+  - Findings now include epubcheck's `info` and `usage` levels, and the JSON
+    `summary` always carries all five counters, zeros included.
+- **Web: the browser validator is now epubveri's own published build**
+  (`@veripublica/epubveri-wasm` from npm, built by epubveri's CI from its
+  release tag with a provenance attestation), vendored byte-for-byte beside a
+  small loader instead of rebuilt locally. `epublift-web/static/vendor/VENDOR.md`
+  records the version, digests and update steps. The module grew from about
+  1 MB to 2 MB; it still loads only when the Validate tab is first used.
 - **BREAKING: `check --json` now emits the shared veripublica machine envelope**
   ([FORMATS.md](https://github.com/veripublica/conventions/blob/main/FORMATS.md))
   instead of a bespoke array, so epublift's validation output can be consumed by

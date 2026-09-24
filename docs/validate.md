@@ -18,9 +18,13 @@ feature (included in the release binaries).
 2. **Dogfooding.** epublift depends on the **published** `epubveri` crate from
    crates.io, exactly like any other user would — not a local path. If we don't
    consume our own published crate, why would anyone else?
-3. **Honest about maturity.** epubveri is **pre-1.0**. On epubcheck's own test
-   corpus it reaches **~98.8% exact message-ID recall** with roughly **1% false
-   positives** — very good, but **not yet full epubcheck parity**. Treat a clean
+3. **Honest about maturity.** epubveri is **pre-1.0**. Against epubcheck 5.4.0's
+   own test suite (measured by epubveri on 0.17.4) it catches **99.7%** of the
+   cases that should be flagged with epubcheck's exact message ID (685 of 687)
+   and raises **no false alarm** on any of the 368 valid ones — very good, but
+   **not yet full epubcheck parity**, and it departs from epubcheck on purpose
+   in a few documented places (see epubveri's
+   [coverage notes](https://github.com/veripublica/epubveri/blob/main/docs/COVERAGE.md)). Treat a clean
    `check` as strong evidence, not a conformance certificate. For an official
    conformance claim, cross-check with `epubcheck` itself.
 4. **Machine output is a shared contract.** `--json` emits the
@@ -115,13 +119,13 @@ command-line order.
 {
   "tool": "epublift",
   "tool_version": "1.13.0",
-  "convention": "0.4",
+  "convention": "0.6",
   "status": "problems",
   "inputs": [
     {
       "path": "book.epub",
       "status": "problems",
-      "summary": { "errors": 3, "warnings": 1 },
+      "summary": { "fatal": 0, "error": 3, "warning": 1, "info": 0, "usage": 37 },
       "items": [
         {
           "type": "finding",
@@ -155,6 +159,15 @@ Worth knowing when consuming it:
 - **`data.element_path`** is an XPath-style path to the offending node, resolvable
   with the prefixes in `data.namespaces` — so a fixer can jump to the node
   instead of re-deriving it from a line and column.
+- **`summary`** always carries all five counters, zeros included, so a missing
+  key never stands in for "none". `usage` findings (epubcheck's `-u` level) are
+  counted and listed like the others; `epublift check` filters nothing, so the
+  envelope never carries a `suppressed` marker.
+- **`convention`** is epublift's own claim about this output: the envelope meets
+  [FORMATS.md](https://github.com/veripublica/conventions/blob/main/FORMATS.md)
+  of veripublica conventions 0.6. It is a claim about the JSON, not the command
+  line — `check` takes positional paths and `--json` rather than the `-i` and
+  `--format json` that conventions' CLI.md asks for.
 - Fields that don't apply are **omitted**, and unknown fields **must be ignored**:
   the shape gains optional fields over time without breaking consumers.
 
@@ -170,10 +183,15 @@ Worth knowing when consuming it:
 
 The hosted web UI has a **Validate** mode that runs the epubveri engine
 **entirely client-side, as WebAssembly** — the file is **never uploaded**. The
-`wasm-pack --target web` build is vendored under `epublift-web/static/vendor/`
-and served same-origin (`/vendor/epubveri.js` + `/vendor/epubveri_bg.wasm`); the
-SPA lazy-loads it the first time you open the Validate tab, then validates in the
-browser and renders the report inline. The server never sees the book. The
+engine is epubveri's own published build, `@veripublica/epubveri-wasm` from npm
+(built by epubveri's CI from its release tag, with a provenance attestation),
+vendored byte-for-byte under `epublift-web/static/vendor/` beside a small loader
+of ours; [`VENDOR.md`](../epublift-web/static/vendor/VENDOR.md) there records the
+version, digests and update steps. It is served same-origin (`/vendor/epubveri.js`,
+`/vendor/epubveri_bg.js`, `/vendor/epubveri_bg.wasm`); the SPA lazy-loads it the
+first time you open the Validate tab, then validates in the browser and renders
+the report inline. It is always the same epubveri version as the CLI's `check`:
+on the 474-book test shelf the two report identical findings for every book. The server never sees the book. The
 report table's location column shows the same `file:line:column` spot as the
 CLI when the engine pinned one.
 

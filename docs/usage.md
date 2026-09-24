@@ -138,12 +138,13 @@ epublift check book.epub --json          # machine-readable, one object per file
 epublift check dict.epub --profile dict  # validate against an extension profile
 ```
 
-The exit code follows grep's convention — `0` if every input is valid (zero
-ERROR-severity messages), `1` if any has problems or can't be read — so it drops
-straight into a build script: `epublift check dist/*.epub || exit 1`. It's
+The exit code follows grep's convention — `0` if every input is valid (no
+error- or fatal-severity finding), `1` if any book is invalid, `2` if an input
+couldn't be read at all — so it drops straight into a build script: `epublift check dist/*.epub || exit 1`. It's
 compiled only with the opt-in `validate` feature
 (`cargo build --features validate`; included in the release binaries). epubveri
-is **pre-1.0** (~98.8% message-ID recall vs epubcheck — not yet full parity), so
+is **pre-1.0** (99.7% message-ID recall on epubcheck's own test suite — not yet
+full parity), so
 treat a clean check as strong evidence, not a conformance certificate. Full
 details: [Validation](validate.md).
 

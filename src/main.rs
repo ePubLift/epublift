@@ -185,6 +185,11 @@ struct RepairArgs {
     dry_run: bool,
 }
 
+/// The veripublica conventions version whose FORMATS.md the `check --json`
+/// envelope meets — asserted by epublift about itself (FORMATS §1.1).
+#[cfg(feature = "validate")]
+const ENVELOPE_CONVENTION: &str = "0.6";
+
 /// `epublift check …` — validate EPUB file(s) against the EPUB spec using our
 /// pure-Rust epubveri engine (a JVM-free epubcheck alternative).
 ///
@@ -527,7 +532,8 @@ fn run_check(args: &CheckArgs) -> Result<()> {
         .map(|path| {
             let name = path.display().to_string();
             match epubveri::validate_path_with_profile(path, profile) {
-                Ok(report) => Input::from_report(name, &report),
+                // No severity is filtered out, so nothing is `suppressed`.
+                Ok(report) => Input::from_report(name, &report, &[]),
                 // Not a verdict: we never got far enough to grade the book.
                 Err(e) => Input::from_error(name, e.to_string()),
             }
@@ -536,7 +542,16 @@ fn run_check(args: &CheckArgs) -> Result<()> {
 
     // `for_tool` derives the aggregate status with the exit code's precedence,
     // so the status we print and the code we exit with cannot disagree.
-    let envelope = Envelope::for_tool("epublift", env!("CARGO_PKG_VERSION"), None, inputs);
+    // The `convention` key is our own claim about the output's shape (FORMATS
+    // §1.1), not inherited from epubveri: this envelope meets FORMATS 0.6. The
+    // `check` command line itself does not follow CLI.md (see docs/validate.md).
+    let envelope = Envelope::for_tool(
+        "epublift",
+        env!("CARGO_PKG_VERSION"),
+        ENVELOPE_CONVENTION,
+        None,
+        inputs,
+    );
 
     if args.json {
         println!("{}", serde_json::to_string_pretty(&envelope)?);
@@ -598,8 +613,9 @@ fn run_check(args: &CheckArgs) -> Result<()> {
         // Honest footer: epubveri is pre-1.0 and not yet full epubcheck parity.
         if !args.quiet || envelope.status != "ok" {
             eprintln!(
-                "\nValidated with epubveri (pure-Rust, JVM-free; pre-1.0, ~98.8% \
-                 message-ID recall vs epubcheck — not yet full parity)."
+                "\nValidated with epubveri (pure-Rust, JVM-free; pre-1.0 — 99.7% of \
+                 epubcheck's own test cases caught with the same message ID, not yet \
+                 full parity)."
             );
         }
     }

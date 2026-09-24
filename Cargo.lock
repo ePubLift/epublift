@@ -995,9 +995,9 @@ dependencies = [
 
 [[package]]
 name = "epubveri"
-version = "0.5.9"
+version = "0.17.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4cc39d44c986718930db207e8a179ea9e0adfcecc3bbc80fb41a0dc4c7815ba4"
+checksum = "75249a55f86531602aad8093738a25b4e44bd385db3447e7a7df74340447acba"
 dependencies = [
  "roxmltree",
  "serde",
@@ -2918,9 +2918,9 @@ dependencies = [
 
 [[package]]
 name = "styloria"
-version = "0.2.0"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "384c71d1682020e3c4847eb30478b3f021a9a3b055b2a99ecfa2fc33ac8f319b"
+checksum = "5f5d27daeb5851a035db0a101c062dfb8720455f69da27ab50ad2be1db5ac69b"
 
 [[package]]
 name = "subtle"
@@ -2969,7 +2969,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.3.4",
+ "getrandom 0.4.3",
  "once_cell",
  "rustix",
  "windows-sys 0.61.2",

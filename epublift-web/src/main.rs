@@ -212,6 +212,7 @@ async fn main() {
         .route("/app.js", get(app_js))
         .route("/i18n.js", get(i18n_js))
         .route("/vendor/epubveri.js", get(epubveri_js))
+        .route("/vendor/epubveri_bg.js", get(epubveri_bg_js))
         .route("/vendor/epubveri_bg.wasm", get(epubveri_wasm))
         .route("/healthz", get(|| async { "ok" }))
         .route("/version", get(version))
@@ -345,10 +346,11 @@ async fn app_js() -> impl IntoResponse {
     )
 }
 
-/// Serve the epubveri WASM glue (the `wasm-pack --target web` ES module) as a
-/// same-origin module, so the client-side Validate mode loads it under
-/// `script-src 'self'`. The glue fetches `epubveri_bg.wasm` relative to its own
-/// URL, so both live under `/vendor/`. See the Validate mode in app.js.
+/// Serve the epubveri loader (our small ES module that instantiates the
+/// published WASM build — see static/vendor/VENDOR.md) as a same-origin module,
+/// so the client-side Validate mode loads it under `script-src 'self'`. It
+/// fetches `epubveri_bg.wasm` and imports `epubveri_bg.js` relative to its own
+/// URL, so all three live under `/vendor/`. See the Validate mode in app.js.
 async fn epubveri_js() -> impl IntoResponse {
     (
         [(
@@ -359,7 +361,18 @@ async fn epubveri_js() -> impl IntoResponse {
     )
 }
 
-/// Serve the epubveri WASM binary (pure-Rust EPUB validator, ~1 MB) as a
+/// Serve epubveri's wasm-bindgen glue, verbatim from the published npm package.
+async fn epubveri_bg_js() -> impl IntoResponse {
+    (
+        [(
+            header::CONTENT_TYPE,
+            header::HeaderValue::from_static("text/javascript; charset=utf-8"),
+        )],
+        include_str!("../static/vendor/epubveri_bg.js"),
+    )
+}
+
+/// Serve the epubveri WASM binary (pure-Rust EPUB validator, ~2 MB) as a
 /// same-origin `application/wasm` asset. EPUB validation runs entirely in the
 /// browser from this module — the file is never uploaded.
 async fn epubveri_wasm() -> impl IntoResponse {
