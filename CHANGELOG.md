@@ -69,6 +69,18 @@ are tagged with the component they belong to.
   contrast (invisible), and `ERROR`/`WARNING` at 3.3–3.6:1 both missed WCAG AA
   for body text. All five levels now use the veripublica family's measured dark
   ramp and clear AA (6.4:1 – 9.2:1) on that panel.
+- **PDF import: text now comes from whichever extractor reads the page better.**
+  Newer lopdf reads pages its `extract_text` used to give up on, but on some
+  fonts it runs the words together ("Atyearend2022,Berkshirewas…") and on an
+  unreadable composite font it returns the raw glyph codes as letters
+  ("DXWKRUV" for "authors"). Our own extractor, which places spaces from the
+  real glyph widths, used to take over only when lopdf found nothing. Now, on a
+  born-digital page, both run and the text with fewer run-together words wins
+  (lopdf's on a tie, as before); on a scanned page with an OCR text layer lopdf
+  still reads first. Measured on 126 real PDFs against the previous release: 13
+  more documents import (74 vs 61), 27% more text comes through, and
+  run-together words drop from 0.27% to 0.21%; the reference books in `tests/`
+  import byte-identically.
 
 ### Security
 - **Docker: the runtime image is now based on Alpine 3.24 (was 3.20).** Alpine
@@ -91,6 +103,9 @@ are tagged with the component they belong to.
   convert, kepub, `meta show` and repair produce identical output on all 474
   books of the test shelf. 0.42 is a separate decision: it rewrites the API
   around `&str` and rejects non-UTF-8 input outright.
+- **`lopdf` 0.34 → 0.45** (PDF import), clearing RUSTSEC-2026-0187 (stack
+  overflow on deeply nested PDF objects) and picking up fixes for four crashes
+  on crafted PDFs and a bound on object-graph recursion.
 
 ## [cli-v1.13.0] - 2026-07-08
 

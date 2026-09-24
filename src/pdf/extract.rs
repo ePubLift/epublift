@@ -522,9 +522,7 @@ pub(crate) fn extract_page(doc: &Document, page_id: ObjectId) -> PageContent {
         runs: Vec::new(),
     };
 
-    let Ok(data) = doc.get_page_content(page_id) else {
-        return page;
-    };
+    let data = doc.get_page_content(page_id);
     let Ok(content) = Content::decode(&data) else {
         return page;
     };
@@ -644,9 +642,7 @@ pub(crate) fn extract_page(doc: &Document, page_id: ObjectId) -> PageContent {
 /// decoding — used only to detect the presence of a text layer. This is robust
 /// where `extract_text` returns empty (CID fonts).
 pub(crate) fn shown_text_bytes(doc: &Document, page_id: ObjectId) -> usize {
-    let Ok(data) = doc.get_page_content(page_id) else {
-        return 0;
-    };
+    let data = doc.get_page_content(page_id);
     let Ok(content) = Content::decode(&data) else {
         return 0;
     };
@@ -678,7 +674,8 @@ pub(crate) fn shown_text_bytes(doc: &Document, page_id: ObjectId) -> usize {
 /// Clean text of a page plus the signals the hybrid structurer needs.
 #[derive(Debug, Clone, Default)]
 pub(crate) struct PageText {
-    /// Clean text blocks (≈ paragraphs) from lopdf `extract_text`.
+    /// Clean text blocks (≈ paragraphs), from our extractor or lopdf's
+    /// `extract_text` (see [`page_text`]).
     pub blocks: Vec<String>,
     /// True when the page has no full-page image → clean typography, so the
     /// font-size heading signal is trustworthy (born-digital). False for
@@ -724,28 +721,33 @@ pub(crate) fn page_text(
     page_num: u32,
     extract_figures: bool,
 ) -> PageText {
-    let mut blocks: Vec<String> = doc
-        .extract_text(&[page_num])
-        .unwrap_or_default()
-        .lines()
-        .map(|l| l.split_whitespace().collect::<Vec<_>>().join(" "))
-        .filter(|l| !l.is_empty())
-        .collect();
     let born_digital = !has_full_page_image(doc, page_id);
-
-    // Run our own positioned extractor when we need it: (a) as a CID/Type0
-    // fallback when `extract_text` came up empty (composite fonts), and (b) for
-    // the big-font heading signal on born-digital pages.
+    // Which extractor's text the page keeps:
+    // - born-digital: both run, and the cleaner result wins (see
+    //   `run_together_score`). Neither extractor is better everywhere: lopdf's
+    //   `extract_text` runs words together on some fonts ("Atyearend2022,…"),
+    //   ours on others; ours has to run anyway for the big-font heading signal.
+    // - scan with an OCR text layer: lopdf's, which reads those invisible
+    //   layers well; ours is the fallback when it comes up empty.
     let mut big_font = Vec::new();
-    if blocks.is_empty() || born_digital {
+    let blocks = if born_digital {
         let pc = extract_page(doc, page_id);
-        if blocks.is_empty() {
-            blocks = blocks_from_runs(&pc);
+        big_font = big_font_texts(&pc);
+        let ours = blocks_from_runs(&pc);
+        let theirs = lopdf_blocks(doc, page_id, page_num);
+        if run_together_score(&theirs) <= run_together_score(&ours) {
+            theirs
+        } else {
+            ours
         }
-        if born_digital {
-            big_font = big_font_texts(&pc);
+    } else {
+        let theirs = lopdf_blocks(doc, page_id, page_num);
+        if theirs.is_empty() {
+            blocks_from_runs(&extract_page(doc, page_id))
+        } else {
+            theirs
         }
-    }
+    };
     // Carry over real figures when the doc is born-digital (decided once at the
     // document level — see `born_digital_doc`).
     let figures = if extract_figures {
@@ -759,6 +761,49 @@ pub(crate) fn page_text(
         big_font,
         figures,
     }
+}
+
+/// How badly a page's extracted text reads, for choosing between the two
+/// extractors: the share of letters sitting in implausibly long "words" (18+
+/// letters — words run together because a space was missed), then fewer
+/// letters overall as the tie-breaker. Lower is better; no text at all is worst.
+fn run_together_score(blocks: &[String]) -> (u32, i64) {
+    let (mut letters, mut glued) = (0usize, 0usize);
+    for word in blocks.iter().flat_map(|b| b.split_whitespace()) {
+        let n = word.chars().filter(|c| c.is_alphabetic()).count();
+        letters += n;
+        if n >= 18 {
+            glued += n;
+        }
+    }
+    if letters == 0 {
+        return (u32::MAX, 0);
+    }
+    ((glued * 1000 / letters) as u32, -(letters as i64))
+}
+
+/// lopdf's `extract_text` for one page, as whitespace-normalised lines. Empty
+/// when the page has a composite (Type0) font whose /ToUnicode CMap lopdf
+/// can't read: up to 0.34 `extract_text` failed on such a page, since then it
+/// falls back to StandardEncoding and returns the raw glyph codes as letters
+/// ("DXWKRUV" for "authors"), so it isn't asked at all.
+fn lopdf_blocks(doc: &Document, page_id: ObjectId, page_num: u32) -> Vec<String> {
+    let unreadable_composite = page_font_dicts(doc, page_id).iter().any(|(_, d)| {
+        d.get(b"Subtype").and_then(|o| o.as_name()).ok() == Some(b"Type0".as_slice())
+            && !matches!(
+                d.get_font_encoding(doc),
+                Ok(Encoding::UnicodeMapEncoding(_))
+            )
+    });
+    if unreadable_composite {
+        return Vec::new();
+    }
+    doc.extract_text(&[page_num])
+        .unwrap_or_default()
+        .lines()
+        .map(|l| l.split_whitespace().collect::<Vec<_>>().join(" "))
+        .filter(|l| !l.is_empty())
+        .collect()
 }
 
 /// The page's largest image as OCR-ready bytes (JPEG verbatim or raw → PNG) —
@@ -1199,5 +1244,17 @@ endcmap";
     #[test]
     fn empty_cmap_is_none() {
         assert!(parse_to_unicode(b"begincmap endcmap").is_none());
+    }
+
+    #[test]
+    fn run_together_text_scores_worse() {
+        let spaced = vec!["At year end 2022, Berkshire was the largest owner".to_string()];
+        let glued = vec!["Atyearend2022,Berkshirewasthelargestowner".to_string()];
+        assert!(run_together_score(&spaced) < run_together_score(&glued));
+        // Equally clean: more text wins.
+        let more = vec!["At year end 2022, Berkshire was the largest owner of".to_string()];
+        assert!(run_together_score(&more) < run_together_score(&spaced));
+        // Nothing extracted loses to anything.
+        assert!(run_together_score(&glued) < run_together_score(&[]));
     }
 }

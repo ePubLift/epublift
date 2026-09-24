@@ -75,7 +75,7 @@ roxmltree = "0.21"
 regex = "1"
 # [EXPERIMENTAL] PDF import (`epublift import`): read text/images from a PDF.
 # Optional so the default build doesn't carry it. See src/pdf/.
-lopdf = { version = "0.34", optional = true }
+lopdf = { version = "0.45", optional = true }
 # [EXPERIMENTAL] Markdown import (`epublift import file.md`): turn a Markdown
 # file (e.g. an AI-OCR'd PDF) into a reflowable EPUB. pulldown-cmark is the
 # CommonMark standard, pure Rust, zero C. default-features off drops its bundled
