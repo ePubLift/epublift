@@ -136,7 +136,7 @@ zstd = { version = "0.13", optional = true }
 # has a web/HTML-tuned static dictionary, a strong candidate for the solid-stream
 # `.eparc` archive. Pure Rust (rust-brotli), bench-gated for now — it does not
 # ship until the archival mode lands. Used by `zstd-bench --solid`.
-brotli = { version = "8", optional = true }
+brotli = { version = "9", optional = true }
 # Bench-only C reference CEILING for the archival track: xz/LZMA (liblzma) is the
 # usual ratio champion on text. Used ONLY to quantify how much ratio the pure-Rust
 # choice trades away (and, via --mem-probe, at what memory cost). NEVER shipped —
