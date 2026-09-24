@@ -56,7 +56,7 @@ jobs:
 
     steps:
       - name: Check out the tag
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag || github.ref }}
 
@@ -157,7 +157,7 @@ jobs:
       # Check out first (clean), so the artifact download below isn't wiped, and
       # so CHANGELOG.md is available to build the release notes.
       - name: Check out the tag
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag || github.ref }}
 
