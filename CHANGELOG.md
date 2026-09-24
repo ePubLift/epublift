@@ -84,6 +84,13 @@ are tagged with the component they belong to.
   WASM copy, so the CLI and the browser keep agreeing.
   `archmage`/`magetypes`/`archmage-macros` are held at 0.9.26: 0.9.27+ no longer
   compiles `jxl-encoder-simd` 0.3.0 (the JPEG XL encoder) on ARM64.
+- **`quick-xml` 0.40 → 0.41**, clearing two advisories on the parser that reads
+  every uploaded book's package, metadata and content: RUSTSEC-2026-0194
+  (quadratic time on a start tag with many attributes) and RUSTSEC-2026-0195
+  (unbounded namespace-declaration allocation). No code change was needed;
+  convert, kepub, `meta show` and repair produce identical output on all 474
+  books of the test shelf. 0.42 is a separate decision: it rewrites the API
+  around `&str` and rejects non-UTF-8 input outright.
 
 ## [cli-v1.13.0] - 2026-07-08
 
