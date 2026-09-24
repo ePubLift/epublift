@@ -75,6 +75,15 @@ are tagged with the component they belong to.
   3.20 reached end of support on 2026-04-01 and no longer receives security
   fixes; 3.24 is supported until 2028-06. The server binary is fully static, so
   nothing else changes.
+- **Dependencies refreshed to their latest compatible releases** (`cargo update`,
+  135 lockfile changes). This clears two advisories — `rustls` 0.23.40
+  (RUSTSEC-2026-0285, TLS 1.3 handshake messages accepted across encryption
+  levels) and `crossbeam-epoch` 0.9.18 (RUSTSEC-2026-0204) — and the `anyhow`
+  (unsound) and `spin` (yanked) warnings. `epubveri` is deliberately held at
+  0.5.9: it is upgraded in its own step, together with the web app's vendored
+  WASM copy, so the CLI and the browser keep agreeing.
+  `archmage`/`magetypes`/`archmage-macros` are held at 0.9.26: 0.9.27+ no longer
+  compiles `jxl-encoder-simd` 0.3.0 (the JPEG XL encoder) on ARM64.
 
 ## [cli-v1.13.0] - 2026-07-08
 
