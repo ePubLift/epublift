@@ -106,6 +106,17 @@ are tagged with the component they belong to.
 - **`lopdf` 0.34 → 0.45** (PDF import), clearing RUSTSEC-2026-0187 (stack
   overflow on deeply nested PDF objects) and picking up fixes for four crashes
   on crafted PDFs and a bound on object-graph recursion.
+- **HTTPS client: the pure-Rust crypto provider now comes from the maintained
+  code line.** `rustls-rustcrypto`'s only release (0.0.2-alpha, 2024) pulls
+  `rustls-webpki` 0.102 with four advisories (RUSTSEC-2026-0049, -0098, -0099,
+  -0104); its main branch no longer does, so it is now pinned to a reviewed
+  commit until a release is cut. The HTTPS client stays pure Rust — no C
+  toolchain — and still runs on every CPU we ship for, Raspberry Pi 4
+  included. Handshakes to every host we talk to (Open Library, Google Books,
+  Mistral, the OCR model store) measure the same as before. One advisory
+  remains accepted, with its reason in `.cargo/audit.toml`: the `rsa` Marvin
+  side channel concerns RSA private keys, and a TLS client verifying server
+  signatures holds none.
 - **Dependencies are now audited continuously.** A new `Audit` workflow checks
   `Cargo.lock` against the RustSec advisory database whenever the dependencies
   change and every Monday; the few accepted advisories are listed, each with

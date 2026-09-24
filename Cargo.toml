@@ -143,7 +143,11 @@ brotli = { version = "8", optional = true }
 xz2 = { version = "0.1", optional = true }
 butteraugli = { version = "0.9", optional = true }
 rustls = { version = "0.23.40", default-features = false, features = ["std", "tls12", "logging"], optional = true }
-rustls-rustcrypto = { version = "0.0.2-alpha", optional = true }
+# Pinned to an unreleased commit of RustCrypto/rustls-rustcrypto: the last
+# release (0.0.2-alpha, 2024-04) pulls rustls-webpki 0.102 and its four
+# advisories; master no longer does. Back to a crates.io version once one is cut
+# (tracked upstream in RustCrypto/rustls-rustcrypto#107).
+rustls-rustcrypto = { git = "https://github.com/RustCrypto/rustls-rustcrypto", rev = "70f76c039e587192688af18a80d5d6435dedaf22", optional = true }
 webpki-roots = { version = "1.0.8", optional = true }
 
 [features]
