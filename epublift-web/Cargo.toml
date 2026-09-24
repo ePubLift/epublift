@@ -31,7 +31,10 @@ name = "epublift-web"
 # 1.16.0 re-vendors the client-side validator to epubveri 0.4.4 (materially fewer
 # false positives: legacy <meta name>, full-timestamp dates, @media, non-linear
 # nav) and shows the exact file:line:column in the Validate report, matching the CLI.
-version = "1.16.0"
+# 1.17.0 runs epubveri 0.17.5 in the browser (the published npm build, identical
+# findings to the CLI), declines XML that would crash the server (xmlguard), and
+# ships the security upgrades of cli-v2.0.0 on an Alpine 3.24 base.
+version = "1.17.0"
 edition = "2024"
 license = "AGPL-3.0-or-later"
 description = "Web front-end for epublift: convert, archive, restore & edit EPUB metadata in the browser"

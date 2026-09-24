@@ -10,6 +10,11 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+## [cli-v2.0.0] - 2026-09-24
+
+A major release because `check`'s machine output and exit code changed (both
+marked **BREAKING** below). Everything else is fixes, security and upkeep.
+
 ### Changed
 - **Upgraded the validator engine to `epubveri` 0.17.5 (from 0.4.4) — on both the
   CLI and the browser.** `epublift check` and the web app's client-side Validate
@@ -46,12 +51,6 @@ are tagged with the component they belong to.
     build: it now shares the versions epublift already uses.
   - Findings now include epubcheck's `info` and `usage` levels, and the JSON
     `summary` always carries all five counters, zeros included.
-- **Web: the browser validator is now epubveri's own published build**
-  (`@veripublica/epubveri-wasm` from npm, built by epubveri's CI from its
-  release tag with a provenance attestation), vendored byte-for-byte beside a
-  small loader instead of rebuilt locally. `epublift-web/static/vendor/VENDOR.md`
-  records the version, digests and update steps. The module grew from about
-  1 MB to 2 MB; it still loads only when the Validate tab is first used.
 - **BREAKING: `check --json` now emits the shared veripublica machine envelope**
   ([FORMATS.md](https://github.com/veripublica/conventions/blob/main/FORMATS.md))
   instead of a bespoke array, so epublift's validation output can be consumed by
@@ -69,11 +68,6 @@ are tagged with the component they belong to.
   are non-zero, so an ordinary `check … || exit 1` gate is unaffected. Every
   input is still processed and reported even when an earlier one fails.
 
-- **Web: the Validate report now shows all five severity levels.** Findings carry
-  epubcheck's full vocabulary — `fatal`, `error`, `warning`, `info`, `usage` —
-  instead of folding fatals into errors and usage notes into info. `fatal` is
-  ranked above `error` with a tinted chip. Localized in all 13 UI languages.
-
 ### Fixed
 - **A fatally broken book no longer reports `(0 errors, 0 warnings)`.** epubveri
   counts fatal-severity findings apart from errors, so a book stopped dead by a
@@ -81,11 +75,100 @@ are tagged with the component they belong to.
   named nothing. Both surfaces now name them only when there are any: the CLI
   reads `FAIL book.epub (1 fatal, 0 errors, 0 warnings)`, and the web report's
   count line matches.
+- **PDF import: text now comes from whichever extractor reads the page better.**
+  Newer lopdf reads pages its `extract_text` used to give up on, but on some
+  fonts it runs the words together ("Atyearend2022,Berkshirewas…") and on an
+  unreadable composite font it returns the raw glyph codes as letters
+  ("DXWKRUV" for "authors"). Our own extractor, which places spaces from the
+  real glyph widths, used to take over only when lopdf found nothing. Now, on a
+  born-digital page, both run and the text with fewer run-together words wins
+  (lopdf's on a tie, as before); on a scanned page with an OCR text layer lopdf
+  still reads first. Measured on 126 real PDFs against the previous release: 13
+  more documents import (74 vs 61), 27% more text comes through, and
+  run-together words drop from 0.27% to 0.21%; the reference books in `tests/`
+  import byte-identically.
+
+### Security
+- **One crafted upload could take the whole web server down; now it is declined.**
+  epublift parses a book's `container.xml`, package document and NCX with
+  roxmltree, which recurses per nesting level: an EPUB whose package document
+  nested 20,000 elements (1.2 MB) overflowed the stack, and in Rust that aborts
+  the process — the `epublift-web` container exited, taking every conversion in
+  flight with it. Found by epubveri, reproduced against the server. Every such
+  parse (eight sites, in the CLI and the web service alike) now runs epubveri's
+  `xmlguard::check` first, which declines nesting deeper than 256 levels, more
+  than 256 attributes on one element (quadratic to parse), more than a million
+  elements, or runaway entity expansion — with an ordinary error. No real book
+  comes near: the deepest document on the 474-book test shelf nests 24 levels,
+  and convert, kepub, `meta show` and repair produce identical output on all 474
+  before and after. `epubveri` is therefore always linked now (the validator
+  itself stays behind the `validate` feature); the binaries did not grow.
+- **Dependencies refreshed to their latest compatible releases** (`cargo update`,
+  135 lockfile changes). This clears two advisories — `rustls` 0.23.40
+  (RUSTSEC-2026-0285, TLS 1.3 handshake messages accepted across encryption
+  levels) and `crossbeam-epoch` 0.9.18 (RUSTSEC-2026-0204) — and the `anyhow`
+  (unsound) and `spin` (yanked) warnings. `archmage`/`magetypes`/`archmage-macros` are held at 0.9.26: 0.9.27+ no longer
+  compiles `jxl-encoder-simd` 0.3.0 (the JPEG XL encoder) on ARM64.
+- **`quick-xml` 0.40 → 0.41**, clearing two advisories on the parser that reads
+  every uploaded book's package, metadata and content: RUSTSEC-2026-0194
+  (quadratic time on a start tag with many attributes) and RUSTSEC-2026-0195
+  (unbounded namespace-declaration allocation). No code change was needed;
+  convert, kepub, `meta show` and repair produce identical output on all 474
+  books of the test shelf. 0.42 is a separate decision: it rewrites the API
+  around `&str` and rejects non-UTF-8 input outright.
+- **`lopdf` 0.34 → 0.45** (PDF import), clearing RUSTSEC-2026-0187 (stack
+  overflow on deeply nested PDF objects) and picking up fixes for four crashes
+  on crafted PDFs and a bound on object-graph recursion.
+- **HTTPS client: the pure-Rust crypto provider now comes from the maintained
+  code line.** `rustls-rustcrypto`'s only release (0.0.2-alpha, 2024) pulls
+  `rustls-webpki` 0.102 with four advisories (RUSTSEC-2026-0049, -0098, -0099,
+  -0104); its main branch no longer does, so it is now pinned to a reviewed
+  commit until a release is cut. The HTTPS client stays pure Rust — no C
+  toolchain — and still runs on every CPU we ship for, Raspberry Pi 4
+  included. Handshakes to every host we talk to (Open Library, Google Books,
+  Mistral, the OCR model store) measure the same as before. One advisory
+  remains accepted, with its reason in `.cargo/audit.toml`: the `rsa` Marvin
+  side channel concerns RSA private keys, and a TLS client verifying server
+  signatures holds none.
+- **Dependencies are now audited continuously.** A new `Audit` workflow checks
+  `Cargo.lock` against the RustSec advisory database whenever the dependencies
+  change and every Monday; the few accepted advisories are listed, each with
+  its reason, in `.cargo/audit.toml`. Dependabot now proposes weekly updates
+  for the Rust crates, the GitHub Actions and the Docker base image.
+- **CI now builds and tests on ARM64 as well as x86-64**, since the SIMD image
+  codecs compile different code per architecture. A `SECURITY.md` now says how
+  to report a vulnerability privately and what counts as one, including for
+  the hosted web service.
+
+## [web-v1.17.0] - 2026-09-24
+
+### Changed
+- **Validate runs `epubveri` 0.17.5 in the browser (from 0.4.4)** — the same
+  engine and the same findings as `epublift check` in cli-v2.0.0, verified
+  identical on all 474 books of the test shelf. See cli-v2.0.0 for what the new
+  engine fixes: fewer false positives (86 wrongly failing shelf books now pass,
+  85 of them confirmed by epubcheck) and real errors it used to miss (29 books,
+  all confirmed).
+- **Web: the browser validator is now epubveri's own published build**
+  (`@veripublica/epubveri-wasm` from npm, built by epubveri's CI from its
+  release tag with a provenance attestation), vendored byte-for-byte beside a
+  small loader instead of rebuilt locally. `epublift-web/static/vendor/VENDOR.md`
+  records the version, digests and update steps. The module grew from about
+  1 MB to 2 MB; it still loads only when the Validate tab is first used.
+- **Web: the Validate report now shows all five severity levels.** Findings carry
+  epubcheck's full vocabulary — `fatal`, `error`, `warning`, `info`, `usage` —
+  instead of folding fatals into errors and usage notes into info. `fatal` is
+  ranked above `error` with a tinted chip. Localized in all 13 UI languages.
+
+### Fixed
 - **Web: the Validate severity colours are legible again.** They were the light
   theme's values, but the result panel is dark — `INFO` sat at **1.86:1**
   contrast (invisible), and `ERROR`/`WARNING` at 3.3–3.6:1 both missed WCAG AA
   for body text. All five levels now use the veripublica family's measured dark
   ramp and clear AA (6.4:1 – 9.2:1) on that panel.
+- **Validate: the result panel is inset like the rest of the results.** The
+  counts line, the "Fix these issues" button and the findings table sat flush
+  against the panel's left edge.
 - **PDF import: text now comes from whichever extractor reads the page better.**
   Newer lopdf reads pages its `extract_text` used to give up on, but on some
   fonts it runs the words together ("Atyearend2022,Berkshirewas…") and on an
@@ -118,45 +201,9 @@ are tagged with the component they belong to.
   3.20 reached end of support on 2026-04-01 and no longer receives security
   fixes; 3.24 is supported until 2028-06. The server binary is fully static, so
   nothing else changes.
-- **Dependencies refreshed to their latest compatible releases** (`cargo update`,
-  135 lockfile changes). This clears two advisories — `rustls` 0.23.40
-  (RUSTSEC-2026-0285, TLS 1.3 handshake messages accepted across encryption
-  levels) and `crossbeam-epoch` 0.9.18 (RUSTSEC-2026-0204) — and the `anyhow`
-  (unsound) and `spin` (yanked) warnings. `epubveri` is deliberately held at
-  0.5.9: it is upgraded in its own step, together with the web app's vendored
-  WASM copy, so the CLI and the browser keep agreeing.
-  `archmage`/`magetypes`/`archmage-macros` are held at 0.9.26: 0.9.27+ no longer
-  compiles `jxl-encoder-simd` 0.3.0 (the JPEG XL encoder) on ARM64.
-- **`quick-xml` 0.40 → 0.41**, clearing two advisories on the parser that reads
-  every uploaded book's package, metadata and content: RUSTSEC-2026-0194
-  (quadratic time on a start tag with many attributes) and RUSTSEC-2026-0195
-  (unbounded namespace-declaration allocation). No code change was needed;
-  convert, kepub, `meta show` and repair produce identical output on all 474
-  books of the test shelf. 0.42 is a separate decision: it rewrites the API
-  around `&str` and rejects non-UTF-8 input outright.
-- **`lopdf` 0.34 → 0.45** (PDF import), clearing RUSTSEC-2026-0187 (stack
-  overflow on deeply nested PDF objects) and picking up fixes for four crashes
-  on crafted PDFs and a bound on object-graph recursion.
-- **HTTPS client: the pure-Rust crypto provider now comes from the maintained
-  code line.** `rustls-rustcrypto`'s only release (0.0.2-alpha, 2024) pulls
-  `rustls-webpki` 0.102 with four advisories (RUSTSEC-2026-0049, -0098, -0099,
-  -0104); its main branch no longer does, so it is now pinned to a reviewed
-  commit until a release is cut. The HTTPS client stays pure Rust — no C
-  toolchain — and still runs on every CPU we ship for, Raspberry Pi 4
-  included. Handshakes to every host we talk to (Open Library, Google Books,
-  Mistral, the OCR model store) measure the same as before. One advisory
-  remains accepted, with its reason in `.cargo/audit.toml`: the `rsa` Marvin
-  side channel concerns RSA private keys, and a TLS client verifying server
-  signatures holds none.
-- **Dependencies are now audited continuously.** A new `Audit` workflow checks
-  `Cargo.lock` against the RustSec advisory database whenever the dependencies
-  change and every Monday; the few accepted advisories are listed, each with
-  its reason, in `.cargo/audit.toml`. Dependabot now proposes weekly updates
-  for the Rust crates, the GitHub Actions and the Docker base image.
-- **CI now builds and tests on ARM64 as well as x86-64**, since the SIMD image
-  codecs compile different code per architecture. A `SECURITY.md` now says how
-  to report a vulnerability privately and what counts as one, including for
-  the hosted web service.
+- **Every dependency fix of cli-v2.0.0 ships in the server too**: the `rustls`,
+  `quick-xml` and `lopdf` advisories are cleared, and the pure-Rust HTTPS crypto
+  provider moved to its maintained code line. See cli-v2.0.0 for the details.
 
 ## [cli-v1.13.0] - 2026-07-08
 
