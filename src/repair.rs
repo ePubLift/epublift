@@ -180,7 +180,7 @@ fn plan_repairs(
     opf_entry_name: &str,
     zip_entries: &HashSet<String>,
 ) -> Result<RepairPlan> {
-    let doc = roxmltree::Document::parse(xml).context("Failed to parse OPF package document")?;
+    let doc = crate::util::parse_xml(xml).context("Failed to parse OPF package document")?;
     let mut plan = RepairPlan::default();
     let opf_dir = opf_dir_of(opf_entry_name);
     let unique_id = doc

@@ -25,7 +25,7 @@ struct NavPoint {
 pub fn generate_nav_xhtml(ncx_path: &Path, out_path: &Path, guide_refs: &[GuideRef]) -> Result<()> {
     let raw = fs::read_to_string(ncx_path).context("Failed to read toc.ncx")?;
     let xml = strip_doctype(&raw);
-    let doc = roxmltree::Document::parse(&xml).context("Failed to parse toc.ncx")?;
+    let doc = crate::util::parse_xml(&xml).context("Failed to parse toc.ncx")?;
 
     // Document title.
     let title_text = doc

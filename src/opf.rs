@@ -96,7 +96,7 @@ fn get_attr(e: &BytesStart, key: &str) -> Option<String> {
 /// Read-only pass over the OPF gathering manifest, cover, navigation and guide
 /// information.
 pub fn parse_opf_info(xml: &str) -> Result<OpfInfo> {
-    let doc = roxmltree::Document::parse(xml).context("Failed to parse OPF package document")?;
+    let doc = crate::util::parse_xml(xml).context("Failed to parse OPF package document")?;
 
     // Cover image id: <meta name="cover" content="..."/> anywhere in metadata.
     let cover_id = doc

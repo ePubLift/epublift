@@ -10,6 +10,18 @@ use std::fs;
 use std::path::Path;
 use walkdir::WalkDir;
 
+/// Parse XML text taken from a book with roxmltree — after epubveri's
+/// `xmlguard::check`, which declines a document roxmltree can't safely take:
+/// nesting deep enough to overflow the stack (an abort, not a catchable
+/// panic — one upload would take the whole web server down), attribute or
+/// element counts that make parsing quadratic or unbounded, or entities that
+/// expand without limit. The limits sit far above any real book (the deepest
+/// document on our 474-book shelf nests 24 elements; the limit is 256).
+pub fn parse_xml(text: &str) -> Result<roxmltree::Document<'_>> {
+    epubveri::xmlguard::check(text)?;
+    Ok(roxmltree::Document::parse(text)?)
+}
+
 /// Characters that Python's `urllib.parse.quote` leaves untouched by default:
 /// unreserved characters (`A-Z a-z 0-9 _ . - ~`) plus the `/` path separator
 /// (because `quote` uses `safe='/'` by default).

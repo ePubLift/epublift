@@ -100,6 +100,20 @@ are tagged with the component they belong to.
   import byte-identically.
 
 ### Security
+- **One crafted upload could take the whole web server down; now it is declined.**
+  epublift parses a book's `container.xml`, package document and NCX with
+  roxmltree, which recurses per nesting level: an EPUB whose package document
+  nested 20,000 elements (1.2 MB) overflowed the stack, and in Rust that aborts
+  the process — the `epublift-web` container exited, taking every conversion in
+  flight with it. Found by epubveri, reproduced against the server. Every such
+  parse (eight sites, in the CLI and the web service alike) now runs epubveri's
+  `xmlguard::check` first, which declines nesting deeper than 256 levels, more
+  than 256 attributes on one element (quadratic to parse), more than a million
+  elements, or runaway entity expansion — with an ordinary error. No real book
+  comes near: the deepest document on the 474-book test shelf nests 24 levels,
+  and convert, kepub, `meta show` and repair produce identical output on all 474
+  before and after. `epubveri` is therefore always linked now (the validator
+  itself stays behind the `validate` feature); the binaries did not grow.
 - **Docker: the runtime image is now based on Alpine 3.24 (was 3.20).** Alpine
   3.20 reached end of support on 2026-04-01 and no longer receives security
   fixes; 3.24 is supported until 2028-06. The server binary is fully static, so

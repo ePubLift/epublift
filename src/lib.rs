@@ -297,7 +297,7 @@ fn opf_entry_name(zip: &mut ZipArchive<File>) -> Result<String> {
         e.read_to_string(&mut s)?;
         s
     };
-    let doc = roxmltree::Document::parse(&container).context("Failed to parse container.xml")?;
+    let doc = crate::util::parse_xml(&container).context("Failed to parse container.xml")?;
     doc.descendants()
         .find(|n| {
             n.is_element()
@@ -728,7 +728,7 @@ fn locate_opf(temp_dir: &Path) -> Result<PathBuf> {
     }
 
     let xml = fs::read_to_string(&container_path)?;
-    let doc = roxmltree::Document::parse(&xml).context("Failed to parse container.xml")?;
+    let doc = crate::util::parse_xml(&xml).context("Failed to parse container.xml")?;
 
     let rootfile = doc
         .descendants()

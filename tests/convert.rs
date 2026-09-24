@@ -741,3 +741,32 @@ mod zstd_experimental {
         out
     }
 }
+
+#[test]
+fn hostile_nesting_is_declined_not_a_crash() {
+    // 20,000 nested elements in the OPF: without epubveri's xmlguard in front
+    // of roxmltree this overflows the stack and aborts the whole process (the
+    // web server included). It has to come back as an ordinary error instead.
+    let depth = 20_000;
+    let nested = format!(
+        "{}{}</metadata>",
+        "<x:d xmlns:x=\"urn:x\">".repeat(depth),
+        "</x:d>".repeat(depth)
+    );
+    let opf: &'static str = Box::leak(OPF_TEXT_ONLY.replacen("</metadata>", &nested, 1).into());
+    let mut entries = legacy_text_only();
+    entries[1] = text("OEBPS/content.opf", opf);
+
+    let dir = tempfile::tempdir().unwrap();
+    let input = dir.path().join("deep.epub");
+    build_epub(&input, &entries);
+
+    let Err(err) = convert(&input, &Options::default(), |_| {}) else {
+        panic!("convert accepted a 20,000-level OPF");
+    };
+    assert!(format!("{err:#}").contains("nesting"), "got: {err:#}");
+    let Err(err) = epublift::read_metadata(&input) else {
+        panic!("read_metadata accepted a 20,000-level OPF");
+    };
+    assert!(format!("{err:#}").contains("nesting"), "got: {err:#}");
+}

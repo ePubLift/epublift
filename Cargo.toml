@@ -89,14 +89,15 @@ base64 = { version = "0.22", optional = true }
 # ~12 MB models download on first use. Heavy, so strictly opt-in.
 ocrs = { version = "0.12", optional = true }
 rten = { version = "0.24", optional = true }
-# EPUB validation (`epublift check`, `validate` feature): our own pure-Rust,
-# JVM-free alternative to W3C epubcheck. Dogfooding — we consume the published
-# crate exactly like any other user would. Pure Rust, and shares our own `zip` 8
-# and `roxmltree` 0.21 rather than pulling second copies (0.5.4 aligned the
-# veripublica family on one zip major for exactly this reason). Opt-in so the
-# default build stays lean; shipped in release binaries (see release.yml).
-# See docs/validate.md.
-epubveri = { version = "0.17.5", optional = true }
+# epubveri, the veripublica family's pure-Rust, JVM-free alternative to W3C
+# epubcheck. Dogfooding — we consume the published crate exactly like any other
+# user would. Pure Rust, and shares our own `zip` 8 and `roxmltree` 0.21 rather
+# than pulling second copies. Always linked, for `xmlguard::check`: every
+# roxmltree parse of book XML goes through it first (see `util::parse_xml`), so a
+# hostile document is declined instead of aborting the process. The validator
+# itself (`epublift check`) stays behind the opt-in `validate` feature; see
+# docs/validate.md.
+epubveri = "0.17.5"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 tempfile = "3"
 walkdir = "2"
@@ -175,7 +176,7 @@ epub34 = ["dep:zenavif", "dep:zenjxl", "dep:rgb", "dep:imgref", "dep:almost-enou
 # own pure-Rust epubveri (JVM-free epubcheck alternative). Opt-in so `cargo build`
 # stays lean; included in release binaries. Pure Rust, no C. serde_json serializes
 # epubveri's shared veripublica envelope under `--json` (see docs/validate.md).
-validate = ["dep:epubveri", "dep:serde_json"]
+validate = ["dep:serde_json"]
 # [EXPERIMENTAL] PDF → EPUB import (`epublift import`). `pdf` = the text tiers
 # (born-digital PDFs + scans that already carry a text layer); pure Rust, light.
 # `pdf-ocr` will add OCR for scans with no text layer (a later phase: ocrs +
@@ -228,6 +229,13 @@ webpki-roots = ["dep:webpki-roots"]
 zip = { version = "8", default-features = false, features = ["deflate"] }
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 tempfile = "3"
+
+# roxmltree parses recursively. Unoptimised it spends ~20x the stack per level,
+# so on a 2 MiB `cargo test` thread it aborts at ~125 levels, below the
+# 256 that epubveri's xmlguard lets through. Optimising just this crate in dev
+# builds restores the margin (measured by epubveri; see xmlguard::MAX_XML_DEPTH).
+[profile.dev.package.roxmltree]
+opt-level = 1
 
 [profile.release]
 opt-level = 3

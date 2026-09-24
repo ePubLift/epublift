@@ -379,7 +379,7 @@ fn read_zip_entry<R: Read + std::io::Seek>(zip: &mut ZipArchive<R>, name: &str) 
 fn detect_epub_version(entries: &[(String, Vec<u8>)]) -> Option<String> {
     let (_, opf) = entries.iter().find(|(n, _)| n.ends_with(".opf"))?;
     let xml = std::str::from_utf8(opf).ok()?;
-    let doc = roxmltree::Document::parse(xml).ok()?;
+    let doc = crate::util::parse_xml(xml).ok()?;
     doc.descendants()
         .find(|n| n.is_element() && n.tag_name().name() == "package")
         .and_then(|n| n.attribute("version"))

@@ -92,7 +92,7 @@ fn attr_local(n: roxmltree::Node, name: &str) -> Option<String> {
 
 /// Read all bibliographic metadata from an OPF package document.
 pub fn parse_metadata(xml: &str) -> Result<Metadata> {
-    let doc = roxmltree::Document::parse(xml).context("Failed to parse OPF package document")?;
+    let doc = crate::util::parse_xml(xml).context("Failed to parse OPF package document")?;
     let pkg = doc.root_element();
 
     let mut md = Metadata {
@@ -529,7 +529,7 @@ struct DropPlan {
 }
 
 fn build_drop_plan(xml: &str, update: &MetadataUpdate) -> Result<DropPlan> {
-    let doc = roxmltree::Document::parse(xml).context("Failed to parse OPF package document")?;
+    let doc = crate::util::parse_xml(xml).context("Failed to parse OPF package document")?;
     let mut plan = DropPlan::default();
     let mut tag = |present: bool, name: &str| {
         if present {
