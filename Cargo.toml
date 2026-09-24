@@ -70,7 +70,7 @@ clap = { version = "4", features = ["derive"] }
 zip = { version = "8", default-features = false, features = ["deflate"] }
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 zenwebp = "0.4"
-quick-xml = "0.41"
+quick-xml = "0.42"
 roxmltree = "0.21"
 regex = "1"
 # [EXPERIMENTAL] PDF import (`epublift import`): read text/images from a PDF.
