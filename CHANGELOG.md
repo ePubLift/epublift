@@ -111,6 +111,10 @@ are tagged with the component they belong to.
   change and every Monday; the few accepted advisories are listed, each with
   its reason, in `.cargo/audit.toml`. Dependabot now proposes weekly updates
   for the Rust crates, the GitHub Actions and the Docker base image.
+- **CI now builds and tests on ARM64 as well as x86-64**, since the SIMD image
+  codecs compile different code per architecture. A `SECURITY.md` now says how
+  to report a vulnerability privately and what counts as one, including for
+  the hosted web service.
 
 ## [cli-v1.13.0] - 2026-07-08
 

@@ -22,8 +22,19 @@ env:
 
 jobs:
   check:
-    name: fmt + clippy + test
-    runs-on: ubuntu-latest
+    name: fmt + clippy + test (${{ matrix.arch }})
+    # ARM64 as well as x86-64: the SIMD image codecs compile different code per
+    # architecture, and an ARM64-only break (archmage 0.9.27 vs the JPEG XL
+    # encoder) once got past an x86-only CI.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86-64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     steps:
       - name: Check out the repository
         uses: actions/checkout@v5
