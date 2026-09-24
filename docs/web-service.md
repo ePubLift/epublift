@@ -53,8 +53,8 @@ docker run -d --name epublift-web \
 ```
 
 Then open <http://127.0.0.1:8080>. Pin a specific version with a tag instead of
-`latest`, e.g. `ghcr.io/epublift/epublift-web:1.4.0`. The image is a static musl
-binary on Alpine, runs as a non-root user, and is only ~14 MB.
+`latest`, e.g. `ghcr.io/epublift/epublift-web:1.17.0`. The image is a static musl
+binary on Alpine, runs as a non-root user, and is about 23 MB.
 
 ## Run with Docker Compose (recommended)
 
@@ -81,11 +81,10 @@ docker compose up -d
 | :--- | :--- |
 | `GOOGLE_BOOKS_API_KEY` | A [Google Books API key](https://console.cloud.google.com/) for the **Metadata** editor's ISBN enrichment when you pick the *Google Books* provider. Anonymous requests share a small daily quota (HTTP 429 when exhausted); a key raises it. **Optional** — leave it blank to use Open Library only (the default provider needs no key). |
 | `MISTRAL_API_KEY` | A [Mistral API key](https://console.mistral.ai/) that enables the **[EXPERIMENTAL] Smart Import** mode (AI OCR: PDF → EPUB, including scans/photos). **Optional** — leave it blank and Smart Import stays switched off (the UI shows an "add an API key" notice). The key stays on the server and is never sent to browsers; with it set, uploaded PDFs are sent to Mistral for OCR and **this key pays for the calls**. See [Smart Import](smart-import.md). |
-
-Your real `.env` is git-ignored, so your key stays private.
-
 | `EPUBLIFT_LOG_DIR` | Directory for the rolling **WARN+** log file (default `logs/`). The service always logs to stdout too (`docker logs`). In Docker the container's working dir isn't writable, so to keep file logs point this at a mounted directory (e.g. `EPUBLIFT_LOG_DIR=/logs` with a `./logs:/logs` volume). If the directory can't be created, it falls back to stdout only. |
 | `RUST_LOG` | Log verbosity, e.g. `RUST_LOG=epublift_web=debug,tower_http=debug` (default `epublift_web=info,tower_http=warn`). |
+
+Your real `.env` is git-ignored, so your key stays private.
 
 No API keys or uploaded content are ever logged.
 
@@ -114,7 +113,7 @@ defense — not obscurity:
 *   **No retention** — each request is converted in a temp dir wiped on success *or* error; no upload is stored or logged.
 *   **Strict Content-Security-Policy** (`default-src 'none'`) plus `X-Frame-Options`, `X-Content-Type-Options`, and locked-down CORS on every response.
 *   **Abuse limits** — a 50 MiB body cap, a request timeout, per-IP rate limiting, and a concurrency cap that keeps latency predictable.
-*   **Input hardening** (shared with the CLI) — zip-bomb (uncompressed-size + entry-count caps) and image decode-bomb (dimension/allocation limits) guards.
-*   **Optional egress-blocking** — the converter never makes outbound connections, so `docker-compose.yml` documents how to run it on an `internal` Docker network with no route to the internet at all.
+*   **Input hardening** (shared with the CLI) — zip-bomb (uncompressed-size + entry-count caps), image decode-bomb (dimension/allocation limits), and XML guards: every package document, NCX and `container.xml` is checked by epubveri's `xmlguard` before it is parsed, so a document nested deep enough to overflow the parser's stack (which would abort the whole server), or one with thousands of attributes on an element, is declined with an ordinary error.
+*   **Optional egress-blocking** — conversion, archiving and validation never make outbound connections; only ISBN enrichment (Open Library / Google Books) and Smart Import (when configured) do. So `docker-compose.yml` documents how to run it on an `internal` Docker network with no route to the internet at all, at the cost of those two features.
 
 > **AGPL-3.0 note:** if you run a **modified** copy of this service over a network, §13 requires you to offer your modified source to its users. The page carries a visible **Source** link to satisfy this.

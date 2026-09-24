@@ -128,7 +128,7 @@ need no network. Full details: [Metadata](metadata.md).
 
 The `check` subcommand validates one or more EPUBs against the spec and reports
 problems with epubcheck-compatible message IDs. It uses
-[epubveri](https://github.com/ePubLift/epubveri) — our own **pure-Rust, JVM-free**
+[epubveri](https://github.com/veripublica/epubveri) — our own **pure-Rust, JVM-free**
 alternative to W3C `epubcheck` — so there's no Java and no external process.
 
 ```sh

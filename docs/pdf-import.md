@@ -96,9 +96,12 @@ deletes it immediately, like every other mode.
 - **Scanned PDFs in the `pdf`-only build** (no `pdf-ocr`) → reported, not
   converted: you get a clear "OCR is needed" message, not a broken file. OCR is
   also skipped when a scan's page images are JPEG2000 (no pure-Rust decoder).
-- **Some PDF-1.5 object-stream PDFs** whose font objects the parser can't
-  resolve → detected by a quality gate (if the decoded text is mostly garbage)
-  and refused with a clear message rather than emitting a broken EPUB.
+- **A PDF whose text still decodes to garbage** (a font encoding neither
+  extractor can read) → detected by a quality gate and refused with a clear
+  message rather than emitting a broken EPUB. Object-stream PDFs that used to
+  land here now import (since cli-v2.0.0 / web-v1.17.0).
+- **Paragraphs can come out coarse** on some born-digital PDFs: the text is
+  complete and correctly spaced, but several source paragraphs may share one.
 - **Tables and equations** are not yet preserved (text only; keeping them as
   images is planned). Figure **placement** is per-page (approximate), not at the
   exact original position, and the cover image appears as the first figure rather

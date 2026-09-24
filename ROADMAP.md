@@ -274,11 +274,12 @@ build feature. Design & usage: [`docs/pdf-import.md`](docs/pdf-import.md).
 - [ ] *(Later)* **Finer chapter structure** — heading detection finds fewer
       chapter breaks than a publisher EPUB (PHM: 9 docs vs 41), so the ToC is
       coarser. Text is complete; this is granularity/navigation only.
-- [ ] *(Later)* **Object-stream PDFs** — some PDF-1.5 files store their fonts in
-      object streams the current parser can't resolve. Verified: no clean lopdf
-      upgrade (0.42 fixes resolution but panics on CMaps + regresses spacing).
-      Needs an upstream lopdf fix or a custom ObjStm parser. Detected and
-      reported for now (no broken output).
+- [x] **Object-stream PDFs** *(cli-v2.0.0 / web-v1.17.0)* — some PDF-1.5 files
+      store their fonts in object streams lopdf 0.34 couldn't resolve. lopdf
+      0.45 resolves them; the spacing regression it brought was fixed by picking
+      the cleaner of the two text extractors per page. On 126 real PDFs, 13 more
+      now import (74 vs 61), including the Turkish `Dikkat.pdf` that was the
+      reference failure.
 
 ---
 
@@ -330,13 +331,13 @@ builds. Came from a community request (issue #40). Web-only, behind the opt-in
 ## ✅ Shipped — EPUB validation (`check`) — cli-v1.11.0 · web-v1.14.0
 
 Goal: let ePubLift validate an EPUB against the spec, and validate its own output.
-Powered by [**epubveri**](https://github.com/ePubLift/epubveri) — our own
+Powered by [**epubveri**](https://github.com/veripublica/epubveri) — our own
 **pure-Rust, JVM-free** alternative to W3C's Java `epubcheck` — consumed as the
 published crates.io crate (dogfooding). Design: [`docs/validate.md`](docs/validate.md).
 
 - [x] **CLI `epublift check`** — validate one or more EPUBs with epubcheck-compatible
-      message IDs (`RSC-005`, `OPF-…`), grep-style exit code (`0` valid / `1` problems)
-      for CI, `--json` / `--quiet` / `--profile`. Behind the opt-in `validate` feature
+      message IDs (`RSC-005`, `OPF-…`), grep-style exit code (`0` valid / `1` problems /
+      `2` unreadable input) for CI, `--json` / `--quiet` / `--profile`. Behind the opt-in `validate` feature
       (shipped in the release binaries).
 - [x] **Web "Validate" mode** — the *same* engine as **WebAssembly, entirely
       client-side**: the file is **never uploaded**, no server round-trip. Verdict +
@@ -370,6 +371,28 @@ the "fix common issues" gap noted when `check` shipped. Design:
       file over to Repair without re-uploading. All 13 UI languages.
 - [ ] *(Later)* Content-document-level link checking (broken hrefs inside
       chapter XHTML) — out of scope for this OPF-only pass.
+
+## ✅ Shipped — Foundation & security — cli-v2.0.0 · web-v1.17.0 (2026-09-24)
+
+Goal: bring the base up to date before touching features again — nothing new for
+the user to learn, a lot less that can go wrong. Details in the
+[CHANGELOG](CHANGELOG.md).
+
+- [x] **epubveri 0.17.5** on both surfaces — the web app vendors epubveri's own
+      published npm build; CLI and browser report identical findings on all 474
+      books of the test shelf.
+- [x] **One-upload server crash closed** — every roxmltree parse of book XML now
+      runs epubveri's `xmlguard` first; epubveri's hostile-input set no longer
+      takes the server down.
+- [x] **9 RustSec advisories cleared, 1 accepted with its reason** (`rustls`, `crossbeam-epoch`,
+      `quick-xml`, `lopdf`, `rustls-webpki` via the crypto provider), Alpine 3.24
+      base image; continuous `cargo audit`, Dependabot, ARM64 CI, `SECURITY.md`.
+- [x] **Machine output joins the family format** — `check --json` emits the
+      shared veripublica envelope; an unreadable input exits `2` (why this is a
+      major CLI release).
+- [ ] *(Next)* `--format <human|json>` per veripublica conventions, with `--json`
+      kept as an alias; rate limiting that can't be sidestepped with a forged
+      `X-Forwarded-For` header.
 
 ---
 
