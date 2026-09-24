@@ -1,0 +1,38 @@
+# Dependabot: weekly update PRs for the Rust workspace, the GitHub Actions the
+# workflows use, and the Docker base images. Minor and patch bumps arrive
+# grouped in one PR per ecosystem; a major bump gets its own PR, because it is
+# the kind that needs reading (quick-xml 0.42 and lopdf 0.44 both changed
+# behaviour, not just API). Nothing here merges on its own.
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    groups:
+      cargo-minor-patch:
+        update-types: [minor, patch]
+    ignore:
+      # 0.9.27+ no longer compiles jxl-encoder-simd 0.3.0 (the JPEG XL encoder)
+      # on ARM64 — CI runs on x86 and would not notice. Drop this when
+      # jxl-encoder ships a release built against a newer archmage.
+      - dependency-name: archmage
+      - dependency-name: archmage-macros
+      - dependency-name: magetypes
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      actions-minor-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday

@@ -106,6 +106,11 @@ are tagged with the component they belong to.
 - **`lopdf` 0.34 → 0.45** (PDF import), clearing RUSTSEC-2026-0187 (stack
   overflow on deeply nested PDF objects) and picking up fixes for four crashes
   on crafted PDFs and a bound on object-graph recursion.
+- **Dependencies are now audited continuously.** A new `Audit` workflow checks
+  `Cargo.lock` against the RustSec advisory database whenever the dependencies
+  change and every Monday; the few accepted advisories are listed, each with
+  its reason, in `.cargo/audit.toml`. Dependabot now proposes weekly updates
+  for the Rust crates, the GitHub Actions and the Docker base image.
 
 ## [cli-v1.13.0] - 2026-07-08
 

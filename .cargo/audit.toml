@@ -1,0 +1,21 @@
+# cargo-audit configuration (read by `cargo audit` and the Audit workflow).
+#
+# Every ignore below is a known, reviewed advisory with no fix reachable from
+# this project yet. Each one names why it is accepted and what removes it; drop
+# the entry the moment that happens, so the list never outlives its reason.
+
+[advisories]
+ignore = [
+    # All five come in through `rustls-rustcrypto` 0.0.2-alpha, the pure-Rust
+    # crypto provider for our HTTPS client (ISBN enrichment, OCR model download,
+    # Smart Import). It is unmaintained (no release since 2024-04) and pins
+    # `rustls-webpki` 0.102 and `rsa` 0.9. Certificate verification itself runs
+    # through rustls's own `rustls-webpki` 0.103, which is patched; and we are
+    # only ever a TLS client verifying signatures, never holding an RSA private
+    # key. Removed by replacing the crypto provider (decision pending).
+    "RUSTSEC-2026-0049", # rustls-webpki 0.102: CRL distribution-point matching
+    "RUSTSEC-2026-0098", # rustls-webpki 0.102: URI name constraints
+    "RUSTSEC-2026-0099", # rustls-webpki 0.102: wildcard name constraints
+    "RUSTSEC-2026-0104", # rustls-webpki 0.102: panic in CRL parsing
+    "RUSTSEC-2023-0071", # rsa 0.9: Marvin timing side channel (private-key ops only)
+]
