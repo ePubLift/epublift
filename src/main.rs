@@ -46,6 +46,8 @@ impl From<ZstdModeArg> for epublift::ZstdMode {
 #[derive(Parser, Debug)]
 #[command(
     name = "epublift",
+    // `-V` / `--version`: `epublift <semver>[+<hash>[.dirty]]` (see build.rs).
+    version = concat!(env!("CARGO_PKG_VERSION"), env!("EPUBLIFT_BUILD")),
     about = "Optimize EPUBs to 3.3 (default), or archive/restore them as .eparc.",
     after_help = "Examples:\n  epublift -i book.epub -q 75\n  epublift archive ~/Books            # shrink a library to .eparc\n  epublift restore book.eparc         # back to a content-exact .epub",
     args_conflicts_with_subcommands = true

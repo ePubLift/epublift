@@ -10,6 +10,12 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+### Added
+- **`epublift --version` (`-V`)** prints the version you are running, as the
+  veripublica conventions ask of every tool — with the exact commit as SemVer
+  build metadata when the build knew it (`epublift 2.1.0+9abafee`, plus `.dirty`
+  for a build from uncommitted changes), and the plain version otherwise.
+
 ## [cli-v2.1.0] - 2026-09-25
 
 ### Added
