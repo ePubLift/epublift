@@ -80,7 +80,7 @@ lopdf = { version = "0.45", optional = true }
 # file (e.g. an AI-OCR'd PDF) into a reflowable EPUB. pulldown-cmark is the
 # CommonMark standard, pure Rust, zero C. default-features off drops its bundled
 # CLI (getopts). See src/markdown.rs.
-pulldown-cmark = { version = "0.12", default-features = false, optional = true }
+pulldown-cmark = { version = "0.13", default-features = false, optional = true }
 # [EXPERIMENTAL] Smart Import: base64 for inlining the PDF into the OCR API
 # request and decoding the images it returns. Pure Rust. See src/smart_import/.
 base64 = { version = "0.23", optional = true }
