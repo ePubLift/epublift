@@ -10,6 +10,12 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+### Changed
+- **`--format`'s help uses the veripublica conventions' wording verbatim** on
+  `check` and `meta show` — *"Report format. `human` (the default) is always
+  supported; `json` is reserved for FORMATS.md."* — and shows the accepted
+  values in its placeholder (`--format <human|json>`, `--format <human|metadata>`).
+
 ## [cli-v2.2.0] - 2026-09-25
 
 ### Added

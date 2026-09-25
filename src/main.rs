@@ -192,6 +192,10 @@ struct RepairArgs {
 #[cfg(feature = "validate")]
 const ENVELOPE_CONVENTION: &str = "0.6";
 
+/// `--format`'s help: veripublica conventions' canonical one-liner, verbatim.
+const FORMAT_HELP: &str =
+    "Report format. `human` (the default) is always supported; `json` is reserved for FORMATS.md.";
+
 /// What `check --format` can emit (veripublica conventions CLI.md §3.6).
 #[cfg(feature = "validate")]
 #[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
@@ -219,11 +223,13 @@ struct CheckArgs {
     #[arg(long, value_name = "dict|edupub|idx|preview")]
     profile: Option<String>,
 
-    /// Output format.
+    // The canonical one-liner, verbatim (veripublica conventions CLI.md §3.1, §7);
+    // an explicit `help` so clap keeps the closing full stop.
     #[arg(
         long,
+        help = FORMAT_HELP,
         value_enum,
-        value_name = "FORMAT",
+        value_name = "human|json",
         default_value_t = CheckFormat::Human,
         conflicts_with = "json"
     )]
@@ -286,11 +292,13 @@ struct MetaShowArgs {
     /// EPUB file to read.
     #[arg(value_name = "EPUB")]
     input: PathBuf,
-    /// Output format.
+    // The canonical one-liner, verbatim (CLI.md §3.1, §7). It holds here too:
+    // `json` is *reserved*, which is why this command offers `metadata` instead.
     #[arg(
         long,
+        help = FORMAT_HELP,
         value_enum,
-        value_name = "FORMAT",
+        value_name = "human|metadata",
         default_value_t = MetaFormat::Human,
         conflicts_with = "json"
     )]
