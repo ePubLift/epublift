@@ -34,7 +34,9 @@ name = "epublift-web"
 # 1.17.0 runs epubveri 0.17.5 in the browser (the published npm build, identical
 # findings to the CLI), declines XML that would crash the server (xmlguard), and
 # ships the security upgrades of cli-v2.0.0 on an Alpine 3.24 base.
-version = "1.17.0"
+# 1.17.1 keys the rate limit on the address the reverse proxy saw, not a
+# client-forgeable X-Forwarded-For entry; faster Archive mode; quick-xml 0.42.
+version = "1.17.1"
 edition = "2024"
 license = "AGPL-3.0-or-later"
 description = "Web front-end for epublift: convert, archive, restore & edit EPUB metadata in the browser"

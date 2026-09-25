@@ -10,6 +10,8 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+## [cli-v2.1.0] - 2026-09-25
+
 ### Added
 - **`--format` on `check` and `meta show`**, as the veripublica conventions
   ask of every command. `check --format <human|json>`: `json` is the shared
@@ -47,6 +49,8 @@ are tagged with the component they belong to.
   `meta show`, `meta set` (every field) and repair produce identical output on
   all 474 books.
 
+## [web-v1.17.1] - 2026-09-25
+
 ### Security
 - **Web: the per-IP rate limit can no longer be sidestepped with a forged
   header.** The service keyed its rate limit on the *first*
@@ -59,6 +63,13 @@ are tagged with the component they belong to.
   rightmost entry, the address the proxy saw. Checked through an Nginx
   configured like Nginx Proxy Manager: nine requests with forged addresses
   were all served before; now the seventh is refused, as for any client.
+
+### Changed
+- **Archive mode is about a quarter faster** and **quick-xml moves to 0.42** —
+  the same engine changes as cli-v2.1.0, with identical output.
+- **Building `epublift-web` from source needs Rust 1.96 or newer** — the same
+  minimum as cli-v2.1.0, tested in CI. The Docker image is built with the latest
+  stable Rust and is unaffected.
 
 ## [cli-v2.0.0] - 2026-09-24
 
