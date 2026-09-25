@@ -10,6 +10,15 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+### Changed
+- **Archiving is about a quarter faster.** The pure-Rust Zstandard codec behind
+  `.eparc` (`structured-zstd`) moves from 0.0.40 to 0.0.55, which also brings
+  its decoder fixes. Measured on the 474-book test shelf: total archive time
+  304 s → 234 s, archive size unchanged (+0.01%), and every combination of old
+  and new versions restores every book's content exactly — archives made
+  before this release open with it, and archives made with it open in older
+  releases.
+
 ## [cli-v2.0.0] - 2026-09-24
 
 A major release because `check`'s machine output and exit code changed (both

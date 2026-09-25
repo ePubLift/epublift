@@ -109,7 +109,7 @@ any_ascii = "0.3"
 # docs/design/zstd-ocf-experimental.md. Pure Rust, no FFI. Opt-in at compile
 # time so the default shipped artifact is byte-identical to today (no new deps).
 # Also the compression backend for the archival mode (`archival` feature).
-structured-zstd = { version = "0.0.40", optional = true, features = ["dict_builder"] }
+structured-zstd = { version = "0.0.55", optional = true, features = ["dict-builder"] }
 crc32fast = { version = "1", optional = true }
 # Archival mode (`.eparc`) — see docs/design/eparc-format.md. Pure Rust. SHA-256
 # for whole-file provenance/fixity; serde(_json) for the human-readable manifest.
