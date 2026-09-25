@@ -18,6 +18,10 @@ are tagged with the component they belong to.
   and new versions restores every book's content exactly — archives made
   before this release open with it, and archives made with it open in older
   releases.
+- **PDF OCR is about a quarter faster.** The pure-Rust OCR engine moves to
+  `ocrs` 0.13 on `rten` 0.26. On the scanned PDFs at hand the recognised text
+  is word-for-word the same as before, in 24% less time. The OCR models are
+  unchanged (still downloaded once, on first use).
 
 ## [cli-v2.0.0] - 2026-09-24
 
