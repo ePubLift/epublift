@@ -72,7 +72,7 @@ pub struct RewriteParams {
 
 /// Local (namespace-stripped) name of an XML element.
 fn local(name: QName) -> String {
-    let s = String::from_utf8_lossy(name.as_ref()).into_owned();
+    let s: String = name.as_ref().to_string();
     match s.rfind(':') {
         Some(i) => s[i + 1..].to_string(),
         None => s,
@@ -82,11 +82,11 @@ fn local(name: QName) -> String {
 /// Read an attribute's unescaped value from a start/empty element.
 fn get_attr(e: &BytesStart, key: &str) -> Option<String> {
     for a in e.attributes().flatten() {
-        if a.key.as_ref() == key.as_bytes() {
+        if a.key.as_ref() == key {
             return Some(
                 a.normalized_value(XmlVersion::Implicit1_0)
                     .map(|c| c.into_owned())
-                    .unwrap_or_else(|_| String::from_utf8_lossy(&a.value).into_owned()),
+                    .unwrap_or_else(|_| a.value.to_string()),
             );
         }
     }
@@ -296,17 +296,17 @@ fn transform_start(
     overrides: &[(String, String)],
     add_if_missing: &[(String, String)],
 ) -> BytesStart<'static> {
-    let name = String::from_utf8_lossy(e.name().as_ref()).into_owned();
+    let name = e.name().as_ref().to_string();
     let mut new = BytesStart::new(name);
     let mut present: HashSet<String> = HashSet::new();
 
     for a in e.attributes().flatten() {
-        let key = String::from_utf8_lossy(a.key.as_ref()).into_owned();
+        let key = a.key.as_ref().to_string();
         present.insert(key.clone());
         let value = a
             .normalized_value(XmlVersion::Implicit1_0)
             .map(|c| c.into_owned())
-            .unwrap_or_else(|_| String::from_utf8_lossy(&a.value).into_owned());
+            .unwrap_or_else(|_| a.value.to_string());
         let value = overrides
             .iter()
             .find(|(k, _)| *k == key)

@@ -329,10 +329,10 @@ fn plan_repairs(
 
 /// Local (namespace-stripped) name of an XML element.
 fn local_name(q: QName) -> String {
-    let s = String::from_utf8_lossy(q.as_ref());
+    let s: &str = q.as_ref();
     match s.rsplit_once(':') {
         Some((_, local)) => local.to_string(),
-        None => s.into_owned(),
+        None => s.to_string(),
     }
 }
 
@@ -340,8 +340,8 @@ fn local_name(q: QName) -> String {
 fn get_attr(e: &BytesStart, key: &str) -> Option<String> {
     e.attributes()
         .flatten()
-        .find(|a| a.key.as_ref() == key.as_bytes())
-        .map(|a| String::from_utf8_lossy(&a.value).into_owned())
+        .find(|a| a.key.as_ref() == key)
+        .map(|a| a.value.into_owned())
 }
 
 fn item_id_dropped(e: &BytesStart, plan: &RepairPlan) -> bool {

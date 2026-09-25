@@ -77,7 +77,7 @@ fn transform_file(path: &Path) -> Result<()> {
 
 /// Lower-cased local name of an element (prefix stripped).
 fn local_lower(name: QName) -> String {
-    String::from_utf8_lossy(name.local_name().as_ref()).to_ascii_lowercase()
+    name.local_name().as_ref().to_ascii_lowercase()
 }
 
 /// Elements whose text content must NOT be wrapped in koboSpans.
@@ -231,16 +231,15 @@ fn spanify(content: &str) -> Result<Vec<u8>> {
             // Accumulate body text; defer wrapping until the next structural event.
             Event::Text(e) => {
                 if in_body && skip_depth == 0 {
-                    text_buf.push_str(&String::from_utf8_lossy(&e));
+                    text_buf.push_str(&e);
                 } else {
                     writer.write_event(Event::Text(e))?;
                 }
             }
             Event::GeneralRef(r) => {
                 if in_body && skip_depth == 0 {
-                    let name = String::from_utf8_lossy(&r);
                     text_buf.push('&');
-                    text_buf.push_str(&name);
+                    text_buf.push_str(&r);
                     text_buf.push(';');
                 } else {
                     writer.write_event(Event::GeneralRef(r))?;

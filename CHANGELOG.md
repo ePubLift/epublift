@@ -22,6 +22,14 @@ are tagged with the component they belong to.
   `ocrs` 0.13 on `rten` 0.26. On the scanned PDFs at hand the recognised text
   is word-for-word the same as before, in 24% less time. The OCR models are
   unchanged (still downloaded once, on first use).
+- **`quick-xml` 0.41 → 0.42**, the parser that reads and rewrites each book's
+  package document, metadata and content for convert, kepub, `meta` and
+  repair. 0.42 works in text rather than bytes and adds a fix for a panic on
+  malformed attribute input. Its stricter UTF-8 handling never reaches us:
+  epublift already hands it UTF-8 text, and none of the 22,847 XML documents
+  on the 474-book test shelf is in another encoding. Convert, kepub,
+  `meta show`, `meta set` (every field) and repair produce identical output on
+  all 474 books.
 
 ## [cli-v2.0.0] - 2026-09-24
 
