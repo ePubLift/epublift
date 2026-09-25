@@ -60,6 +60,14 @@ use opf::RewriteParams;
 
 pub use images::{FormatPolicy, ImageFormat, ImageMetric};
 
+/// This library's version: the engine inside both the `epublift` CLI and
+/// `epublift-web`, so a web build can say which CLI release it matches.
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// The epubveri release linked in (the validator, and the XML guard every
+/// parse goes through).
+pub const EPUBVERI_VERSION: &str = epubveri::VERSION;
+
 /// Target EPUB specification version for the converted output.
 ///
 /// Only EPUB 3.3 is supported today; the enum exists so newer versions (e.g.

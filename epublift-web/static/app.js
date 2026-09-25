@@ -350,6 +350,8 @@ async function runValidate(){
   const bytes = new Uint8Array(await selectedFile.arrayBuffer());
   const report = mod.validate(bytes, undefined); // profile: default (base EPUB 3)
   renderValidate(report, selectedFile.name);
+  // The validator that actually ran in this browser, e.g. "epubveri 0.17.5+ec09da4".
+  document.getElementById('valEngine').textContent = 'epubveri ' + mod.version();
 }
 
 function renderValidate(report, filename){
@@ -494,20 +496,25 @@ document.addEventListener('i18n:change', () => {
   renderKepubDesc(); // re-render the .kepub note in the new language (with the version)
 });
 
-// Footer build info: link the version to its GitHub release, and (when known)
-// the commit to its GitHub commit. Cheap deploy-verification signal.
+// Footer build info: "web 1.17.1 · cli 2.1.0 · @9abafee" — the web release, the
+// CLI release whose engine it runs (web and CLI are built from the same library,
+// so this is the CLI version matching this page), and the commit, each linked
+// to its GitHub page. The separators are real text so a copied footer reads right.
 fetch('/version').then(r => r.json()).then(d => {
   const repo = 'https://github.com/ePubLift/epublift';
-  if (d && d.version) {
-    const v = document.getElementById('verlink');
-    v.textContent = 'v' + d.version;
-    v.href = repo + '/releases/tag/web-v' + d.version;
-  }
-  if (d && d.commit) {
-    const c = document.getElementById('commitlink');
-    c.textContent = '@' + d.commit;
-    c.href = repo + '/commit/' + d.commit;
-  }
+  const box = document.getElementById('buildinfo');
+  if (!d || !box) return;
+  const parts = [];
+  if (d.version) parts.push(['web ' + d.version, repo + '/releases/tag/web-v' + d.version]);
+  if (d.engine) parts.push(['cli ' + d.engine, repo + '/releases/tag/cli-v' + d.engine]);
+  if (d.commit) parts.push(['@' + d.commit, repo + '/commit/' + d.commit]);
+  box.textContent = '';
+  parts.forEach(([text, href]) => {
+    box.append(' · ');
+    const a = document.createElement('a');
+    a.textContent = text; a.href = href; a.target = '_blank'; a.rel = 'noopener';
+    box.append(a);
+  });
 }).catch(() => { /* version is non-essential; ignore */ });
 
 // Smart Import capability: ask the server whether a provider key is configured.

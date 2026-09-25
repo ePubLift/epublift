@@ -340,13 +340,17 @@ async fn index() -> Html<&'static str> {
     Html(include_str!("../static/index.html"))
 }
 
-/// Report the running build: the `epublift-web` version and the short git commit
-/// it was built from (`commit` is empty if unavailable). Cheap, machine-readable
-/// deploy verification, and the source for the footer's version link.
+/// Report the running build: the `epublift-web` version, the `epublift` engine
+/// version it was built with (the same library the CLI ships, so it names the
+/// matching CLI release), the linked epubveri, and the short git commit (`commit`
+/// is empty if unavailable). Cheap, machine-readable deploy verification, and the
+/// source for the footer's version links.
 async fn version() -> impl IntoResponse {
     let body = format!(
-        r#"{{"version":"{}","commit":"{}"}}"#,
+        r#"{{"version":"{}","engine":"{}","epubveri":"{}","commit":"{}"}}"#,
         env!("CARGO_PKG_VERSION"),
+        epublift::VERSION,
+        epublift::EPUBVERI_VERSION,
         env!("GIT_SHA"),
     );
     (
