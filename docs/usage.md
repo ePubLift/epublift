@@ -14,7 +14,7 @@ This modernizes the input and saves it next to the original as
 `<input_name>_v3.3.epub`, plus a performance report in `<input_name>_report.txt`.
 
 Print the version you are running (with the exact commit when the build knew
-it, e.g. `epublift 2.1.0+9abafee`):
+it, e.g. `epublift 2.2.0+9fa548d`):
 
 ```bash
 epublift --version        # or -V

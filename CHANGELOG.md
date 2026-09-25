@@ -10,20 +10,24 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
-### Added (web)
-- **The footer says which CLI release the page runs:** `web 1.17.1 · cli 2.1.0
-  · @9abafee`, each part linked to its release notes or commit. Web and CLI are
+## [cli-v2.2.0] - 2026-09-25
+
+### Added
+- **`epublift --version` (`-V`)** prints the version you are running, as the
+  veripublica conventions ask of every tool — with the exact commit as SemVer
+  build metadata when the build knew it (`epublift 2.2.0+<commit>`, plus `.dirty`
+  for a build from uncommitted changes), and the plain version otherwise.
+
+## [web-v1.18.0] - 2026-09-25
+
+### Added
+- **The footer says which CLI release the page runs:** `web 1.18.0 · cli 2.2.0
+  · @<commit>`, each part linked to its release notes or commit. Web and CLI are
   built from the same library, so the CLI number names exactly the engine
   behind the page. `/version` gains the same, as `engine`, plus the linked
   `epubveri`; and a Validate result now names the validator that ran in the
   browser (`epubveri 0.17.5+ec09da4`). Copying the footer no longer runs the
   version into the text before it.
-
-### Added
-- **`epublift --version` (`-V`)** prints the version you are running, as the
-  veripublica conventions ask of every tool — with the exact commit as SemVer
-  build metadata when the build knew it (`epublift 2.1.0+9abafee`, plus `.dirty`
-  for a build from uncommitted changes), and the plain version otherwise.
 
 ## [cli-v2.1.0] - 2026-09-25
 
