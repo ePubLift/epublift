@@ -12,7 +12,11 @@ edition = "2024"
 license = "AGPL-3.0-or-later"
 description = "Modernize and optimize EPUB files — upgrade structure and re-encode images"
 readme = "README.md"
-rust-version = "1.94"
+# Minimum supported Rust: kept at latest stable minus two, reviewed at every
+# release, so a dependency raising its own minimum rarely gets ahead of us. The
+# CI `msrv` job builds with exactly this version (it reads it from here), so the
+# promise is tested, not just stated.
+rust-version = "1.96"
 authors = ["Baris Kayadelen <baris@kayadelen.com>"]
 repository = "https://github.com/ePubLift/epublift"
 homepage = "https://github.com/ePubLift/epublift"

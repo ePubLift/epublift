@@ -39,7 +39,7 @@ edition = "2024"
 license = "AGPL-3.0-or-later"
 description = "Web front-end for epublift: convert, archive, restore & edit EPUB metadata in the browser"
 repository = "https://github.com/ePubLift/epublift"
-rust-version = "1.94"
+rust-version = "1.96" # keep equal to the root crate's
 publish = false
 
 [dependencies]

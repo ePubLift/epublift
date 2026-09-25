@@ -11,6 +11,12 @@ are tagged with the component they belong to.
 ## [Unreleased]
 
 ### Changed
+- **Building from source now needs Rust 1.96 or newer (was 1.94).** The minimum
+  follows a stated policy — latest stable minus two, reviewed at every release —
+  and a new CI job builds every shipped feature with exactly that version, so a
+  dependency that raises its own minimum is caught the day it lands. Release
+  binaries, packages and the Docker image are unaffected: they are built with
+  the latest stable Rust.
 - **Archiving is about a quarter faster.** The pure-Rust Zstandard codec behind
   `.eparc` (`structured-zstd`) moves from 0.0.40 to 0.0.55, which also brings
   its decoder fixes. Measured on the 474-book test shelf: total archive time

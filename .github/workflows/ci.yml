@@ -21,6 +21,31 @@ env:
   RUSTFLAGS: "-D warnings"
 
 jobs:
+  msrv:
+    name: MSRV (rust-version from Cargo.toml)
+    # Builds with the oldest Rust we promise to support (`rust-version` in the
+    # root Cargo.toml), so a dependency that raises its own minimum above ours
+    # fails here, the day it lands, instead of breaking someone's source build.
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7
+
+      - name: Read rust-version
+        id: msrv
+        run: echo "version=$(sed -n 's/^rust-version = "\(.*\)"/\1/p' Cargo.toml)" >> "$GITHUB_OUTPUT"
+
+      - name: Install Rust ${{ steps.msrv.outputs.version }}
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.msrv.outputs.version }}
+
+      - name: Cache cargo registry and build
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build every shipped feature
+        run: cargo check --workspace --all-targets --locked --features zstd-experimental,pdf-ocr,markdown,smart-import,validate,epub34,metadata
+
   check:
     name: fmt + clippy + test (${{ matrix.arch }})
     # ARM64 as well as x86-64: the SIMD image codecs compile different code per
