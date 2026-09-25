@@ -92,16 +92,40 @@ impl RateLimiter {
     }
 }
 
-/// Best-effort client IP: the first `X-Forwarded-For` entry (set by the trusted
-/// reverse proxy) if present, else the direct peer address.
-fn client_ip(headers: &HeaderMap, peer: SocketAddr) -> IpAddr {
-    if let Some(xff) = headers.get("x-forwarded-for").and_then(|v| v.to_str().ok())
-        && let Some(first) = xff.split(',').next()
-        && let Ok(ip) = first.trim().parse::<IpAddr>()
-    {
-        return ip;
+/// Whether a direct peer may speak for the client through `X-Forwarded-For`: a
+/// loopback or private-network address, which is where the documented setups
+/// run the reverse proxy (same host, or the same Docker network). A peer on a
+/// public address is the client itself, and its forwarding headers are ignored.
+fn is_trusted_proxy(ip: IpAddr) -> bool {
+    match ip.to_canonical() {
+        IpAddr::V4(v4) => v4.is_loopback() || v4.is_private() || v4.is_link_local(),
+        IpAddr::V6(v6) => v6.is_loopback() || v6.is_unique_local() || v6.is_unicast_link_local(),
     }
-    peer.ip()
+}
+
+/// The client address the rate limiter keys on.
+///
+/// Behind a trusted proxy (see [`is_trusted_proxy`]) it is the **rightmost**
+/// `X-Forwarded-For` entry: the address that proxy saw connecting to it. Entries
+/// to its left are whatever the client chose to send — a proxy such as Nginx
+/// (`$proxy_add_x_forwarded_for`) keeps them and appends the real one — so
+/// trusting the first entry let anyone pick a fresh "IP" for every request and
+/// never be limited. From any other peer the header is ignored.
+fn client_ip(headers: &HeaderMap, peer: SocketAddr) -> IpAddr {
+    let peer_ip = peer.ip().to_canonical();
+    if !is_trusted_proxy(peer_ip) {
+        return peer_ip;
+    }
+    headers
+        .get_all("x-forwarded-for")
+        .iter()
+        .filter_map(|v| v.to_str().ok())
+        .flat_map(|v| v.split(','))
+        .map(str::trim)
+        .rfind(|s| !s.is_empty())
+        .and_then(|s| s.parse::<IpAddr>().ok())
+        .map(|ip| ip.to_canonical())
+        .unwrap_or(peer_ip)
 }
 
 /// Shared service state.
@@ -1596,5 +1620,69 @@ fn sanitize_filename(name: &str) -> String {
         "epublift-output.epub".to_string()
     } else {
         trimmed.to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn xff(values: &[&str]) -> HeaderMap {
+        let mut h = HeaderMap::new();
+        for v in values {
+            h.append("x-forwarded-for", v.parse().unwrap());
+        }
+        h
+    }
+
+    fn peer(ip: &str) -> SocketAddr {
+        SocketAddr::new(ip.parse().unwrap(), 40000)
+    }
+
+    fn ip(s: &str) -> IpAddr {
+        s.parse().unwrap()
+    }
+
+    #[test]
+    fn behind_a_proxy_the_rightmost_entry_wins_over_a_forged_one() {
+        // What Nginx Proxy Manager forwards when a client sends a forged header:
+        // the client's value, then the address the proxy really saw.
+        let h = xff(&["203.0.113.9, 198.51.100.7"]);
+        assert_eq!(client_ip(&h, peer("172.18.0.2")), ip("198.51.100.7"));
+        assert_eq!(client_ip(&h, peer("127.0.0.1")), ip("198.51.100.7"));
+    }
+
+    #[test]
+    fn several_headers_are_read_as_one_list() {
+        let h = xff(&["203.0.113.9", "198.51.100.7"]);
+        assert_eq!(client_ip(&h, peer("10.0.0.5")), ip("198.51.100.7"));
+    }
+
+    #[test]
+    fn a_public_peer_is_the_client_whatever_it_claims() {
+        let h = xff(&["203.0.113.9"]);
+        assert_eq!(client_ip(&h, peer("198.51.100.7")), ip("198.51.100.7"));
+    }
+
+    #[test]
+    fn no_or_unreadable_header_falls_back_to_the_peer() {
+        assert_eq!(
+            client_ip(&HeaderMap::new(), peer("172.18.0.2")),
+            ip("172.18.0.2")
+        );
+        let h = xff(&["unknown"]);
+        assert_eq!(client_ip(&h, peer("172.18.0.2")), ip("172.18.0.2"));
+        let h = xff(&["198.51.100.7, "]);
+        assert_eq!(client_ip(&h, peer("172.18.0.2")), ip("198.51.100.7"));
+    }
+
+    #[test]
+    fn ipv4_mapped_addresses_are_recognised() {
+        let h = xff(&["198.51.100.7"]);
+        assert_eq!(client_ip(&h, peer("::ffff:172.18.0.2")), ip("198.51.100.7"));
+        assert_eq!(
+            client_ip(&HeaderMap::new(), peer("::ffff:198.51.100.7")),
+            ip("198.51.100.7")
+        );
     }
 }

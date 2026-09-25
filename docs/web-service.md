@@ -100,6 +100,15 @@ proxy with `413`. For Nginx (and Nginx Proxy Manager's *Advanced* tab):
 client_max_body_size 50M;
 ```
 
+The proxy must add the real client address to `X-Forwarded-For`. Nginx Proxy
+Manager, Caddy and Traefik all do by default. The service reads only the
+rightmost entry, and only when the connection comes from a loopback or
+private-network address, so a client can't choose its own rate-limit bucket by
+sending the header itself. One consequence: anything that can reach the
+container directly from a private address (another container on its network, or
+the host) is trusted to set that header, which is why the default compose file
+publishes the port on `127.0.0.1` only.
+
 If your proxy **also runs as a container**, it can't reach the host's
 `127.0.0.1:8080`. Put both on a shared Docker network and point the proxy at the
 service by name — `http://epublift-web:8080` (the container's internal port
@@ -112,7 +121,7 @@ defense — not obscurity:
 
 *   **No retention** — each request is converted in a temp dir wiped on success *or* error; no upload is stored or logged.
 *   **Strict Content-Security-Policy** (`default-src 'none'`) plus `X-Frame-Options`, `X-Content-Type-Options`, and locked-down CORS on every response.
-*   **Abuse limits** — a 50 MiB body cap, a request timeout, per-IP rate limiting, and a concurrency cap that keeps latency predictable.
+*   **Abuse limits** — a 50 MiB body cap, a request timeout, per-IP rate limiting, and a concurrency cap that keeps latency predictable. The IP is the connecting address, except when that address is loopback or a private network (the reverse proxy in the setups above): then it is the **rightmost** `X-Forwarded-For` entry, the address the proxy itself saw. Entries to its left come from the client and are never trusted.
 *   **Input hardening** (shared with the CLI) — zip-bomb (uncompressed-size + entry-count caps), image decode-bomb (dimension/allocation limits), and XML guards: every package document, NCX and `container.xml` is checked by epubveri's `xmlguard` before it is parsed, so a document nested deep enough to overflow the parser's stack (which would abort the whole server), or one with thousands of attributes on an element, is declined with an ordinary error.
 *   **Optional egress-blocking** — conversion, archiving and validation never make outbound connections; only ISBN enrichment (Open Library / Google Books) and Smart Import (when configured) do. So `docker-compose.yml` documents how to run it on an `internal` Docker network with no route to the internet at all, at the cost of those two features.
 

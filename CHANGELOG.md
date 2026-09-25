@@ -37,6 +37,19 @@ are tagged with the component they belong to.
   `meta show`, `meta set` (every field) and repair produce identical output on
   all 474 books.
 
+### Security
+- **Web: the per-IP rate limit can no longer be sidestepped with a forged
+  header.** The service keyed its rate limit on the *first*
+  `X-Forwarded-For` entry, which is whatever the client sends — a reverse
+  proxy such as Nginx Proxy Manager keeps that value and appends the real
+  address after it. Sending a different made-up address with every request
+  therefore meant never being limited, including on the paid Smart Import
+  calls. Now the header is read only when the connection comes from a
+  loopback or private-network address (the reverse proxy), and then only its
+  rightmost entry, the address the proxy saw. Checked through an Nginx
+  configured like Nginx Proxy Manager: nine requests with forged addresses
+  were all served before; now the seventh is refused, as for any client.
+
 ## [cli-v2.0.0] - 2026-09-24
 
 A major release because `check`'s machine output and exit code changed (both
