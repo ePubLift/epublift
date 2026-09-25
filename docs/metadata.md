@@ -98,7 +98,7 @@ meta property we use for series). See [`docs/epub-3.4.md`](epub-3.4.md).
 ## CLI
 
 ```
-epublift meta show   book.epub                       # print current metadata (table; --json for machine output)
+epublift meta show   book.epub                       # print current metadata (table; --format metadata for JSON)
 
 epublift meta set    --title "…" --author "…" \      # manual edit (repeatable flags for multi-valued fields)
                      --subject "…" --series "…:1" book.epub

@@ -10,6 +10,16 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+### Added
+- **`--format` on `check` and `meta show`**, as the veripublica conventions
+  ask of every command. `check --format <human|json>`: `json` is the shared
+  machine envelope. `meta show --format <human|metadata>`: `metadata` is the
+  book's metadata as a JSON object — not `json`, which the conventions reserve
+  for the envelope. `--json` keeps working on both as the older spelling
+  (`--format json` and `--format metadata` respectively) and prints the same
+  bytes. An unsupported value, `--format` given twice, or `--json` together
+  with `--format` exits `2` with a message naming the supported values.
+
 ### Changed
 - **Building from source now needs Rust 1.96 or newer (was 1.94).** The minimum
   follows a stated policy — latest stable minus two, reviewed at every release —

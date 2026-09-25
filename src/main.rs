@@ -190,6 +190,16 @@ struct RepairArgs {
 #[cfg(feature = "validate")]
 const ENVELOPE_CONVENTION: &str = "0.6";
 
+/// What `check --format` can emit (veripublica conventions CLI.md §3.6).
+#[cfg(feature = "validate")]
+#[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+enum CheckFormat {
+    /// A report for people: one line per book, then its findings.
+    Human,
+    /// The veripublica machine envelope (FORMATS.md): one JSON object per run.
+    Json,
+}
+
 /// `epublift check …` — validate EPUB file(s) against the EPUB spec using our
 /// pure-Rust epubveri engine (a JVM-free epubcheck alternative).
 ///
@@ -207,8 +217,17 @@ struct CheckArgs {
     #[arg(long, value_name = "dict|edupub|idx|preview")]
     profile: Option<String>,
 
-    /// Emit the machine-readable veripublica envelope (one JSON object per run)
-    /// instead of the human-readable report.
+    /// Output format.
+    #[arg(
+        long,
+        value_enum,
+        value_name = "FORMAT",
+        default_value_t = CheckFormat::Human,
+        conflicts_with = "json"
+    )]
+    format: CheckFormat,
+
+    /// Same as `--format json`.
     #[arg(long)]
     json: bool,
 
@@ -265,9 +284,29 @@ struct MetaShowArgs {
     /// EPUB file to read.
     #[arg(value_name = "EPUB")]
     input: PathBuf,
-    /// Emit machine-readable JSON instead of a human-readable table.
+    /// Output format.
+    #[arg(
+        long,
+        value_enum,
+        value_name = "FORMAT",
+        default_value_t = MetaFormat::Human,
+        conflicts_with = "json"
+    )]
+    format: MetaFormat,
+    /// Same as `--format metadata`.
     #[arg(long)]
     json: bool,
+}
+
+/// What `meta show --format` can emit. Not `json`: that name is reserved for
+/// the veripublica envelope (conventions CLI.md §3.6), and this is a plain
+/// metadata object, so it gets a format name of its own.
+#[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+enum MetaFormat {
+    /// A table for people.
+    Human,
+    /// The book's metadata as one JSON object.
+    Metadata,
 }
 
 #[derive(clap::Args, Debug)]
@@ -514,7 +553,7 @@ fn run_import(args: &ImportArgs) -> Result<()> {
 }
 
 /// `epublift check …` — validate EPUB file(s) with the pure-Rust epubveri
-/// engine. Prints a per-file report (human-readable or `--json`, the shared
+/// engine. Prints a per-file report (human-readable or `--format json`, the shared
 /// veripublica envelope). Exit: `0` clean, `1` a book is invalid, `2` an input
 /// could not be read at all. See docs/validate.md.
 #[cfg(feature = "validate")]
@@ -553,7 +592,14 @@ fn run_check(args: &CheckArgs) -> Result<()> {
         inputs,
     );
 
-    if args.json {
+    // `--json` is the older spelling of `--format json`; clap rejects the two
+    // together, so only one of them can be set here.
+    let format = if args.json {
+        CheckFormat::Json
+    } else {
+        args.format
+    };
+    if format == CheckFormat::Json {
         println!("{}", serde_json::to_string_pretty(&envelope)?);
     } else {
         let mut stdout = std::io::stdout().lock();
@@ -651,7 +697,8 @@ fn run_meta(args: &MetaArgs) -> Result<()> {
                 .canonicalize()
                 .with_context(|| format!("Input file not found: {}", s.input.display()))?;
             let md = epublift::read_metadata(&input)?;
-            if s.json {
+            // `--json` is the older spelling of `--format metadata`.
+            if s.json || s.format == MetaFormat::Metadata {
                 println!("{}", md.to_json());
             } else {
                 print!("{}", md.to_text());

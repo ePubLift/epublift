@@ -101,7 +101,7 @@ The `meta` subcommand reads, hand-edits, or auto-fills a book's metadata. It nev
 modifies the input; edits are written to `<name>_meta.epub` (or `-o <path>`).
 
 ```bash
-# Print the current metadata (add --json for machine output)
+# Print the current metadata (add --format metadata for JSON)
 epublift meta show book.epub
 
 # Edit by hand (repeat --author / --subject for multiple values)
@@ -134,7 +134,7 @@ alternative to W3C `epubcheck` — so there's no Java and no external process.
 ```sh
 epublift check book.epub                 # human-readable report
 epublift check *.epub --quiet            # only print files with problems
-epublift check book.epub --json          # machine-readable, one object per file
+epublift check book.epub --format json   # machine-readable: one envelope per run
 epublift check dict.epub --profile dict  # validate against an extension profile
 ```
 

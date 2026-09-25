@@ -162,3 +162,56 @@ fn every_input_is_processed_even_after_an_unreadable_one() {
     assert_eq!(inputs[1]["status"], "problems");
     assert!(!inputs[1]["items"].as_array().unwrap().is_empty());
 }
+
+/// Run `epublift check <args> <path>` and return (exit code, stdout, stderr).
+fn check_with(args: &[&str], path: &std::path::Path) -> (Option<i32>, String, String) {
+    let out = Command::new(bin())
+        .arg("check")
+        .args(args)
+        .arg(path)
+        .output()
+        .expect("run epublift check");
+    (
+        out.status.code(),
+        String::from_utf8_lossy(&out.stdout).into_owned(),
+        String::from_utf8_lossy(&out.stderr).into_owned(),
+    )
+}
+
+#[test]
+fn format_json_is_the_envelope_and_json_is_its_alias() {
+    // veripublica conventions CLI.md §3.6: `--format`, `human` by default; `--json`
+    // stays as the older spelling of `--format json` and prints the same bytes.
+    let path = tmp_file("format-json.epub", b"not an epub");
+    let (code, human, _) = check_with(&[], &path);
+    let (_, explicit, _) = check_with(&["--format", "human"], &path);
+    assert_eq!(code, Some(1));
+    assert_eq!(human, explicit, "human is the default format");
+
+    let (code, json, _) = check_with(&["--format", "json"], &path);
+    assert_eq!(code, Some(1));
+    let v: serde_json::Value = serde_json::from_str(&json).expect("one JSON object");
+    assert_eq!(v["tool"], "epublift");
+    let (_, alias, _) = check_with(&["--json"], &path);
+    assert_eq!(
+        alias, json,
+        "--json must print exactly what --format json prints"
+    );
+}
+
+#[test]
+fn format_usage_errors_exit_2() {
+    let path = tmp_file("format-usage.epub", b"not an epub");
+    // An unsupported value names the supported ones (CLI.md §3.5).
+    let (code, _, err) = check_with(&["--format", "xml"], &path);
+    assert_eq!(code, Some(2));
+    assert!(err.contains("human") && err.contains("json"), "got: {err}");
+    // `--format` is single-valued, even when both values agree (CLI.md §3.4).
+    let (code, _, _) = check_with(&["--format", "json", "--format", "json"], &path);
+    assert_eq!(code, Some(2));
+    // `--json` is `--format json`, so giving both is `--format` twice.
+    let (code, _, _) = check_with(&["--json", "--format", "human"], &path);
+    assert_eq!(code, Some(2));
+    let (code, _, _) = check_with(&["--json", "--format", "json"], &path);
+    assert_eq!(code, Some(2));
+}

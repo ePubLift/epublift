@@ -27,7 +27,7 @@ feature (included in the release binaries).
    [coverage notes](https://github.com/veripublica/epubveri/blob/main/docs/COVERAGE.md)). Treat a clean
    `check` as strong evidence, not a conformance certificate. For an official
    conformance claim, cross-check with `epubcheck` itself.
-4. **Machine output is a shared contract.** `--json` emits the
+4. **Machine output is a shared contract.** `--format json` emits the
    [veripublica machine envelope](https://github.com/veripublica/conventions/blob/main/FORMATS.md),
    the same shape epubveri and epubsana emit — so one report can be consumed
    without bespoke per-tool parsing. epublift is not a veripublica tool (it's a
@@ -51,7 +51,8 @@ epublift check *.epub
 | Flag | Meaning |
 | --- | --- |
 | `--profile <name>` | Validate against an EPUB extension profile: `dict` (dictionaries), `edupub`, `idx` (indexes) or `preview`. Default: base EPUB 3. |
-| `--json` | Emit the machine-readable [envelope](#json) instead of the human-readable report. |
+| `--format <human\|json>` | `human` (default): the report for people. `json`: the machine-readable [envelope](#json). Any other value, or `--format` given twice, exits `2`. |
+| `--json` | Same as `--format json` — the older spelling, kept so existing scripts keep working. Can't be combined with `--format`. |
 | `-q`, `--quiet` | Only print files that have problems; stay silent on clean passes. Handy in scripts/CI over a large library. |
 
 ### Exit codes
@@ -110,7 +111,7 @@ FAIL  broken.epub  (1 fatal, 0 errors, 0 warnings)
 
 ### JSON
 
-`--json` emits **one** [veripublica envelope](https://github.com/veripublica/conventions/blob/main/FORMATS.md)
+`--format json` (or `--json`) emits **one** [veripublica envelope](https://github.com/veripublica/conventions/blob/main/FORMATS.md)
 object: the tool that produced it, the convention it conforms to, an aggregate
 `status` mirroring the exit code, and one self-contained object per input in
 command-line order.
@@ -165,13 +166,13 @@ Worth knowing when consuming it:
   envelope never carries a `suppressed` marker.
 - **`convention`** is epublift's own claim about this output: the envelope meets
   [FORMATS.md](https://github.com/veripublica/conventions/blob/main/FORMATS.md)
-  of veripublica conventions 0.6. It is a claim about the JSON, not the command
-  line — `check` takes positional paths and `--json` rather than the `-i` and
-  `--format json` that conventions' CLI.md asks for.
+  of veripublica conventions 0.6. It is a claim about the JSON, not yet about the
+  whole command line: `check` now takes `--format` as conventions' CLI.md asks,
+  but still takes positional paths rather than `-i`.
 - Fields that don't apply are **omitted**, and unknown fields **must be ignored**:
   the shape gains optional fields over time without breaking consumers.
 
-> **Breaking change.** `--json` used to emit a bespoke array of
+> **Breaking change (cli-v2.0.0).** `--json` used to emit a bespoke array of
 > `{file, valid, errors, warnings, messages}` objects. It now emits the shared
 > envelope above. Migrating: the array is `inputs`; `file` is `path`; `valid:
 > true` is `status == "ok"` (the old `valid: false` covered both a bad book and
@@ -202,7 +203,7 @@ same-origin so `'self'` covers them. The UI is honest about maturity: a **beta**
 badge, a "never uploaded" privacy line, and a link to epubcheck for an
 authoritative result. Available in all 13 UI languages.
 
-The WASM binding returns the **same `inputs[i]` object** the CLI's `--json`
+The WASM binding returns the **same `inputs[i]` object** the CLI's `--format json`
 emits per input (minus `path`/`error`, which a browser caller has neither of), so
 both surfaces read one shape from one engine and cannot drift into reporting the
 same book differently.
