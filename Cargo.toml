@@ -88,7 +88,7 @@ base64 = { version = "0.23", optional = true }
 # ocrs runs on the rten tensor engine — both pure Rust, no C/ONNX-runtime. The
 # ~12 MB models download on first use. Heavy, so strictly opt-in.
 ocrs = { version = "0.12", optional = true }
-rten = { version = "0.24", optional = true }
+rten = { version = "0.26", optional = true }
 # epubveri, the veripublica family's pure-Rust, JVM-free alternative to W3C
 # epubcheck. Dogfooding — we consume the published crate exactly like any other
 # user would. Pure Rust, and shares our own `zip` 8 and `roxmltree` 0.21 rather
