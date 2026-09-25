@@ -2,16 +2,16 @@
 
 | | |
 | --- | --- |
-| Package | [`@veripublica/epubveri-wasm`](https://www.npmjs.com/package/@veripublica/epubveri-wasm) **0.17.5** |
-| npm integrity | `sha512-hgLiZELV/FDxWjKUu4KBqwQIt/SqJ69dhC5TshGIx91AK3iGvKsQ5N3oUURRfzMQsvsNKl7cNptzWQLmrF/WSA==` |
-| Built from | [veripublica/epubveri](https://github.com/veripublica/epubveri) tag `v0.17.5`, commit `ec09da4b19df38f96aa6accc573c7d92ac40c1df`, by its `publish-npm.yml` workflow (SLSA provenance attestation on the npm release) |
+| Package | [`@veripublica/epubveri-wasm`](https://www.npmjs.com/package/@veripublica/epubveri-wasm) **0.18.0** |
+| npm integrity | `sha512-xWK9N4HaGrHD4gb5pTIHUUoCG0dzhxhlfyaM8XtM7l8KO6WBOW6x/M5PF3n6PORVyFPGuX84ByWlBnyb/joBpw==` |
+| Built from | [veripublica/epubveri](https://github.com/veripublica/epubveri) tag `v0.18.0`, commit `de7bd2dcfaba5118fad7263e2dc6ed80d6bda374`, by its `publish-npm.yml` workflow (SLSA provenance attestation on the npm release) |
 | Must match | the `epubveri` version in the root `Cargo.toml` — the CLI's `epublift check` and this browser build have to agree about the same book |
 
 ## Files
 
 | File | Origin | SHA-256 |
 | --- | --- | --- |
-| `epubveri_bg.wasm` | verbatim from the package | `1b6b434e23810cecab36fcd78ad8a621cd0d562b33edc8974d31e675a35a1146` |
+| `epubveri_bg.wasm` | verbatim from the package | `06f8caffacf72e7e51a19a30796786adea565b53a622b9926b4dc8edecc37238` |
 | `epubveri_bg.js` | verbatim from the package (wasm-bindgen glue) | `34a75cedc6de02dfe0381c4ae80cb26e96868457f49a90f3a5bb341fa892959b` |
 | `epubveri-LICENSE`, `epubveri-LICENSE.COMMERCIAL.md` | the package's `LICENSE` and `LICENSE.COMMERCIAL.md` | — |
 | `epubveri.js` | **ours** — the browser loader | — |

@@ -101,7 +101,7 @@ rten = { version = "0.26", optional = true }
 # hostile document is declined instead of aborting the process. The validator
 # itself (`epublift check`) stays behind the opt-in `validate` feature; see
 # docs/validate.md.
-epubveri = "0.17.5"
+epubveri = "0.18.0"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 tempfile = "3"
 walkdir = "2"

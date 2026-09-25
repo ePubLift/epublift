@@ -11,6 +11,17 @@ are tagged with the component they belong to.
 ## [Unreleased]
 
 ### Changed
+- **The validator moves to `epubveri` 0.18.0, on the CLI and in the browser.**
+  It now checks EDUPUB, EPUB Dictionaries, Indexes, Previews, collections,
+  region-based navigation and ARIA roles the way epubcheck does, drops four
+  findings epubcheck never gives, reports every URL epubcheck's strict parser
+  rejects under RSC-020 (not only those with spaces), and judges the first file
+  header of a container that cannot be opened. A book that uses those
+  specialised profiles may draw errors it did not draw before; on the 474-book
+  test shelf, which has none, every report is unchanged, and `epublift check`
+  and the browser's Validate mode give identical findings for every book. The
+  browser build is epubveri's published npm package, as before
+  (`vendor/VENDOR.md`).
 - **`--format`'s help uses the veripublica conventions' wording verbatim** on
   `check` and `meta show` — *"Report format. `human` (the default) is always
   supported; `json` is reserved for FORMATS.md."* — and shows the accepted

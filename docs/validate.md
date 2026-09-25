@@ -19,7 +19,7 @@ feature (included in the release binaries).
    crates.io, exactly like any other user would — not a local path. If we don't
    consume our own published crate, why would anyone else?
 3. **Honest about maturity.** epubveri is **pre-1.0**. Against epubcheck 5.4.0's
-   own test suite (measured by epubveri on 0.17.4) it catches **99.7%** of the
+   own test suite (measured by epubveri on 0.17.5) it catches **99.7%** of the
    cases that should be flagged with epubcheck's exact message ID (685 of 687)
    and raises **no false alarm** on any of the 368 valid ones — very good, but
    **not yet full epubcheck parity**, and it departs from epubcheck on purpose
