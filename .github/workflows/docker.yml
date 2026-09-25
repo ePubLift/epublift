@@ -9,6 +9,11 @@ name: Docker
 # Each architecture is built on a *native* runner (no QEMU emulation), then a
 # final job stitches the per-arch images into one multi-arch manifest. This is
 # dramatically faster than emulating arm64 — emulated Rust compiles took ~30 min.
+#
+# A tag push also publishes a GitHub Release for the web version, with notes
+# from its CHANGELOG section. It is never marked "Latest": the README's download
+# link (releases/latest) has to keep landing on a CLI release, which carries the
+# binaries.
 
 on:
   push:
@@ -133,3 +138,49 @@ jobs:
 
       - name: Inspect
         run: docker buildx imagetools inspect ${{ env.IMAGE }}:${{ steps.meta.outputs.version }}
+
+  release:
+    name: Publish GitHub Release
+    needs: merge
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out the tag
+        uses: actions/checkout@v7
+
+      # This version's CHANGELOG section (from its `## [<tag>]` heading up to the
+      # next `## [`), then how to run the image. Same extraction as release.yml.
+      - name: Build release notes from CHANGELOG
+        shell: bash
+        run: |
+          tag="${{ github.ref_name }}"
+          awk -v t="[$tag]" '
+            /^## / { if (seen) exit; if (index($0, t)) { seen = 1; next } }
+            seen { print }
+          ' CHANGELOG.md | sed '/./,$!d' > RELEASE_NOTES.md
+          if [ ! -s RELEASE_NOTES.md ]; then
+            echo "No CHANGELOG entry found for $tag — see CHANGELOG.md." > RELEASE_NOTES.md
+          fi
+          version="${tag#web-v}"
+          cat >> RELEASE_NOTES.md <<EOF
+
+          ### Run it
+
+          \`\`\`bash
+          docker pull ${{ env.IMAGE }}:$version
+          \`\`\`
+
+          Multi-arch (amd64 + arm64). The web service ships as a container image
+          only; for the command-line tool, see the latest \`cli-v*\` release.
+          EOF
+          cat RELEASE_NOTES.md
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          body_path: RELEASE_NOTES.md
+          make_latest: "false"
