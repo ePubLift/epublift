@@ -83,7 +83,7 @@ lopdf = { version = "0.45", optional = true }
 pulldown-cmark = { version = "0.12", default-features = false, optional = true }
 # [EXPERIMENTAL] Smart Import: base64 for inlining the PDF into the OCR API
 # request and decoding the images it returns. Pure Rust. See src/smart_import/.
-base64 = { version = "0.22", optional = true }
+base64 = { version = "0.23", optional = true }
 # [EXPERIMENTAL] PDF OCR (`pdf-ocr` feature): pure-Rust OCR for scanned PDFs.
 # ocrs runs on the rten tensor engine — both pure Rust, no C/ONNX-runtime. The
 # ~12 MB models download on first use. Heavy, so strictly opt-in.
