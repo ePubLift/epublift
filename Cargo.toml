@@ -87,7 +87,7 @@ base64 = { version = "0.23", optional = true }
 # [EXPERIMENTAL] PDF OCR (`pdf-ocr` feature): pure-Rust OCR for scanned PDFs.
 # ocrs runs on the rten tensor engine — both pure Rust, no C/ONNX-runtime. The
 # ~12 MB models download on first use. Heavy, so strictly opt-in.
-ocrs = { version = "0.12", optional = true }
+ocrs = { version = "0.13", optional = true }
 rten = { version = "0.24", optional = true }
 # epubveri, the veripublica family's pure-Rust, JVM-free alternative to W3C
 # epubcheck. Dogfooding — we consume the published crate exactly like any other
