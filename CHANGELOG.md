@@ -11,16 +11,20 @@ are tagged with the component they belong to.
 ## [Unreleased]
 
 ### Changed
-- **The validator moves to `epubveri` 0.18.0, on the CLI and in the browser.**
+- **The validator moves to `epubveri` 0.19.1, on the CLI and in the browser.**
   It now checks EDUPUB, EPUB Dictionaries, Indexes, Previews, collections,
-  region-based navigation and ARIA roles the way epubcheck does, drops four
-  findings epubcheck never gives, reports every URL epubcheck's strict parser
-  rejects under RSC-020 (not only those with spaces), and judges the first file
-  header of a container that cannot be opened. A book that uses those
-  specialised profiles may draw errors it did not draw before; on the 474-book
-  test shelf, which has none, every report is unchanged, and `epublift check`
-  and the browser's Validate mode give identical findings for every book. The
-  browser build is epubveri's published npm package, as before
+  region-based navigation and ARIA roles the way epubcheck does, drops findings
+  epubcheck never gives, reports every URL epubcheck's strict parser rejects
+  under RSC-020 (not only those with spaces), judges the first file header of a
+  container that cannot be opened, and reports RSC-010/RSC-011 once per link
+  rather than once per target (so books with many such links show higher
+  counts). Findings now come out in the same order on every run. A book that
+  uses those specialised profiles may draw errors it did not draw before. On
+  the 544-book test shelf no book's verdict changes: two books report more
+  findings (RSC-010 61 → 67, one more OPF-003 usage note), and `epublift check`
+  and the browser's Validate mode give identical findings, in identical order,
+  for every book. 0.19.0 is skipped on purpose, because it slowed some large
+  books down. The browser build is epubveri's published npm package, as before
   (`vendor/VENDOR.md`).
 - **`--format`'s help uses the veripublica conventions' wording verbatim** on
   `check` and `meta show` — *"Report format. `human` (the default) is always

@@ -982,9 +982,9 @@ dependencies = [
 
 [[package]]
 name = "epubveri"
-version = "0.18.0"
+version = "0.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "362e4a7160a3df1c54c8efdd81ee66b9101d51863f6d7c2b0b71f7ef8aefc14e"
+checksum = "4f15bd043eb916f5d079e3439713efdaa81b490ecacf01f0e749ea587e0f1dd8"
 dependencies = [
  "roxmltree",
  "serde",
