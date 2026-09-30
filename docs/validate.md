@@ -120,7 +120,7 @@ command-line order.
 ```json
 {
   "tool": "epublift",
-  "tool_version": "2.2.0",
+  "tool_version": "2.3.0",
   "convention": "0.6",
   "status": "problems",
   "inputs": [

@@ -10,6 +10,8 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+## [cli-v2.3.0] - 2026-09-30
+
 ### Changed
 - **The validator moves to `epubveri` 0.19.1, on the CLI and in the browser.**
   It now checks EDUPUB, EPUB Dictionaries, Indexes, Previews, collections,
@@ -30,6 +32,14 @@ are tagged with the component they belong to.
   `check` and `meta show` — *"Report format. `human` (the default) is always
   supported; `json` is reserved for FORMATS.md."* — and shows the accepted
   values in its placeholder (`--format <human|json>`, `--format <human|metadata>`).
+
+## [web-v1.19.0] - 2026-09-30
+
+### Changed
+- **Validate mode runs `epubveri` 0.19.1 in the browser**, the same validator
+  as cli-v2.3.0. See cli-v2.3.0 for what changes in the reports. On the
+  544-book test shelf the browser and `epublift check` give identical
+  findings, in identical order, for every book.
 
 ## [cli-v2.2.0] - 2026-09-25
 
