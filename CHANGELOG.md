@@ -10,14 +10,10 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
-### Fixed
-- **Repair no longer deletes a book's description.** The web Repair mode, and
-  `epublift repair` up to cli-v2.3.0, dropped a `dc:description` whose text sat
-  in child elements (`<dc:description><p>…</p></dc:description>`) as if it were
-  empty: it read only the element's first text node, which there is just a line
-  break. Three of the 544 test-shelf books lost a description of 800 to 1,400
-  characters this way. An element that holds markup is now never empty, and a
-  no-break space counts as content, as epubcheck counts it.
+## [cli-v3.0.0] - 2026-10-01
+
+**Major:** `repair` changes how it decides and what its exit code means; see
+the first item. Nothing else in the command line changes.
 
 ### Changed
 - **`epublift repair` now runs epubsana**, the veripublica family's repairer,
@@ -27,6 +23,11 @@ are tagged with the component they belong to.
   entries, empty metadata, unrecognised package versions, font rules for missing
   fonts, and more. On `tests/Project_Hail_Mary(Andy_Weir).epub` it clears 87 of
   1,171 errors and 33 of 37 usage notes, where the old repair cleared one error.
+  On the 544-book test shelf, graded by the same epubveri 0.20.0, 346 books are
+  valid after `repair --yes` against 251 after the old repair (247 before), and
+  fatal plus error findings fall from 48,253 to 22,382 (old repair: 48,209). No
+  valid book became invalid. The old repair also deleted the description of 3
+  of those books (see web-v1.20.0); the new one keeps it.
   - **Safe fixes are applied; a fix that needs a decision is asked about** in a
     terminal, skipped without one, and applied without asking under the new
     `-y`/`--yes`. The old repair applied all of its fixes without asking, so a
@@ -56,6 +57,26 @@ are tagged with the component they belong to.
   check` and the browser's Validate mode, which still give identical findings,
   in identical order, for every book. The browser build is epubveri's published
   npm package, as before (`vendor/VENDOR.md`).
+
+## [web-v1.20.0] - 2026-10-01
+
+### Fixed
+- **Repair no longer deletes a book's description.** The Repair mode dropped a
+  `dc:description` whose text sat in child elements
+  (`<dc:description><p>…</p></dc:description>`) as if it were empty: it read
+  only the element's first text node, which there is just a line break. Three
+  of the 544 test-shelf books lost a description of 800 to 1,400 characters this
+  way, and `epublift repair` up to cli-v2.3.0 did the same. An element that holds
+  markup is now never empty, and a no-break space counts as content, as epubcheck
+  counts it. The Repair mode still runs this older repair; it moves to epubsana,
+  which cli-v3.0.0 runs, in a later release.
+
+### Changed
+- **Validate mode runs `epubveri` 0.20.0 in the browser**, the same validator
+  as cli-v3.0.0: a book with an image whose header stops before its width and
+  height now fails with PKG-021, as it does in epubcheck. On the 544-book test
+  shelf no report changes, and the browser and `epublift check` give identical
+  findings, in identical order, for every book.
 
 ## [cli-v2.3.0] - 2026-09-30
 

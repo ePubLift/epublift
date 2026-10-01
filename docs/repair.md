@@ -6,7 +6,7 @@ Validate diagnoses, Repair fixes what it can.
 
 Status: **shipped**, in the default build. The CLI runs
 [epubsana](https://github.com/veripublica/epubsana), the veripublica family's
-repairer, since the release after cli-v2.3.0. The web **Repair** mode still runs
+repairer, since cli-v3.0.0. The web **Repair** mode still runs
 the older, narrower repair described [at the end](#in-the-web-app-epublift-web)
 until it moves to epubsana too.
 
