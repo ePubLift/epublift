@@ -24,6 +24,14 @@ are tagged with the component they belong to.
   writes the same bytes as `epublift repair --yes`. The page's text is in all 13
   languages; the fixes' titles and reasons are epubsana's, in English.
 
+### Removed
+- **The old three-fix repair is gone.** The web server's `POST /repair`
+  endpoint, which the Repair page no longer calls, and the library's
+  `epublift::repair` module with `plan_repair` and `write_repaired`. Both the
+  command line (since cli-v3.0.0) and the web page now repair with epubsana. The
+  library functions were never documented; code that called them through a git
+  dependency should use epubsana's `repair()` instead.
+
 ### Fixed (web)
 - **The privacy and beta notes in Validate no longer split into columns.** A note
   whose translation held bold text or a link rendered each piece as its own
