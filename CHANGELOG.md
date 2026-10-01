@@ -10,6 +10,18 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+### Changed
+- **The validator moves to `epubveri` 0.20.0, on the CLI and in the browser.**
+  It adds one error, PKG-021, for an image whose header stops before its width
+  and height (a JPEG with no complete SOF segment, a PNG whose IHDR is cut short,
+  a GIF that ends before its first image descriptor). epubcheck reports the same
+  thing on the same files, so a book with such an image now fails where it
+  passed before. On the 544-book test shelf no book's report changes. A
+  truncated cover JPEG made for the purpose draws PKG-021 from both `epublift
+  check` and the browser's Validate mode, which still give identical findings,
+  in identical order, for every book. The browser build is epubveri's published
+  npm package, as before (`vendor/VENDOR.md`).
+
 ## [cli-v2.3.0] - 2026-09-30
 
 ### Changed
