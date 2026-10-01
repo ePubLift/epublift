@@ -51,7 +51,8 @@ const MODE_CFG = {
   metadata: { accept: '.epub',  dropKey: 'drop_title' },
   // Validate runs entirely client-side (WASM) — no endpoint, no upload.
   validate: { accept: '.epub',  dropKey: 'drop_title', hKey: 'opt_h_validate', ctaKey: 'cta_validate', workKey: 'cta_working_validate' },
-  repair:   { accept: '.epub',  dropKey: 'drop_title', hKey: 'opt_h_repair', ctaKey: 'cta_repair', workKey: 'cta_working_repair', readyKey: 'res_ready_repair', endpoint: '/repair' },
+  // Repair also runs client-side (epubsana's WASM build) — no upload.
+  repair:   { accept: '.epub',  dropKey: 'drop_title', hKey: 'opt_h_repair', ctaKey: 'cta_repair', workKey: 'cta_working_repair' },
 };
 const importLang = document.getElementById('importLang');
 // Smart Import (AI OCR) elements + capability flag (set from /config on load).
@@ -196,6 +197,11 @@ go.addEventListener('click', async () => {
       await runValidate();
       return;
     }
+    // Repair is client-side too: plan the fixes in the browser and show them.
+    if (mode === 'repair') {
+      await runRepairPlan();
+      return;
+    }
     const fd = new FormData();
     fd.append('file', selectedFile);
     if (mode === 'optimize'){
@@ -221,7 +227,7 @@ go.addEventListener('click', async () => {
       if (smartProvider) fd.append('provider', smartProvider.value);
       if (smartLang) fd.append('language', smartLang.value);
     }
-    // archive and repair send only the file.
+    // archive sends only the file.
     const res = await fetch(cfg.endpoint, { method:'POST', body: fd });
     if (!res.ok) {
       let msg = T('err_failed') + ' (HTTP ' + res.status + ').';
@@ -303,24 +309,6 @@ function renderResult(m, data){
         size: '<b>' + fmtBytes(data.final_size) + '</b>',
       });
     }
-  } else if (m === 'repair'){
-    const total = data.duplicate_spine_itemrefs + data.empty_metadata_dropped
-                + data.dangling_manifest_items + data.dangling_spine_itemrefs;
-    let summary;
-    if (total === 0) {
-      summary = fill('sub_repair_clean', {});
-    } else {
-      const parts = [];
-      if (data.duplicate_spine_itemrefs) parts.push(fill('sub_repair_dup_spine', { n: '<b>' + data.duplicate_spine_itemrefs + '</b>' }));
-      if (data.empty_metadata_dropped) parts.push(fill('sub_repair_empty_meta', { n: '<b>' + data.empty_metadata_dropped + '</b>' }));
-      if (data.dangling_manifest_items) parts.push(fill('sub_repair_dangling_manifest', { n: '<b>' + data.dangling_manifest_items + '</b>' }));
-      if (data.dangling_spine_itemrefs) parts.push(fill('sub_repair_dangling_spine', { n: '<b>' + data.dangling_spine_itemrefs + '</b>' }));
-      summary = parts.join(' · ');
-    }
-    // Always shown, whether something was fixed or not — repair's scope is
-    // narrow (3 issue types), so a clean/fixed result here says nothing about
-    // the book's overall validity.
-    resultSub.innerHTML = summary + '<div style="margin-top:8px;opacity:.65;font-size:11.5px;line-height:1.5;">' + T('repair_disclaimer') + '</div>';
   } else if (m === 'restore'){
     const sizeStr = '<b>' + fmtBytes(data.output_size) + '</b>';
     const key = data.modernized ? 'sub_restore_modernized' : 'sub_restore_exact';
@@ -419,6 +407,208 @@ function renderValidate(report, filename){
   result.classList.remove('show'); void result.offsetWidth; result.classList.add('show');
   result.scrollIntoView({ behavior:'smooth', block:'center' });
 }
+
+// ---- repair (client-side WASM) -----------------------------------------------
+// epubsana's WASM build (~3 MB, with its own copy of epubveri) is loaded lazily
+// like the validator. A `Session` holds the book in memory: `plan()` lists the
+// fixes, `repair(approved)` runs the core repair the CLI runs — applying the
+// approved fixes, undoing any that makes the book worse — and `result_bytes()`
+// is the repaired book. Nothing is uploaded.
+let _epubsana = null;
+async function loadEpubsana(){
+  if (_epubsana) return _epubsana;
+  const mod = await import('/vendor/epubsana.js');
+  await mod.default(); // our loader's init(): fetch + instantiate the .wasm (see vendor/VENDOR.md)
+  _epubsana = mod;
+  return mod;
+}
+
+const repResult = document.getElementById('repResult');
+const repCounts = document.getElementById('repCounts');
+const repMsg = document.getElementById('repMsg');
+const repTools = document.getElementById('repTools');
+const repList = document.getElementById('repList');
+const repApply = document.getElementById('repApply');
+const repRevealed = document.getElementById('repRevealed');
+const repAgain = document.getElementById('repAgain');
+
+// One repair run: the live Session, its plan, the fixes ticked, the counts the
+// book started with (kept across "find more fixes" rounds), the last report.
+let rep = null;
+let repUrl = null; // object URL of the repaired book, revoked when replaced
+
+function repairOutputName(name){ return name.replace(/\.epub$/i, '') + '_repaired.epub'; }
+
+async function runRepairPlan(){
+  const mod = await loadEpubsana();
+  const bytes = new Uint8Array(await selectedFile.arrayBuffer());
+  startRepairRound(mod, bytes, selectedFile.name, null);
+}
+
+// Load bytes into a fresh Session and show its plan. `first` carries the
+// counts of the book as dropped, so a later round still reports from there.
+function startRepairRound(mod, bytes, name, first){
+  if (rep && rep.session) rep.session.free();
+  const session = mod.Session.load(bytes);
+  const plan = session.plan();
+  rep = {
+    mod, session, plan, name, report: null,
+    ticked: new Set(plan.fixes.filter(f => f.tier === 'AutoSafe').map(f => f.index)),
+    first: first || { fatals: plan.fatals_before, errors: plan.errors_before, warnings: plan.warnings_before },
+    round: first ? (first.round + 1) : 1,
+  };
+  rep.first.round = rep.round;
+  renderRepair();
+  result.classList.remove('show'); void result.offsetWidth; result.classList.add('show');
+  result.scrollIntoView({ behavior:'smooth', block:'center' });
+}
+
+// Render the current stage — the plan (checkboxes) or the outcome — and the
+// shared result frame. Re-callable on a language change.
+function renderRepair(){
+  if (!rep) return;
+  const { plan, report } = rep;
+  outname.textContent = report ? repairOutputName(rep.name) : rep.name;
+  const dl = document.getElementById('dl');
+  const badge = document.querySelector('.result-top .badge');
+  resReady.removeAttribute('data-i18n'); // set directly, per stage
+  resReady.style.color = '';
+  applyResultVisibility('repair');
+  resultSub.hidden = true;
+  repResult.classList.remove('hide');
+  repRevealed.classList.add('hide'); repAgain.classList.add('hide');
+  repList.textContent = '';
+  document.getElementById('repEngine').textContent = 'epubsana ' + rep.mod.version();
+
+  if (!report) {
+    // Plan stage: nothing written yet, so no download.
+    dl.classList.add('hide');
+    if (badge) badge.style.display = 'none';
+    repCounts.textContent = fill('rep_counts_before', { f: plan.fatals_before, e: plan.errors_before, w: plan.warnings_before });
+    if (plan.fixes.length === 0) {
+      const valid = plan.fatals_before === 0 && plan.errors_before === 0;
+      resReady.textContent = T(valid ? 'rep_h_nothing_valid' : 'rep_h_nothing');
+      repMsg.className = 'rep-msg' + (valid ? ' good' : '');
+      repMsg.textContent = T(valid ? 'rep_nothing_valid' : 'rep_nothing');
+      repTools.classList.add('hide'); repApply.classList.add('hide');
+      return;
+    }
+    const safe = plan.fixes.filter(f => f.tier === 'AutoSafe').length;
+    resReady.textContent = T('rep_h_plan');
+    repMsg.className = 'rep-msg';
+    repMsg.textContent = fill('rep_plan', { n: plan.fixes.length, s: safe, d: plan.fixes.length - safe });
+    repTools.classList.remove('hide');
+    for (const f of plan.fixes) repList.appendChild(repairRow(f, null));
+    repApply.classList.remove('hide');
+    updateApplyLabel();
+    return;
+  }
+
+  // Outcome stage.
+  const s = report.summary;
+  const ok = report.status === 'ok';
+  repTools.classList.add('hide'); repApply.classList.add('hide');
+  resReady.textContent = (ok ? '✓ ' : '') + T(s.applied > 0 ? 'rep_h_done' : 'rep_h_unchanged');
+  if (badge) badge.style.display = ok ? '' : 'none';
+  repCounts.textContent = fill('rep_counts_after', {
+    fb: rep.first.fatals, eb: rep.first.errors, fa: s.fatals_after, ea: s.errors_after,
+  });
+  repMsg.className = 'rep-msg' + (ok ? ' good' : '');
+  repMsg.textContent = s.applied === 0 ? T('rep_none_applied') : T(ok ? 'rep_valid' : 'rep_not_valid');
+  const items = report.items;
+  plan.fixes.forEach((f, i) => repList.appendChild(repairRow(f, items[i])));
+
+  if (s.applied > 0) {
+    if (repUrl) URL.revokeObjectURL(repUrl);
+    repUrl = URL.createObjectURL(new Blob([rep.session.result_bytes()], { type: 'application/epub+zip' }));
+    dl.href = repUrl; dl.download = repairOutputName(rep.name);
+    dl.classList.remove('hide');
+  } else {
+    dl.classList.add('hide');
+  }
+  // A fix let the validator into part of the book for the first time: what it
+  // found was always there and was not in this plan, so offer another round.
+  const revealed = rep.session.revealed();
+  if (revealed > 0 && s.applied > 0) {
+    repRevealed.textContent = fill('rep_revealed', { n: revealed });
+    repRevealed.className = 'rep-msg';
+    repAgain.classList.remove('hide');
+  }
+}
+
+// One fix as a list row: a checkbox in the plan stage, its outcome afterwards.
+function repairRow(f, item){
+  const li = document.createElement('li'); li.className = 'rep-fix';
+  const head = document.createElement('label'); head.className = 'rep-head';
+  const tag = document.createElement('span');
+  if (item) {
+    tag.className = 'rep-tag ' + item.outcome;
+    tag.textContent = T('rep_out_' + item.outcome);
+  } else {
+    const box = document.createElement('input'); box.type = 'checkbox';
+    box.checked = rep.ticked.has(f.index);
+    box.addEventListener('change', () => {
+      if (box.checked) rep.ticked.add(f.index); else rep.ticked.delete(f.index);
+      updateApplyLabel();
+    });
+    head.appendChild(box);
+    const safe = f.tier === 'AutoSafe';
+    tag.className = 'rep-tag ' + (safe ? 'safe' : 'decide');
+    tag.textContent = T(safe ? 'rep_tier_safe' : 'rep_tier_decide');
+  }
+  const title = document.createElement('span'); title.textContent = f.title; // epubsana's own words (English)
+  head.append(tag, title);
+  li.appendChild(head);
+  if (item && item.outcome === 'reverted') {
+    const why = document.createElement('div'); why.className = 'rep-undone';
+    why.textContent = fill('rep_reverted_for', { f: rep.plan.fixes[f.index].reverted_for || item.code });
+    li.appendChild(why);
+  }
+  const det = document.createElement('details');
+  const sum = document.createElement('summary'); sum.textContent = T('rep_why');
+  const p = document.createElement('p'); p.textContent = f.rationale;
+  const ul = document.createElement('ul');
+  for (const c of f.preview) { const x = document.createElement('li'); x.textContent = c.note; ul.appendChild(x); }
+  det.append(sum, p, ul);
+  li.appendChild(det);
+  return li;
+}
+
+function updateApplyLabel(){
+  const n = rep ? rep.ticked.size : 0;
+  repApply.textContent = fill('rep_apply', { n });
+  repApply.disabled = n === 0;
+}
+
+document.getElementById('repAll').addEventListener('click', () => {
+  rep.ticked = new Set(rep.plan.fixes.map(f => f.index)); renderRepair();
+});
+document.getElementById('repSafe').addEventListener('click', () => {
+  rep.ticked = new Set(rep.plan.fixes.filter(f => f.tier === 'AutoSafe').map(f => f.index)); renderRepair();
+});
+repApply.addEventListener('click', () => {
+  if (!rep || rep.ticked.size === 0) return;
+  repApply.disabled = true; repApply.textContent = T('cta_working_repair');
+  // Let the label paint before the (synchronous) repair runs.
+  setTimeout(() => {
+    try {
+      rep.report = rep.session.repair(Uint32Array.from(rep.ticked), 'valid');
+      // The plan's fixes carry `reverted_for`; refresh them from the session.
+      rep.plan = rep.session.plan();
+      renderRepair();
+    } catch (err) {
+      alert(err.message || T('err_generic'));
+      updateApplyLabel();
+    }
+  }, 30);
+});
+repAgain.addEventListener('click', () => {
+  const bytes = rep.session.result_bytes();
+  startRepairRound(rep.mod, bytes, rep.name, rep.first);
+});
+document.addEventListener('i18n:change', () => {
+  if (mode === 'repair' && result.classList.contains('show')) renderRepair();
+});
 
 // Hand the already-selected file over to the Repair tab (no re-upload) after
 // a failing Validate run. Preloads the file but doesn't auto-run — the user

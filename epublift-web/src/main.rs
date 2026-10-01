@@ -238,6 +238,9 @@ async fn main() {
         .route("/vendor/epubveri.js", get(epubveri_js))
         .route("/vendor/epubveri_bg.js", get(epubveri_bg_js))
         .route("/vendor/epubveri_bg.wasm", get(epubveri_wasm))
+        .route("/vendor/epubsana.js", get(epubsana_js))
+        .route("/vendor/epubsana_wasm_bg.js", get(epubsana_bg_js))
+        .route("/vendor/epubsana_wasm_bg.wasm", get(epubsana_wasm))
         .route("/healthz", get(|| async { "ok" }))
         .route("/version", get(version))
         .route("/config", get(config))
@@ -268,8 +271,9 @@ async fn main() {
         // Content-Security-Policy: deny everything by default, then allow only
         // what the single page actually loads. The front-end script lives at
         // its own `/app.js` so we can use `script-src 'self'` (no inline JS).
-        // `'wasm-unsafe-eval'` is added so the client-side Validate mode can
-        // compile the same-origin epubveri WASM module (it allows WebAssembly
+        // `'wasm-unsafe-eval'` is added so the client-side Validate and Repair
+        // modes can compile the same-origin epubveri and epubsana WASM modules
+        // (it allows WebAssembly
         // compilation only — not arbitrary `eval`, unlike `'unsafe-eval'`).
         // `'unsafe-inline'` is only granted to styles (the inline <style> block
         // and many style="..." attributes); there is no HTML-injection sink, so
@@ -410,6 +414,44 @@ async fn epubveri_wasm() -> impl IntoResponse {
             header::HeaderValue::from_static("application/wasm"),
         )],
         include_bytes!("../static/vendor/epubveri_bg.wasm").as_slice(),
+    )
+}
+
+/// Serve the epubsana loader (our small ES module, the same shape as
+/// `epubveri.js`; see static/vendor/VENDOR.md). The client-side Repair mode
+/// imports it; it fetches `epubsana_wasm_bg.wasm` and imports
+/// `epubsana_wasm_bg.js` relative to its own URL under `/vendor/`.
+async fn epubsana_js() -> impl IntoResponse {
+    (
+        [(
+            header::CONTENT_TYPE,
+            header::HeaderValue::from_static("text/javascript; charset=utf-8"),
+        )],
+        include_str!("../static/vendor/epubsana.js"),
+    )
+}
+
+/// Serve epubsana's wasm-bindgen glue, verbatim from the published npm package.
+async fn epubsana_bg_js() -> impl IntoResponse {
+    (
+        [(
+            header::CONTENT_TYPE,
+            header::HeaderValue::from_static("text/javascript; charset=utf-8"),
+        )],
+        include_str!("../static/vendor/epubsana_wasm_bg.js"),
+    )
+}
+
+/// Serve the epubsana WASM binary (pure-Rust EPUB repairer with its own copy
+/// of epubveri, ~3 MB) as a same-origin `application/wasm` asset. Repair runs
+/// entirely in the browser from this module — the file is never uploaded.
+async fn epubsana_wasm() -> impl IntoResponse {
+    (
+        [(
+            header::CONTENT_TYPE,
+            header::HeaderValue::from_static("application/wasm"),
+        )],
+        include_bytes!("../static/vendor/epubsana_wasm_bg.wasm").as_slice(),
     )
 }
 

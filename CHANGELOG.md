@@ -10,6 +10,28 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+### Changed (web)
+- **The Repair mode runs epubsana in the browser**, the repairer `epublift
+  repair` runs since cli-v3.0.0, in place of the old three-fix repair on the
+  server. The book is never uploaded. Drop an `.epub` and click **Find fixes**:
+  the page lists every proposed fix with the safe ones ticked, each one opening
+  to show why it is proposed and what it changes. Tick the fixes that need a
+  decision if you agree, apply, and download `<name>_repaired.epub`. A fix that
+  makes the book worse is undone automatically and shown as undone. When a fix
+  lets epubveri check part of the book for the first time, **Find more fixes →**
+  plans again on the repaired book. It is epubsana's published npm build
+  (0.22.0, `vendor/VENDOR.md`); on *Project Hail Mary* with every fix approved it
+  writes the same bytes as `epublift repair --yes`. The page's text is in all 13
+  languages; the fixes' titles and reasons are epubsana's, in English.
+
+### Fixed (web)
+- **The privacy and beta notes in Validate no longer split into columns.** A note
+  whose translation held bold text or a link rendered each piece as its own
+  column; its text is now one line of prose, as in Repair's new note.
+- **Validate's count line is readable.** "N error(s), N warning(s)" above the
+  findings was dark brown on the dark result card; it is now the card's light
+  text colour, as in Repair.
+
 ## [cli-v3.0.0] - 2026-10-01
 
 **Major:** `repair` changes how it decides and what its exit code means; see

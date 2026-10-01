@@ -6,9 +6,8 @@ Validate diagnoses, Repair fixes what it can.
 
 Status: **shipped**, in the default build. The CLI runs
 [epubsana](https://github.com/veripublica/epubsana), the veripublica family's
-repairer, since cli-v3.0.0. The web **Repair** mode still runs
-the older, narrower repair described [at the end](#in-the-web-app-epublift-web)
-until it moves to epubsana too.
+repairer, since cli-v3.0.0, and so does the web **Repair** mode, in the browser
+([below](#in-the-web-app-epublift-web)).
 
 ## What it does
 
@@ -104,24 +103,29 @@ A run that applies no fix writes no file. A book with nothing to fix prints
 
 ## In the web app (`epublift-web`)
 
-> The web Repair mode does **not** run epubsana yet. Until it does, it runs the
-> older repair below, which fixes only three kinds of package-document defect.
-> Its move to epubsana, running in the browser like Validate, is the next step.
+The **Repair** mode runs the same epubsana, compiled to WebAssembly, **entirely
+in the browser**, like Validate: the book is never uploaded. It is epubsana's
+published npm build (`static/vendor/VENDOR.md`), so the browser and
+`epublift repair` run the same `repair()` and give the same book for the same
+fixes.
 
-A **Repair** mode sits between Validate and Archive: drop an `.epub`, click
-**Fix my EPUB**, get a summary of what was fixed plus a download link. It fixes:
+1. Drop an `.epub` and click **Find fixes**. The page lists every proposed fix.
+   Safe fixes are ticked; a fix that needs a decision is not, and each one opens
+   to show why it is proposed and what it changes. **Select all** and **Safe
+   only** set the ticks in one click.
+2. Click **Apply N selected fixes**. The page shows each fix's outcome (fixed,
+   skipped, or undone because it made the book worse), the fatal and error
+   counts before and after, and a **Download** button for
+   `<name>_repaired.epub`. A run that applies no fix offers no download.
+3. When a fix lets epubveri check part of the book for the first time, the page
+   says how many more findings appeared and offers **Find more fixes →**, which
+   plans again on the repaired book. This is the browser's form of the CLI's
+   second pass.
 
-1. **Duplicate spine itemrefs**, keeping the first occurrence.
-2. **Empty or legacy metadata**: Dublin Core elements with no text, and any
-   `<meta refines>` that describes them. An element that holds markup, such as
-   a description written as `<p>` paragraphs, is never treated as empty. It
-   never leaves a book with no title, identifier or language.
-3. **Dangling references**: manifest items whose file is not in the archive,
-   and spine entries that point at no manifest item.
-
-It only removes content, and only in the package document. When Validate finds
-problems, its result view shows a **"Fix these issues →"** button that switches
-to the Repair tab with the file carried over. Available in all 13 UI languages.
+When Validate finds problems, its result view shows a **"Fix these issues →"**
+button that switches to the Repair tab with the file carried over. The page's
+own text is in all 13 UI languages; the titles and reasons of the fixes are
+epubsana's, in English.
 
 ## Notes
 

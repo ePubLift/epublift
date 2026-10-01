@@ -23,6 +23,14 @@ choose a mode from the switcher at the top of the panel:
   Apple Books recognize it. The lookup runs server-side over a pure-Rust TLS
   client (no C). Google Books needs an API key for reliable use — see
   [Configuration](#configuration-env).
+- **Validate** — check a book with [epubveri](validate.md), epubcheck's message
+  IDs and all, **entirely in the browser** (WebAssembly; the book is never
+  uploaded). A failing result offers **Fix these issues →**, which hands the
+  file to Repair.
+- **Repair** — fix what Validate finds with [epubsana](repair.md), also
+  **entirely in the browser**: the page lists the proposed fixes with the safe
+  ones ticked, you tick the ones that need a decision, and you download the
+  repaired book. A fix that makes the book worse is undone automatically.
 - **Import PDF** *(experimental)* — turn a [PDF into a reflowable EPUB](pdf-import.md):
   drop a `.pdf`, pick the book's language, convert. Works for PDFs that carry a
   text layer (born-digital books and already-searchable scans), including modern

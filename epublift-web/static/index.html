@@ -616,12 +616,13 @@
         </div>
         <div class="modeinfo" data-modes="validate">
           <p data-i18n-html="validate_lede">Check an <b>.epub</b> against the spec — with epubcheck-compatible message IDs (<code style="font-family:inherit">RSC-005</code>, <code style="font-family:inherit">OPF-…</code>). Powered by <b>epubveri</b>, a pure-Rust, JVM-free validator.</p>
-          <p class="opt-note" data-i18n-html="validate_privacy">🔒 <b>Validated entirely in your browser</b> with WebAssembly — your file is never uploaded. A quick pre-check, not an official conformance certificate.</p>
-          <p class="opt-note" data-i18n-html="validate_beta">Beta · epubveri is pre-1.0 (~99.7% message-ID recall vs epubcheck). For an authoritative result, cross-check with <a href="https://www.w3.org/publishing/epubcheck/" target="_blank" rel="noopener">epubcheck</a>.</p>
+          <p class="opt-note"><span data-i18n-html="validate_privacy">🔒 <b>Validated entirely in your browser</b> with WebAssembly — your file is never uploaded. A quick pre-check, not an official conformance certificate.</span></p>
+          <p class="opt-note"><span data-i18n-html="validate_beta">Beta · epubveri is pre-1.0 (~99.7% message-ID recall vs epubcheck). For an authoritative result, cross-check with <a href="https://www.w3.org/publishing/epubcheck/" target="_blank" rel="noopener">epubcheck</a>.</span></p>
         </div>
         <div class="modeinfo" data-modes="repair">
-          <p data-i18n-html="repair_lede">Fix common <b>structural issues</b> in an EPUB's package document: duplicate spine entries, empty or legacy metadata, and dangling manifest/spine references. Scoped to the package document — content chapters aren't touched. Your original file is never modified.</p>
-          <p class="opt-note" data-i18n="repair_note">Not a substitute for Validate — repair only fixes the handful of issues above. Run Validate afterward to confirm the result.</p>
+          <p data-i18n-html="repair_lede">Fix what Validate finds, wherever a fix is certain to be right: undeclared entities, invalid ids, broken spine and manifest entries, empty metadata and more. Powered by <b>epubsana</b>. Your original file is never modified.</p>
+          <p class="opt-note"><span data-i18n-html="repair_privacy">🔒 <b>Repaired entirely in your browser</b> with WebAssembly — your file is never uploaded.</span></p>
+          <p class="opt-note" data-i18n="repair_note">Safe fixes are selected for you. A fix that needs a decision shows why — tick it if you agree. A fix that makes the book worse is undone automatically.</p>
         </div>
         <div id="metaForm" class="metaform hide">
           <p class="opt-h" style="margin:0" data-i18n="meta_isbn_h">Auto-fill by ISBN</p>
@@ -714,7 +715,7 @@
 
     <style>
       .valresult { display:block; padding:20px 28px 24px; } /* same inset as .result-top/.stat */
-      .valcounts { font-family:"JetBrains Mono",monospace; font-size:12px; color:var(--ink-soft); margin:2px 0 12px; }
+      .valcounts { font-family:"JetBrains Mono",monospace; font-size:12px; color:rgba(244,238,225,0.7); margin:2px 0 12px; }
       .valclean { font-size:14px; color:var(--good-2); font-weight:600; }
       .valengine { font-family:"JetBrains Mono",monospace; font-size:11px; color:rgba(244,238,225,0.55); margin:12px 0 0; }
       .valtable { width:100%; }
@@ -752,6 +753,45 @@
         <tbody id="valTbody"></tbody>
       </table>
       <p class="valengine" id="valEngine"></p>
+    </div>
+
+    <style>
+      .rep-list { list-style:none; margin:0 0 14px; padding:0; max-height:420px; overflow:auto;
+        border-top:1px solid rgba(244,238,225,0.14); }
+      .rep-fix { padding:9px 2px; border-bottom:1px solid rgba(244,238,225,0.14); font-size:13.5px; line-height:1.45; }
+      .rep-head { display:flex; align-items:flex-start; gap:10px; cursor:pointer; }
+      .rep-head input { margin:3px 0 0; width:15px; height:15px; flex:none; accent-color: var(--good-2); }
+      .rep-tag { flex:none; font-family:"JetBrains Mono",monospace; font-size:10.5px; font-weight:700;
+        text-transform:uppercase; letter-spacing:.04em; padding:2px 7px; border-radius:6px; margin-top:1px; }
+      .rep-tag.safe, .rep-tag.applied { color:var(--good-2); background:color-mix(in srgb, var(--good-2) 14%, transparent); }
+      .rep-tag.decide { color:#d9a441; background:color-mix(in srgb, #d9a441 14%, transparent); }
+      .rep-tag.skipped, .rep-tag.proposed { color:#9a9aa2; background:color-mix(in srgb, #9a9aa2 14%, transparent); }
+      .rep-tag.reverted { color:#ff6b74; background:color-mix(in srgb, #ff6b74 14%, transparent); }
+      .rep-fix details { margin:6px 0 0 25px; font-size:12.5px; color:rgba(244,238,225,0.7); }
+      .rep-fix summary { cursor:pointer; color:rgba(244,238,225,0.55); }
+      .rep-fix details p { margin:6px 0; }
+      .rep-fix details ul { margin:4px 0 0; padding-left:18px; font-family:"JetBrains Mono",monospace; font-size:11.5px; }
+      .rep-undone { margin:5px 0 0 25px; font-size:12.5px; color:#ff6b74; }
+      .rep-tools { display:flex; gap:8px; margin:0 0 10px; }
+      .rep-btn { font-family:inherit; font-size:13px; font-weight:600; padding:7px 14px; border-radius:9px; cursor:pointer;
+        border:1px solid rgba(244,238,225,0.35); background:transparent; color:var(--paper); }
+      .rep-btn.primary { background:var(--paper); color:var(--ink); border-color:var(--paper); }
+      .rep-btn:disabled { opacity:.55; cursor:default; }
+      .rep-msg { font-size:14px; line-height:1.5; margin:0 0 12px; }
+      .rep-msg.good { color:var(--good-2); font-weight:600; }
+    </style>
+    <div class="result-body valresult hide" id="repResult" data-result-modes="repair">
+      <div class="valcounts" id="repCounts"></div>
+      <p class="rep-msg hide" id="repMsg"></p>
+      <div class="rep-tools hide" id="repTools">
+        <button type="button" class="rep-btn" id="repAll" data-i18n="rep_select_all">Select all</button>
+        <button type="button" class="rep-btn" id="repSafe" data-i18n="rep_select_safe">Safe only</button>
+      </div>
+      <ul class="rep-list" id="repList"></ul>
+      <button type="button" class="rep-btn primary hide" id="repApply"></button>
+      <p class="rep-msg hide" id="repRevealed"></p>
+      <button type="button" class="rep-btn hide" id="repAgain" data-i18n="rep_again">Find more fixes →</button>
+      <p class="valengine" id="repEngine"></p>
     </div>
   </div>
 
