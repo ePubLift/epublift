@@ -102,6 +102,14 @@ rten = { version = "0.26", optional = true }
 # itself (`epublift check`) stays behind the opt-in `validate` feature; see
 # docs/validate.md.
 epubveri = "0.20.0"
+# epubsana, the family's confirm-each-step repairer: `epublift repair` runs its
+# core `repair()` — the same function `epubsana` and its browser build run — so
+# a book repaired here and there comes back identical. Pure Rust, on the same
+# epubveri, zip 8 and roxmltree 0.21 as we are. See docs/repair.md.
+epubsana = "0.21.0"
+# `--format json` on `check` and `repair`: the shared veripublica envelope.
+# epubsana already links it, so it costs the default build nothing.
+serde_json = "1"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 tempfile = "3"
 walkdir = "2"
@@ -119,7 +127,6 @@ crc32fast = { version = "1", optional = true }
 # for whole-file provenance/fixity; serde(_json) for the human-readable manifest.
 sha2 = { version = "0.11", optional = true }
 serde = { version = "1", features = ["derive"], optional = true }
-serde_json = { version = "1", optional = true }
 # Experimental EPUB 3.4 image codecs (opt-in, `epub34` feature). Pure Rust, no
 # FFI — part of the imazen `zen*` codec family we already use for WebP (zenwebp),
 # unified by the `zencodec` traits. AVIF via zenavif, JPEG XL via zenjxl. Gated
@@ -160,14 +167,13 @@ webpki-roots = { version = "1.0.8", optional = true }
 # All pure Rust; build with `--no-default-features` to drop it. See
 # docs/design/eparc-format.md.
 default = ["archival"]
-archival = ["dep:structured-zstd", "dep:crc32fast", "dep:sha2", "dep:serde", "dep:serde_json"]
+archival = ["dep:structured-zstd", "dep:crc32fast", "dep:sha2", "dep:serde"]
 # Metadata enrichment: `epublift meta enrich --isbn` fills missing fields from an
 # online catalogue (Open Library first). Opt-in so the default build stays
 # offline + C-free. The HTTPS client is 100% pure Rust: rustls with the RustCrypto
 # crypto provider (no ring/aws-lc, no C toolchain) + webpki-roots, over a small
 # hand-rolled HTTP/1.1 client (see src/http.rs).
 metadata = [
-    "dep:serde_json",
     "dep:rustls",
     "dep:rustls-rustcrypto",
     "dep:webpki-roots",
@@ -178,9 +184,8 @@ metadata = [
 epub34 = ["dep:zenavif", "dep:zenjxl", "dep:rgb", "dep:imgref", "dep:almost-enough"]
 # EPUB validation (`epublift check`): validate an EPUB against the spec using our
 # own pure-Rust epubveri (JVM-free epubcheck alternative). Opt-in so `cargo build`
-# stays lean; included in release binaries. Pure Rust, no C. serde_json serializes
-# epubveri's shared veripublica envelope under `--json` (see docs/validate.md).
-validate = ["dep:serde_json"]
+# stays lean; included in release binaries. Pure Rust, no C. See docs/validate.md.
+validate = []
 # [EXPERIMENTAL] PDF → EPUB import (`epublift import`). `pdf` = the text tiers
 # (born-digital PDFs + scans that already carry a text layer); pure Rust, light.
 # `pdf-ocr` will add OCR for scans with no text layer (a later phase: ocrs +
@@ -201,7 +206,6 @@ markdown = ["dep:pulldown-cmark"]
 # src/smart_import/.
 smart-import = [
     "markdown",
-    "dep:serde_json",
     "dep:base64",
     "dep:rustls",
     "dep:rustls-rustcrypto",

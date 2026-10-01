@@ -11,6 +11,32 @@ are tagged with the component they belong to.
 ## [Unreleased]
 
 ### Changed
+- **`epublift repair` now runs epubsana**, the veripublica family's repairer,
+  in place of epublift's own three OPF fixes. It fixes what `check` finds
+  wherever a fix is certain to be right: undeclared HTML entities, invalid ids
+  and the links that point at them, repeated or dangling spine and manifest
+  entries, empty metadata, unrecognised package versions, font rules for missing
+  fonts, and more. On `tests/Project_Hail_Mary(Andy_Weir).epub` it clears 87 of
+  1,171 errors and 33 of 37 usage notes, where the old repair cleared one error.
+  - **Safe fixes are applied; a fix that needs a decision is asked about** in a
+    terminal, skipped without one, and applied without asking under the new
+    `-y`/`--yes`. The old repair applied all of its fixes without asking, so a
+    script that relied on it dropping a repeated spine entry now needs `--yes`.
+  - **A fix that makes the book worse is undone**, and the report says which and
+    why.
+  - **A second pass runs by itself** when a fix lets epubveri check part of the
+    book for the first time (an unrecognised package version, a fatal error that
+    hid a chapter). A book whose `version="1.0"` showed one error is valid after
+    one `repair`.
+  - New: `--goal valid|openable` and `--format json` (the veripublica envelope,
+    the same shape `epubsana --format json` prints).
+  - **A run that applies no fix writes no file**, and the output path may not be
+    the input.
+  - **Exit codes now say whether the goal was met**, like `check`: `0` met, `1`
+    not met, `2` the book could not be repaired at all. `repair` used to exit `0`
+    whenever it wrote a file.
+  - The web Repair mode still runs the old repair; it moves to epubsana in a
+    later release. See `docs/repair.md`.
 - **The validator moves to `epubveri` 0.20.0, on the CLI and in the browser.**
   It adds one error, PKG-021, for an image whose header stops before its width
   and height (a JPEG with no complete SOF segment, a PNG whose IHDR is cut short,

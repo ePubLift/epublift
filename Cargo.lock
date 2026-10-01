@@ -931,6 +931,7 @@ dependencies = [
  "chrono",
  "clap",
  "crc32fast",
+ "epubsana",
  "epubveri",
  "image",
  "imgref",
@@ -977,6 +978,19 @@ dependencies = [
  "tracing-appender",
  "tracing-subscriber",
  "uuid",
+ "zip",
+]
+
+[[package]]
+name = "epubsana"
+version = "0.21.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8d473db644362090262c9fa41e08ddf725baf6418c4652bf053941ca53b33abb"
+dependencies = [
+ "epubveri",
+ "roxmltree",
+ "serde",
+ "serde_json",
  "zip",
 ]
 

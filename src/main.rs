@@ -167,13 +167,16 @@ enum Command {
     /// Validate EPUB(s) against the spec (pure-Rust epubcheck alternative).
     #[cfg(feature = "validate")]
     Check(CheckArgs),
-    /// Fix common OPF structural issues (duplicate spine entries, empty/legacy
-    /// metadata, dangling manifest/spine references).
+    /// Fix the defects `check` finds that have one safe fix, asking before
+    /// any fix that needs a decision (runs epubsana).
     Repair(RepairArgs),
 }
 
-/// `epublift repair …` — fix common OPF structural issues (writes a new EPUB;
-/// input untouched). See docs/repair.md.
+/// `epublift repair …` — fix what `check` finds, with epubsana (writes a new
+/// EPUB; input untouched). See docs/repair.md.
+///
+/// Exit: 0 = the goal was met; 1 = defects remain; 2 = the book could not be
+/// repaired at all (unreadable, or the output path is the input).
 #[derive(clap::Args, Debug)]
 struct RepairArgs {
     /// EPUB file to repair (never modified; a new file is written).
@@ -183,24 +186,59 @@ struct RepairArgs {
     #[arg(short, long)]
     output: Option<PathBuf>,
     /// Report what would be fixed without writing anything.
-    #[arg(long)]
+    #[arg(long, conflicts_with = "yes")]
     dry_run: bool,
+    /// Apply every proposed fix without asking, including the ones that need a
+    /// decision. Without it, safe fixes are applied and the rest are asked
+    /// about in a terminal, or skipped when there is no terminal to ask in.
+    #[arg(short, long)]
+    yes: bool,
+    /// How far to repair: `valid` (no errors remain) or `openable` (no fatal
+    /// errors remain, so the book opens; errors may still be reported).
+    #[arg(long, value_enum, value_name = "valid|openable", default_value_t = RepairGoal::Valid)]
+    goal: RepairGoal,
+    // The canonical one-liner, verbatim, as on `check`.
+    #[arg(
+        long,
+        help = FORMAT_HELP,
+        value_enum,
+        value_name = "human|json",
+        default_value_t = ReportFormat::Human
+    )]
+    format: ReportFormat,
 }
 
-/// The veripublica conventions version whose FORMATS.md the `check --json`
-/// envelope meets — asserted by epublift about itself (FORMATS §1.1).
-#[cfg(feature = "validate")]
+/// `repair --goal`: epubsana's two bars, spelled as its own CLI spells them.
+#[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+enum RepairGoal {
+    /// No fatal and no error findings remain.
+    Valid,
+    /// No fatal findings remain: the book opens.
+    Openable,
+}
+
+impl From<RepairGoal> for epubsana::Goal {
+    fn from(g: RepairGoal) -> Self {
+        match g {
+            RepairGoal::Valid => epubsana::Goal::Valid,
+            RepairGoal::Openable => epubsana::Goal::Openable,
+        }
+    }
+}
+
+/// The veripublica conventions version whose FORMATS.md the `check` and
+/// `repair` json envelopes meet — asserted by epublift about itself (FORMATS §1.1).
 const ENVELOPE_CONVENTION: &str = "0.6";
 
 /// `--format`'s help: veripublica conventions' canonical one-liner, verbatim.
 const FORMAT_HELP: &str =
     "Report format. `human` (the default) is always supported; `json` is reserved for FORMATS.md.";
 
-/// What `check --format` can emit (veripublica conventions CLI.md §3.6).
-#[cfg(feature = "validate")]
+/// What `check --format` and `repair --format` can emit (veripublica
+/// conventions CLI.md §3.6).
 #[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
-enum CheckFormat {
-    /// A report for people: one line per book, then its findings.
+enum ReportFormat {
+    /// A report for people.
     Human,
     /// The veripublica machine envelope (FORMATS.md): one JSON object per run.
     Json,
@@ -230,10 +268,10 @@ struct CheckArgs {
         help = FORMAT_HELP,
         value_enum,
         value_name = "human|json",
-        default_value_t = CheckFormat::Human,
+        default_value_t = ReportFormat::Human,
         conflicts_with = "json"
     )]
-    format: CheckFormat,
+    format: ReportFormat,
 
     /// Same as `--format json`.
     #[arg(long)]
@@ -605,11 +643,11 @@ fn run_check(args: &CheckArgs) -> Result<()> {
     // `--json` is the older spelling of `--format json`; clap rejects the two
     // together, so only one of them can be set here.
     let format = if args.json {
-        CheckFormat::Json
+        ReportFormat::Json
     } else {
         args.format
     };
-    if format == CheckFormat::Json {
+    if format == ReportFormat::Json {
         println!("{}", serde_json::to_string_pretty(&envelope)?);
     } else {
         let mut stdout = std::io::stdout().lock();
@@ -775,63 +813,320 @@ fn default_repair_output(input: &Path) -> PathBuf {
         .join(format!("{stem}_repaired.epub"))
 }
 
-/// `epublift repair …` — fix common OPF structural issues.
+/// The most passes one `repair` makes. A pass runs again only when the last
+/// one let epubveri check part of the book for the first time (`revealed`), and
+/// each such pass clears the cause of the blindness it found, so in practice a
+/// second pass is the end of it; the cap only bounds the worst case.
+const MAX_REPAIR_PASSES: usize = 3;
+
+/// `epublift repair …` — fix what `check` finds, with epubsana's core
+/// `repair()`: the function its own CLI and its browser build run, so the same
+/// book with the same approvals comes back identical from all three. Exits like
+/// `check`: 0 goal met, 1 defects remain, 2 the book could not be repaired.
 fn run_repair(args: &RepairArgs) -> Result<()> {
+    use std::io::Write;
+    match repair_book(args) {
+        Ok(true) => Ok(()),
+        // A verdict, not a failure: exit directly so it does not print as one.
+        Ok(false) => {
+            std::io::stdout().flush().ok();
+            std::process::exit(1)
+        }
+        Err(e) => {
+            eprintln!("\n[!] Fatal Error: {e:#}");
+            std::process::exit(2)
+        }
+    }
+}
+
+/// Repair one book and report it; `Ok(goal met)`.
+fn repair_book(args: &RepairArgs) -> Result<bool> {
+    use epubsana::{Confirmer, Policy, Workspace};
+    use std::io::IsTerminal;
+
     let input = args
         .input
         .canonicalize()
         .with_context(|| format!("Input file not found: {}", args.input.display()))?;
-
-    if args.dry_run {
-        let report = epublift::plan_repair(&input)?;
-        print_repair_report(&report, None);
-        return Ok(());
-    }
-
     let output = args
         .output
         .clone()
         .unwrap_or_else(|| default_repair_output(&input));
-    let report = epublift::write_repaired(&input, &output)?;
-    print_repair_report(&report, Some(&output));
-    Ok(())
+    if same_file(&input, &output) {
+        anyhow::bail!(
+            "the output path is the input ({}); repair never modifies the original, \
+             so choose a different --output",
+            output.display()
+        );
+    }
+    let bytes =
+        std::fs::read(&input).with_context(|| format!("could not read {}", input.display()))?;
+    let mut ws = Workspace::load(&bytes)
+        .map_err(|e| anyhow::anyhow!("could not open {} as an EPUB: {e}", input.display()))?;
+
+    // Safe fixes are applied without asking; a fix that needs a decision is
+    // asked about in a terminal, skipped without one, approved under --yes.
+    let interactive = !args.yes && !args.dry_run && std::io::stdin().is_terminal();
+    let (policy, mut confirmer): (Policy, Box<dyn Confirmer>) = if args.dry_run {
+        (Policy::DryRun, Box::new(DeclineFix))
+    } else if args.yes {
+        (Policy::AskEach, Box::new(ApproveFix))
+    } else if interactive {
+        (Policy::AutoSafeThenAsk, Box::new(AskFix))
+    } else {
+        (Policy::AutoSafeThenAsk, Box::new(DeclineFix))
+    };
+
+    // A fix that lets epubveri into part of the book for the first time (an
+    // unrecognised package version corrected, a fatal cleared) reveals findings
+    // that were always there but were not in the plan. Planning again on the
+    // result is what epubsana says to do with them, so we do it here rather
+    // than tell the user to run us twice. A dry run changes nothing, so it
+    // never has a second pass to plan.
+    let mut passes = Vec::new();
+    loop {
+        let pass = epubsana::repair(&mut ws, args.goal.into(), policy, confirmer.as_mut())
+            .map_err(|e| anyhow::anyhow!("could not repair {}: {e}", input.display()))?;
+        let again = pass.revealed > 0 && pass.changed();
+        passes.push(pass);
+        if !again || passes.len() == MAX_REPAIR_PASSES {
+            break;
+        }
+    }
+    let report = merge_passes(&passes);
+
+    // Write only when a fix was applied: a run that changed nothing leaves no
+    // file behind. A dry run names the file it would write, if any.
+    let written = if args.dry_run {
+        (!report.fixes.is_empty()).then(|| output.clone())
+    } else if report.changed() {
+        let repaired = ws
+            .serialize()
+            .map_err(|e| anyhow::anyhow!("could not write the repaired EPUB: {e}"))?;
+        std::fs::write(&output, repaired)
+            .with_context(|| format!("could not write {}", output.display()))?;
+        Some(output.clone())
+    } else {
+        None
+    };
+
+    if args.format == ReportFormat::Json {
+        let input = epubsana::envelope::input(
+            args.input.display().to_string(),
+            written.as_ref().map(|p| p.display().to_string()),
+            &report,
+        );
+        let mut envelope = epubsana::envelope::Envelope::for_tool(
+            "epublift",
+            env!("CARGO_PKG_VERSION"),
+            ENVELOPE_CONVENTION,
+            None,
+            vec![input],
+        );
+        envelope.dry_run = args.dry_run;
+        println!("{}", serde_json::to_string_pretty(&envelope)?);
+    } else {
+        print_repair_report(&passes, &report, written.as_deref(), args, interactive);
+    }
+    Ok(report.goal_met)
 }
 
-/// Print a human-readable summary of a repair pass.
-fn print_repair_report(report: &epublift::repair::RepairReport, output: Option<&Path>) {
-    if let Some(out) = output {
-        println!("[+] Wrote repaired EPUB to: {}", out.display());
+/// Several passes as one run: every pass's fixes in order, the counts the book
+/// started from and the counts it ended with, and the last pass's verdict.
+fn merge_passes(passes: &[epubsana::ChangeReport]) -> epubsana::ChangeReport {
+    let (first, last) = (&passes[0], &passes[passes.len() - 1]);
+    epubsana::ChangeReport {
+        fixes: passes.iter().flat_map(|p| p.fixes.clone()).collect(),
+        fatals_after: last.fatals_after,
+        errors_after: last.errors_after,
+        warnings_after: last.warnings_after,
+        infos_after: last.infos_after,
+        usages_after: last.usages_after,
+        revealed: last.revealed,
+        goal: last.goal,
+        goal_met: last.goal_met,
+        ..first.clone()
     }
-    if report.is_clean() {
-        println!("[=] No issues found — this EPUB's package document is already clean.");
+}
+
+/// Whether `output` names the same file as `input` (already canonical), even
+/// when `output` does not exist yet.
+fn same_file(input: &Path, output: &Path) -> bool {
+    if let Ok(o) = output.canonicalize() {
+        return o == input;
+    }
+    let parent = match output.parent() {
+        Some(p) if !p.as_os_str().is_empty() => p,
+        _ => Path::new("."),
+    };
+    match (parent.canonicalize(), output.file_name()) {
+        (Ok(p), Some(name)) => p.join(name) == input,
+        _ => false,
+    }
+}
+
+/// `--yes`: approve every fix.
+struct ApproveFix;
+impl epubsana::Confirmer for ApproveFix {
+    fn decide(&mut self, _fix: &epubsana::ProposedFix) -> epubsana::Decision {
+        epubsana::Decision::Approve
+    }
+}
+
+/// No terminal to ask in (or a dry run): decline every fix that needs a decision.
+struct DeclineFix;
+impl epubsana::Confirmer for DeclineFix {
+    fn decide(&mut self, _fix: &epubsana::ProposedFix) -> epubsana::Decision {
+        epubsana::Decision::Reject
+    }
+}
+
+/// Ask on the terminal about each fix that needs a decision. The question goes
+/// to stderr so that stdout carries only the report (or the one JSON object).
+struct AskFix;
+impl epubsana::Confirmer for AskFix {
+    fn decide(&mut self, fix: &epubsana::ProposedFix) -> epubsana::Decision {
+        use std::io::Write;
+        eprintln!("\n[?] {}", fix.title);
+        eprintln!("    why: {}", fix.rationale);
+        for c in &fix.preview {
+            eprintln!("    - {}", c.note);
+        }
+        eprint!("    Apply this fix? [y/N] ");
+        std::io::stderr().flush().ok();
+        let mut line = String::new();
+        if std::io::stdin().read_line(&mut line).is_ok() && line.trim().eq_ignore_ascii_case("y") {
+            epubsana::Decision::Approve
+        } else {
+            epubsana::Decision::Reject
+        }
+    }
+}
+
+/// "2 fatal errors, 5 errors, 1 warning" — fatals named first and always,
+/// because a fatal-only book has no errors and is not remotely valid.
+fn severity_counts(fatals: usize, errors: usize, warnings: usize) -> String {
+    let n =
+        |count: usize, word: &str| format!("{count} {word}{}", if count == 1 { "" } else { "s" });
+    format!(
+        "{}, {}, {}",
+        n(fatals, "fatal error"),
+        n(errors, "error"),
+        n(warnings, "warning")
+    )
+}
+
+/// Print a human-readable report of a repair run.
+fn print_repair_report(
+    passes: &[epubsana::ChangeReport],
+    report: &epubsana::ChangeReport,
+    written: Option<&Path>,
+    args: &RepairArgs,
+    interactive: bool,
+) {
+    use epubsana::Outcome;
+
+    let goal = report.goal.as_str();
+    if report.fixes.is_empty() {
+        if report.goal_met {
+            println!("[=] Nothing to repair: this EPUB already meets the goal '{goal}'.");
+        } else {
+            println!(
+                "[=] Nothing epublift can repair safely: {}, and none has a fix that \
+                 is certain to be right. No file was written; `epublift check` lists them.",
+                severity_counts(
+                    report.fatals_before,
+                    report.errors_before,
+                    report.warnings_before
+                )
+            );
+        }
         return;
     }
-    if report.duplicate_spine_itemrefs > 0 {
+
+    let mut index = 0;
+    for (n, pass) in passes.iter().enumerate() {
+        if n > 0 {
+            println!(
+                "\n  Pass {}: the fixes above let epubveri check part of the book it could \
+                 not check before, and it found {} more finding(s) that were always there.",
+                n + 1,
+                passes[n - 1].revealed
+            );
+        }
+        for f in &pass.fixes {
+            index += 1;
+            let outcome = match f.outcome {
+                Outcome::Applied => "fixed",
+                Outcome::Skipped => "skipped",
+                Outcome::Proposed => "would fix",
+                Outcome::Reverted => "undone",
+            };
+            let decision = match f.tier {
+                epubsana::Tier::ConfirmNeeded => " (needs a decision)",
+                epubsana::Tier::AutoSafe => "",
+            };
+            println!("  [{index}] {outcome}{decision}: {}", f.title);
+            if let Some((id, rule)) = f.reverted_for {
+                let rule = rule.map(|r| format!(" ({r})")).unwrap_or_default();
+                println!("      undone because it added a {id}{rule} finding");
+            }
+            // A skipped fix changed nothing, so its title is all there is to say.
+            if f.outcome != Outcome::Skipped {
+                for c in &f.changes {
+                    println!("      - {}", c.note);
+                }
+            }
+        }
+    }
+
+    println!(
+        "\n  Before: {}\n  After:  {}",
+        severity_counts(
+            report.fatals_before,
+            report.errors_before,
+            report.warnings_before
+        ),
+        severity_counts(
+            report.fatals_after,
+            report.errors_after,
+            report.warnings_after
+        ),
+    );
+
+    let skipped = report.skipped().count();
+    if skipped > 0 && !interactive && !args.yes && !args.dry_run {
         println!(
-            "  - {} duplicate spine itemref(s) removed",
-            report.duplicate_spine_itemrefs
+            "\n[i] {skipped} fix(es) need a decision and were skipped, because there is no \
+             terminal to ask in. Run in a terminal to be asked, or pass --yes to apply them."
         );
     }
-    if report.empty_metadata_dropped > 0 {
+    if report.revealed > 0 {
         println!(
-            "  - {} empty/legacy metadata element(s) removed",
-            report.empty_metadata_dropped
+            "\n[i] The last pass let epubveri check more of the book and it found {} more \
+             finding(s). Run `epublift repair` again on the output to repair the ones it can.",
+            report.revealed
         );
     }
-    if report.dangling_manifest_items > 0 {
-        println!(
-            "  - {} dangling manifest item(s) removed",
-            report.dangling_manifest_items
-        );
+
+    match written {
+        Some(out) if args.dry_run => println!("\n[=] Dry run: would write {}", out.display()),
+        Some(out) => println!("\n[+] Wrote repaired EPUB to: {}", out.display()),
+        None if args.dry_run => println!("\n[=] Dry run: nothing would be written."),
+        None => println!("\n[=] No fix was applied, so no file was written."),
     }
-    if report.dangling_spine_itemrefs > 0 {
+    if report.goal_met {
+        println!("[+] Goal '{goal}' met.");
+    } else {
+        let book = if written.is_some() && !args.dry_run {
+            "the output"
+        } else {
+            "the book"
+        };
         println!(
-            "  - {} dangling spine itemref(s) removed",
-            report.dangling_spine_itemrefs
+            "[!] Goal '{goal}' not met: what remains needs a person to decide. \
+             `epublift check` on {book} lists it."
         );
-    }
-    for f in &report.findings {
-        println!("    · {}", f.detail);
     }
 }
 
