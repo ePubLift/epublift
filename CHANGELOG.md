@@ -10,7 +10,17 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
-### Changed (web)
+### Removed
+- **The library's `epublift::repair` module, with `plan_repair` and
+  `write_repaired`.** Both the command line (since cli-v3.0.0) and the web page
+  (since web-v1.21.0) repair with epubsana, so nothing calls them. They were
+  never documented and the crate is not published; code that called them
+  through a git dependency should use epubsana's `repair()` instead. The CLI
+  itself does not change.
+
+## [web-v1.21.0] - 2026-10-01
+
+### Changed
 - **The Repair mode runs epubsana in the browser**, the repairer `epublift
   repair` runs since cli-v3.0.0, in place of the old three-fix repair on the
   server. The book is never uploaded. Drop an `.epub` and click **Find fixes**:
@@ -25,14 +35,11 @@ are tagged with the component they belong to.
   languages; the fixes' titles and reasons are epubsana's, in English.
 
 ### Removed
-- **The old three-fix repair is gone.** The web server's `POST /repair`
-  endpoint, which the Repair page no longer calls, and the library's
-  `epublift::repair` module with `plan_repair` and `write_repaired`. Both the
-  command line (since cli-v3.0.0) and the web page now repair with epubsana. The
-  library functions were never documented; code that called them through a git
-  dependency should use epubsana's `repair()` instead.
+- **The server's `POST /repair` endpoint**, which the Repair page no longer
+  calls; it now answers 404. Anyone who scripted against it can run
+  `epublift repair` (cli-v3.0.0), which applies the same repair.
 
-### Fixed (web)
+### Fixed
 - **The privacy and beta notes in Validate no longer split into columns.** A note
   whose translation held bold text or a link rendered each piece as its own
   column; its text is now one line of prose, as in Repair's new note.
