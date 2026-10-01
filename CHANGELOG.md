@@ -10,6 +10,15 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+### Fixed
+- **Repair no longer deletes a book's description.** The web Repair mode, and
+  `epublift repair` up to cli-v2.3.0, dropped a `dc:description` whose text sat
+  in child elements (`<dc:description><p>…</p></dc:description>`) as if it were
+  empty: it read only the element's first text node, which there is just a line
+  break. Three of the 544 test-shelf books lost a description of 800 to 1,400
+  characters this way. An element that holds markup is now never empty, and a
+  no-break space counts as content, as epubcheck counts it.
+
 ### Changed
 - **`epublift repair` now runs epubsana**, the veripublica family's repairer,
   in place of epublift's own three OPF fixes. It fixes what `check` finds

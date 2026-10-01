@@ -113,8 +113,9 @@ A **Repair** mode sits between Validate and Archive: drop an `.epub`, click
 
 1. **Duplicate spine itemrefs**, keeping the first occurrence.
 2. **Empty or legacy metadata**: Dublin Core elements with no text, and any
-   `<meta refines>` that describes them. It never leaves a book with no title,
-   identifier or language.
+   `<meta refines>` that describes them. An element that holds markup, such as
+   a description written as `<p>` paragraphs, is never treated as empty. It
+   never leaves a book with no title, identifier or language.
 3. **Dangling references**: manifest items whose file is not in the archive,
    and spine entries that point at no manifest item.
 

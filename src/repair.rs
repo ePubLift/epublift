@@ -264,11 +264,8 @@ fn plan_repairs(
             REQUIRED_DC.iter().map(|n| (*n, 0)).collect();
         for child in metadata.children().filter(|n| n.is_element()) {
             let name = child.tag_name().name();
-            if REQUIRED_DC.contains(&name) {
-                let empty = child.text().map(|t| t.trim().is_empty()).unwrap_or(true);
-                if !empty {
-                    *non_empty_count.entry(name).or_insert(0) += 1;
-                }
+            if REQUIRED_DC.contains(&name) && !is_empty_element(child) {
+                *non_empty_count.entry(name).or_insert(0) += 1;
             }
         }
 
@@ -277,8 +274,7 @@ fn plan_repairs(
             if !DC_ELEMENTS.contains(&name) {
                 continue;
             }
-            let empty = child.text().map(|t| t.trim().is_empty()).unwrap_or(true);
-            if !empty {
+            if !is_empty_element(child) {
                 continue;
             }
             let id = child.attribute("id").unwrap_or("");
@@ -328,6 +324,23 @@ fn plan_repairs(
 }
 
 /// Local (namespace-stripped) name of an XML element.
+/// Whether a metadata element carries nothing: no child element, and no text
+/// beyond XML whitespace (epubveri's `is_xml_blank`, which matches epubcheck —
+/// a no-break space is content). roxmltree's `text()` is only the *first* text
+/// child, so `<dc:description>⏎<p>…</p></dc:description>` used to read as
+/// empty and the book's description was deleted (3 of the 544 shelf books).
+fn is_empty_element(node: roxmltree::Node) -> bool {
+    node.children().all(|c| {
+        if c.is_element() {
+            false
+        } else if c.is_text() {
+            epubveri::xmlext::is_xml_blank(c.text().unwrap_or(""))
+        } else {
+            true // a comment or processing instruction is not content
+        }
+    })
+}
+
 fn local_name(q: QName) -> String {
     let s: &str = q.as_ref();
     match s.rsplit_once(':') {
@@ -518,6 +531,32 @@ mod tests {
         assert!(!xml.contains("dc:date"));
         assert!(!xml.contains("dc:publisher"));
         assert!(xml.contains("<dc:title>A Clean Book</dc:title>"));
+    }
+
+    #[test]
+    fn keeps_metadata_whose_content_is_markup() {
+        // The shape that lost three shelf books their description: the text
+        // sits in child elements, after a whitespace-only first text node.
+        let opf = OPF_CLEAN.replace(
+            "<dc:language>en</dc:language>",
+            "<dc:language>en</dc:language>\n    <dc:description>\n      <p>A blurb.</p>\n    </dc:description>",
+        );
+        let zip = base_entries();
+        let (xml, report) = repair_opf(&opf, "OEBPS/content.opf", &zip).unwrap();
+        assert_eq!(report.empty_metadata_dropped, 0);
+        assert!(xml.contains("<p>A blurb.</p>"));
+    }
+
+    #[test]
+    fn keeps_metadata_whose_only_content_is_a_no_break_space() {
+        // epubcheck does not call U+00A0 blank, so neither do we.
+        let opf = OPF_CLEAN.replace(
+            "<dc:language>en</dc:language>",
+            "<dc:language>en</dc:language>\n    <dc:publisher>\u{a0}</dc:publisher>",
+        );
+        let zip = base_entries();
+        let (_xml, report) = repair_opf(&opf, "OEBPS/content.opf", &zip).unwrap();
+        assert_eq!(report.empty_metadata_dropped, 0);
     }
 
     #[test]
