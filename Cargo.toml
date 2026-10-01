@@ -106,7 +106,7 @@ epubveri = "0.20.0"
 # core `repair()` — the same function `epubsana` and its browser build run — so
 # a book repaired here and there comes back identical. Pure Rust, on the same
 # epubveri, zip 8 and roxmltree 0.21 as we are. See docs/repair.md.
-epubsana = "0.21.0"
+epubsana = "0.22.0"
 # `--format json` on `check` and `repair`: the shared veripublica envelope.
 # epubsana already links it, so it costs the default build nothing.
 serde_json = "1"

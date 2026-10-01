@@ -983,9 +983,9 @@ dependencies = [
 
 [[package]]
 name = "epubsana"
-version = "0.21.0"
+version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d473db644362090262c9fa41e08ddf725baf6418c4652bf053941ca53b33abb"
+checksum = "a7d303269941d58cb756c4050e4f7f904263ee053a60981609993635c242cdb3"
 dependencies = [
  "epubveri",
  "roxmltree",
