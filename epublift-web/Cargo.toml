@@ -38,7 +38,7 @@ name = "epublift-web"
 # client-forgeable X-Forwarded-For entry; faster Archive mode; quick-xml 0.42.
 # 1.18.0 names the CLI release the page runs in the footer ("web · cli ·
 # @commit") and in /version, and the in-browser validator in Validate results.
-version = "1.22.0"
+version = "1.22.1"
 edition = "2024"
 license = "AGPL-3.0-or-later"
 description = "Web front-end for epublift: convert, archive, restore & edit EPUB metadata in the browser"

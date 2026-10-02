@@ -61,15 +61,15 @@ docker run -d --name epublift-web \
 ```
 
 Then open <http://127.0.0.1:8080>. Pin a specific version with a tag instead of
-`latest`, e.g. `ghcr.io/epublift/epublift-web:1.22.0`. The image is a static musl
+`latest`, e.g. `ghcr.io/epublift/epublift-web:1.22.1`. The image is a static musl
 binary on Alpine, runs as a non-root user, and is about 23 MB.
 
 To see what a running instance is, ask it — the page footer shows the same
-(`web 1.22.0 · cli 3.1.0 · @8959de4`):
+(`web 1.22.1 · cli 3.1.1 · @c332a84`):
 
 ```bash
 curl -s http://127.0.0.1:8080/version
-# {"version":"1.22.0","engine":"3.1.0","epubveri":"0.21.0","commit":"8959de4"}
+# {"version":"1.22.1","engine":"3.1.1","epubveri":"0.21.0","commit":"c332a84"}
 ```
 
 `version` is the web release; `engine` is the epublift library it runs — the

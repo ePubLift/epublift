@@ -1352,21 +1352,21 @@ fn run_archive(args: &ArchiveArgs) -> Result<()> {
         total_in += stats.original_size;
         total_out += stats.archive_size;
         println!(
-            "[+] {} -> {} ({:.1}% smaller; {} compressed + {} stored)",
+            "[+] {} -> {} ({}; {} compressed + {} stored)",
             file_name(epub),
             file_name(&out),
-            stats.percent_saved(),
+            size_change(stats.percent_saved()),
             stats.compressed_entries,
             stats.stored_entries,
         );
     }
     if epubs.len() > 1 {
         println!(
-            "[=] {} books: {:.2} MB -> {:.2} MB ({:.1}% smaller)",
+            "[=] {} books: {:.2} MB -> {:.2} MB ({})",
             epubs.len(),
             total_in as f64 / 1024.0 / 1024.0,
             total_out as f64 / 1024.0 / 1024.0,
-            saved_pct(total_in, total_out),
+            size_change(saved_pct(total_in, total_out)),
         );
     }
     Ok(())
@@ -1572,6 +1572,17 @@ fn sibling_path(path: &Path, new_ext: &str, out_dir: Option<&Path>) -> PathBuf {
 #[cfg(feature = "archival")]
 fn file_name(path: &Path) -> std::borrow::Cow<'_, str> {
     path.file_name().unwrap_or_default().to_string_lossy()
+}
+
+/// "2.0% smaller" or, when the output grew, "2.0% larger" — never a negative
+/// "smaller".
+#[cfg(feature = "archival")]
+fn size_change(saved_pct: f64) -> String {
+    if saved_pct < 0.0 {
+        format!("{:.1}% larger", -saved_pct)
+    } else {
+        format!("{saved_pct:.1}% smaller")
+    }
 }
 
 #[cfg(feature = "archival")]

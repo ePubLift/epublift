@@ -10,6 +10,25 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+## [cli-v3.1.1] - 2026-10-02
+
+### Fixed
+- **An `.eparc` that came out larger than its EPUB was reported as a negative
+  saving.** `epublift archive` printed "-2.0% smaller"; it now says "2.0%
+  larger", for each book and for the total. Seen on a book whose JPEGs carry
+  several megabytes of embedded metadata: the EPUB had deflated them, and
+  `.eparc` stores images as they are.
+
+## [web-v1.22.1] - 2026-10-02
+
+### Changed
+- **Archive and Restore are marked Experimental**, like Import: each tab's
+  description now opens with "Experimental." (all 13 languages).
+
+### Fixed
+- **An `.eparc` larger than its EPUB showed as "You saved -2%".** The result
+  now reads "Larger by +2.0%", in all 13 languages.
+
 ## [cli-v3.1.0] - 2026-10-02
 
 ### Changed

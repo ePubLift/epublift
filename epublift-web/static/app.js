@@ -261,7 +261,15 @@ function setLabel(el, key){ el.setAttribute('data-i18n', key); el.textContent = 
 function fillStats(beforeBytes, afterBytes, savedPct){
   document.getElementById('sBefore').textContent = fmtBytes(beforeBytes);
   document.getElementById('sAfter').textContent  = fmtBytes(afterBytes);
-  document.getElementById('sSaved').textContent  = Math.round(savedPct) + '%';
+  // A grown file (an .eparc can outgrow its EPUB) is said as such, never as a
+  // negative saving.
+  const grew = afterBytes > beforeBytes;
+  const sSaved = document.getElementById('sSaved');
+  if (grew) setLabel(labSaved, 'stat_grew');
+  sSaved.classList.toggle('save', !grew);
+  sSaved.textContent = grew
+    ? '+' + ((afterBytes / beforeBytes - 1) * 100).toFixed(1) + '%'
+    : Math.round(savedPct) + '%';
   const frac = beforeBytes > 0 ? Math.max(4, Math.min(100, afterBytes / beforeBytes * 100)) : 100;
   document.getElementById('sBar').style.width = frac + '%';
 }
