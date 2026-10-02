@@ -10,6 +10,23 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+## [cli-v3.1.0] - 2026-10-02
+
+### Changed
+- **`epublift check` runs epubveri 0.21.0 and `epublift repair` runs epubsana
+  0.23.0.** A CSS syntax error (CSS-008) now says what is wrong and quotes it
+  — `'margin' is not followed by ':'`, `'{' is never closed`, `invalid
+  selector 'img . portrait' at '.'` — where it read only "CSS syntax error".
+  Two CSS false positives are gone (a quoted or parenthesised unquoted `url()`
+  naming a real file; a declaration directly in `@media`), and a rule inside
+  `@font-face` or a value holding `{ }` is now a CSS-008, as in epubcheck, so
+  such a book can fail where it passed. Reports come out in the same order on
+  every run, and a stylesheet with very many findings is checked much faster.
+  Measured on 544 books, cli-v3.0.0 vs this release: the same findings,
+  statuses and exit codes on every book, 24 CSS-008 messages in 12 books
+  reworded; `repair --dry-run` output identical on all 544.
+- **Minimum supported Rust is 1.97** (latest stable − 2).
+
 ### Removed
 - **The library's `epublift::repair` module, with `plan_repair` and
   `write_repaired`.** Both the command line (since cli-v3.0.0) and the web page
@@ -17,6 +34,17 @@ are tagged with the component they belong to.
   never documented and the crate is not published; code that called them
   through a git dependency should use epubsana's `repair()` instead. The CLI
   itself does not change.
+
+## [web-v1.22.0] - 2026-10-02
+
+### Changed
+- **Validate runs epubveri 0.21.0 and Repair runs epubsana 0.23.0** in the
+  browser, the same versions as cli-v3.1.0 (`vendor/VENDOR.md`). CSS syntax
+  errors (CSS-008) now say what is wrong and quote it, two CSS false positives
+  are gone, and a rule inside `@font-face` or a value holding `{ }` is now an
+  error, as in epubcheck. A stylesheet with very many findings is checked much
+  faster, which is felt most in the browser. On 544 books the browser's
+  Validate and `epublift check` give the same report for every book.
 
 ## [web-v1.21.0] - 2026-10-01
 
