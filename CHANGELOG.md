@@ -10,6 +10,39 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+## [cli-v3.2.0] - 2026-10-08
+
+### Changed
+- **`epublift check` runs epubveri 0.23.0 and `epublift repair` runs epubsana
+  0.24.0.** A malformed content document, SVG or package document now also
+  reports what came before the break, as epubcheck does; an empty or broken
+  SVG is RSC-016; stray text in package metadata is RSC-005; EPUB 2 SVG and
+  XHTML-in-SVG follow epubcheck's rules; some EPUB 3 package `<meta>`/`link`
+  cases are now RSC-005 or OPF-093. None of these touch a book epubcheck calls
+  valid. Measured on 544 books, cli-v3.1.1 vs this release: the same findings,
+  statuses and exit codes on every book.
+
+### Fixed
+- **`repair` no longer strips a no-break space when it wraps stray text in a
+  `<div>`.** epubveri now reads a no-break space as text, as epubcheck does,
+  so the old wrap left new stray-text errors behind. On 544 books the planned
+  fixes change in 3, and each comes out of repair with fewer errors than
+  before — one with 26 errors where it had 2,128.
+- **`repair` no longer crashes on an href with `%` before a non-ASCII letter**
+  (`%Bölüm.xhtml`); the href is left as written.
+
+## [web-v1.23.0] - 2026-10-08
+
+### Changed
+- **Validate runs epubveri 0.23.0 and Repair runs epubsana 0.24.0** in the
+  browser, the same versions as cli-v3.2.0 (`vendor/VENDOR.md`), with the same
+  validator changes. On 544 books the browser's Validate and `epublift check`
+  give the same report for every book.
+
+### Fixed
+- **Repair keeps no-break spaces** when it wraps stray text, and no longer
+  stops on an href with `%` before a non-ASCII letter (see cli-v3.2.0).
+
 ## [cli-v3.1.1] - 2026-10-02
 
 ### Fixed

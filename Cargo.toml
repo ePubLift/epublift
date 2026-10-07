@@ -7,7 +7,7 @@ resolver = "2"
 
 [package]
 name = "epublift"
-version = "3.1.1"
+version = "3.2.0"
 edition = "2024"
 license = "AGPL-3.0-or-later"
 description = "Modernize and optimize EPUB files — upgrade structure and re-encode images"
@@ -101,12 +101,12 @@ rten = { version = "0.26", optional = true }
 # hostile document is declined instead of aborting the process. The validator
 # itself (`epublift check`) stays behind the opt-in `validate` feature; see
 # docs/validate.md.
-epubveri = "0.21.0"
+epubveri = "0.23.0"
 # epubsana, the family's confirm-each-step repairer: `epublift repair` runs its
 # core `repair()` — the same function `epubsana` and its browser build run — so
 # a book repaired here and there comes back identical. Pure Rust, on the same
 # epubveri, zip 8 and roxmltree 0.21 as we are. See docs/repair.md.
-epubsana = "0.23.0"
+epubsana = "0.24.0"
 # `--format json` on `check` and `repair`: the shared veripublica envelope.
 # epubsana already links it, so it costs the default build nothing.
 serde_json = "1"
