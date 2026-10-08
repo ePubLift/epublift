@@ -19,6 +19,7 @@
 //! The CLI (`src/main.rs`) is a thin front-end over [`convert`]. Library callers
 //! build [`Options`], call [`convert`], and inspect the returned [`Report`].
 
+pub mod cover;
 #[cfg(feature = "metadata")]
 pub mod enrich;
 #[cfg(feature = "archival")]
@@ -295,7 +296,7 @@ pub fn default_output_path(input: &Path, options: &Options) -> PathBuf {
 
 /// The OPF package document's entry name inside an open EPUB archive (from
 /// `META-INF/container.xml`).
-fn opf_entry_name(zip: &mut ZipArchive<File>) -> Result<String> {
+fn opf_entry_name<R: io::Read + io::Seek>(zip: &mut ZipArchive<R>) -> Result<String> {
     let container = {
         let mut e = zip
             .by_name("META-INF/container.xml")
@@ -336,6 +337,23 @@ pub fn read_metadata(epub: &Path) -> Result<meta::Metadata> {
     meta::parse_metadata(&xml)
 }
 
+/// Read the cover image `epub` declares, if any. The input is never modified.
+pub fn read_cover(epub: &Path) -> Result<Option<cover::CurrentCover>> {
+    let file = File::open(epub).with_context(|| format!("EPUB not found: {}", epub.display()))?;
+    let mut zip = ZipArchive::new(file).context("Input is not a valid EPUB (zip) archive")?;
+    let opf_name = opf_entry_name(&mut zip)?;
+    let entries = read_entries(&mut zip)?;
+    cover::current_cover(&entries, &opf_name)
+}
+
+/// The result of [`write_metadata_and_cover`].
+#[derive(Debug)]
+pub struct MetadataWrite {
+    pub metadata: meta::Metadata,
+    /// What changed about the cover, when a new one was given.
+    pub cover: Option<cover::CoverChange>,
+}
+
 /// Apply a metadata `update` to `input`, writing the result to `output` (the
 /// input is never modified). Only the OPF entry is rewritten; every other entry
 /// is copied through. Returns the resulting metadata for display.
@@ -344,58 +362,120 @@ pub fn write_metadata(
     update: &meta::MetadataUpdate,
     output: &Path,
 ) -> Result<meta::Metadata> {
-    let file = File::open(input).with_context(|| format!("EPUB not found: {}", input.display()))?;
-    let mut zip = ZipArchive::new(file).context("Input is not a valid EPUB (zip) archive")?;
+    Ok(write_metadata_and_cover(input, update, None, output)?.metadata)
+}
+
+/// [`write_metadata`], and when `new_cover` is given, make it the book's cover
+/// (see [`cover::apply_cover`]). A cover change is checked: if the result has
+/// more fatal errors and errors than the input, nothing is written.
+pub fn write_metadata_and_cover(
+    input: &Path,
+    update: &meta::MetadataUpdate,
+    new_cover: Option<&cover::CoverImage>,
+    output: &Path,
+) -> Result<MetadataWrite> {
+    let original =
+        fs::read(input).with_context(|| format!("EPUB not found: {}", input.display()))?;
+    let mut zip = ZipArchive::new(io::Cursor::new(&original))
+        .context("Input is not a valid EPUB (zip) archive")?;
     let opf_name = opf_entry_name(&mut zip)?;
+    let mut entries = read_entries(&mut zip)?;
+    drop(zip);
 
-    let opf_xml = {
-        let mut s = String::new();
-        zip.by_name(&opf_name)
-            .with_context(|| format!("OPF package document not found in EPUB: {opf_name}"))?
-            .read_to_string(&mut s)?;
-        s
+    let cover_change = match new_cover {
+        Some(c) => Some(cover::apply_cover(&mut entries, &opf_name, c)?),
+        None => None,
     };
-    let modified_ts = Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
-    let new_opf = meta::apply_update(&opf_xml, update, &modified_ts)?;
 
-    let out =
-        File::create(output).with_context(|| format!("Failed to create {}", output.display()))?;
-    let mut writer = ZipWriter::new(out);
-    let stored = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
-    let deflated = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
+    let opf_xml = entries
+        .iter()
+        .find(|(n, _)| *n == opf_name)
+        .map(|(_, b)| String::from_utf8_lossy(b).into_owned())
+        .with_context(|| format!("OPF package document not found in EPUB: {opf_name}"))?;
+    // A cover-only change leaves the metadata alone, except that EPUB 3's
+    // `dcterms:modified` is refreshed; EPUB 2 has no such field.
+    let refresh_only = update.is_empty() && cover_change.is_some();
+    let epub3 = meta::parse_metadata(&opf_xml)?
+        .epub_version
+        .is_some_and(|v| v.trim_start().starts_with('3'));
+    let new_opf = if refresh_only && !epub3 {
+        opf_xml
+    } else {
+        let modified_ts = Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
+        meta::apply_update(&opf_xml, update, &modified_ts)?
+    };
+    let metadata = meta::parse_metadata(&new_opf)?;
+    if let Some(e) = entries.iter_mut().find(|(n, _)| *n == opf_name) {
+        e.1 = new_opf.into_bytes();
+    }
 
-    // mimetype first, stored.
-    let mimetype = match zip.by_name("mimetype") {
-        Ok(mut e) => {
-            let mut b = Vec::new();
-            e.read_to_end(&mut b)?;
-            b
+    let bytes = zip_entries(&entries)?;
+    if cover_change.is_some() {
+        // Never make a book worse: the cover goes in only if the book has no
+        // more fatal errors and errors than before.
+        let count = |b: Vec<u8>| {
+            let r = epubveri::validate_bytes(b);
+            r.fatals() + r.errors()
+        };
+        let (before, after) = (count(original), count(bytes.clone()));
+        if after > before {
+            bail!(
+                "changing the cover would leave the book with {after} error(s) where it had \
+                 {before}, so nothing was written"
+            );
         }
-        Err(_) => b"application/epub+zip".to_vec(),
-    };
-    writer.start_file("mimetype", stored)?;
-    io::Write::write_all(&mut writer, &mimetype)?;
+    }
+    fs::write(output, &bytes).with_context(|| format!("Failed to create {}", output.display()))?;
+    Ok(MetadataWrite {
+        metadata,
+        cover: cover_change,
+    })
+}
 
-    // Everything else deflated, with the OPF entry swapped for the rewritten XML.
+/// Every file entry of an EPUB, in archive order, held in memory — with the
+/// same entry-count and decompressed-size limits as [`extract_epub`].
+fn read_entries<R: io::Read + io::Seek>(zip: &mut ZipArchive<R>) -> Result<cover::Entries> {
+    if zip.len() > MAX_ARCHIVE_ENTRIES {
+        bail!(
+            "EPUB has too many entries ({}); refusing to read it.",
+            zip.len()
+        );
+    }
+    let mut budget: u64 = MAX_TOTAL_UNCOMPRESSED;
+    let mut entries = Vec::with_capacity(zip.len());
     for i in 0..zip.len() {
         let mut entry = zip.by_index(i)?;
-        let name = entry.name().to_string();
-        if name == "mimetype" || entry.is_dir() {
+        if entry.is_dir() {
             continue;
         }
-        let data = if name == opf_name {
-            new_opf.clone().into_bytes()
-        } else {
-            let mut b = Vec::new();
-            entry.read_to_end(&mut b)?;
-            b
-        };
-        writer.start_file(name, deflated)?;
-        io::Write::write_all(&mut writer, &data)?;
+        let name = entry.name().to_string();
+        let mut data = Vec::new();
+        let read = entry.by_ref().take(budget + 1).read_to_end(&mut data)? as u64;
+        if read > budget {
+            bail!("EPUB is too large when decompressed (possible zip bomb).");
+        }
+        budget -= read;
+        entries.push((name, data));
     }
-    writer.finish()?;
+    Ok(entries)
+}
 
-    meta::parse_metadata(&new_opf)
+/// Zip `entries` as an EPUB: `mimetype` first and stored, the rest deflated.
+fn zip_entries(entries: &cover::Entries) -> Result<Vec<u8>> {
+    let mut writer = ZipWriter::new(io::Cursor::new(Vec::new()));
+    let stored = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
+    let deflated = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
+    let mimetype = entries
+        .iter()
+        .find(|(n, _)| n == "mimetype")
+        .map_or(&b"application/epub+zip"[..], |(_, b)| b.as_slice());
+    writer.start_file("mimetype", stored)?;
+    io::Write::write_all(&mut writer, mimetype)?;
+    for (name, data) in entries.iter().filter(|(n, _)| n != "mimetype") {
+        writer.start_file(name.as_str(), deflated)?;
+        io::Write::write_all(&mut writer, data)?;
+    }
+    Ok(writer.finish()?.into_inner())
 }
 
 /// Modernize `input` and write an optimized EPUB.

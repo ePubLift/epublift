@@ -335,7 +335,7 @@ const MAX_IMAGE_DIM: u32 = 16_384;
 const MAX_IMAGE_ALLOC: u64 = 512 * 1024 * 1024; // 512 MiB
 
 /// Decode an in-memory image, enforcing the decode-bomb limits.
-fn decode_image(bytes: &[u8]) -> Result<DynamicImage> {
+pub(crate) fn decode_image(bytes: &[u8]) -> Result<DynamicImage> {
     let mut reader = image::ImageReader::new(Cursor::new(bytes)).with_guessed_format()?;
     let mut limits = image::Limits::default();
     limits.max_image_width = Some(MAX_IMAGE_DIM);

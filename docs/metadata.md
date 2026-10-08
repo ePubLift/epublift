@@ -42,6 +42,19 @@ A Turkish book gets Turkish metadata; a Korean book gets Korean metadata. We do
 - **Fields whose language ≠ the book's `dc:language` are skipped by default.** So
   English subjects/description never land in a Turkish book. Override with
   `--allow-foreign-meta`.
+- **Subjects are offered, never written unasked.** "Usually English" does not
+  hold for subjects: Open Library merges the headings of every library that
+  catalogued the book, in that library's language, with no language tag — for
+  an English programming book (ISBN 9780137909100) it returns German
+  (`Datenverarbeitung`, `Einführung`) and Dutch (`Coderingstheorie`) headings
+  next to the Library of Congress ones. Short headings cannot be told apart by
+  language (`Hardware` and `Computers` are German too), so the CLI lists them
+  and writes them only with `--include-subjects`, and the web form shows them
+  as tick boxes, none ticked.
+- **Catalogue text is cleaned:** HTML entities decoded (`Computers &amp; the
+  internet`), Unicode composed (NFC), and duplicate subjects dropped — compared
+  without case, accents and spaces, since the same heading also arrives broken
+  (`Einfu hrung` next to `Einführung`).
 - If the matched edition's language disagrees with the book's `dc:language`, the
   tool **warns** (the ISBN may point at a different-language edition).
 - If the book has no `dc:language`, `enrich` requires `--lang <BCP-47>` or aborts
@@ -78,7 +91,8 @@ auto path fetches `/isbn/<isbn>.json` (edition) and then follows `works[0].key`.
 | **F. Accessibility** *(phase 2)* | accessMode / accessibilityFeature / Hazard / Summary / conformsTo | `meta property="schema:…"` | not in OL → manual / smart default |
 | **G. Rights** | Rights / licence | `dc:rights` | manual |
 
-Always refreshed: **`dcterms:modified`**. Page count (`number_of_pages`) is *not*
+Refreshed on every edit of an **EPUB 3** book: **`dcterms:modified`** (EPUB 2
+has no such field). Page count (`number_of_pages`) is *not*
 a standard reflowable-EPUB field — shown for information, never written.
 
 First release scope: **A + B + C + D**. Groups **E + F** are phase 2.
@@ -95,18 +109,53 @@ refinement, already handled in `opf.rs`), and the package-level `<collection>`
 element became "obsolete but conforming" (unrelated to the `belongs-to-collection`
 meta property we use for series). See [`docs/epub-3.4.md`](epub-3.4.md).
 
+### EPUB 2: written in EPUB 2's own syntax
+
+EPUB 2 has no `refines`, no `property` metas and no `dcterms:modified`; writing
+them is an error there (RSC-005). An EPUB 2 book is written the OPF 2 way:
+
+| Field | EPUB 3 | EPUB 2 |
+| --- | --- | --- |
+| Title | `dc:title` + `title-type` main | `dc:title` |
+| Subtitle | `dc:title` + `title-type` subtitle | **refused** — EPUB 2 has no subtitle field; put it in the title, or upgrade the book first |
+| Author | `dc:creator` + `role` / `file-as` / `display-seq` refinements | `dc:creator opf:role opf:file-as` |
+| ISBN | `dc:identifier` `urn:isbn:…` | `dc:identifier opf:scheme="ISBN"` |
+| Series | `belongs-to-collection` + `group-position` | `calibre:series` / `calibre:series_index` metas |
+| Modified | `dcterms:modified` refreshed | — |
+
+Two rules hold for both versions:
+
+- **A field whose value the book already has is not touched.** The web form
+  sends every field it shows; re-writing an unchanged one would lose what the
+  form does not carry (a second `dc:language`, the markup of an existing ISBN).
+- **An author who stays keeps their role and sort name** (`file-as`), matched by
+  name in order, so a translator listed as a creator is not turned into an
+  author.
+
+Prefixes are taken from the book: Calibre 0.7 wrote the OPF namespace as `ns0:`
+and declared Dublin Core on each element, and the writer follows that instead of
+assuming `dc:` and `opf:`.
+
+Measured on our 544-book shelf (before → after this rule set, cli-v3.2.0 →
+next): re-writing a book's title made **457 of 457 EPUB 2 books** invalid (2,285
+RSC-005) and failed outright on 6; now re-saving every field with its own value
+changes nothing on any book, a real edit (title, authors, publisher, series,
+ISBN) adds no error on any book, and every author keeps role and sort name.
+
 ## CLI
 
 ```
-epublift meta show   book.epub                       # print current metadata (table; --format metadata for JSON)
+epublift meta show   book.epub                       # print current metadata and the cover (table; --format metadata for JSON)
 
 epublift meta set    --title "…" --author "…" \      # manual edit (repeatable flags for multi-valued fields)
-                     --subject "…" --series "…:1" book.epub
+                     --subject "…" --series "…:1" \
+                     [--cover new.jpg] book.epub      # --cover: make this JPEG/PNG the cover
 
 epublift meta enrich --isbn 9780… [--lang tr] \      # auto-fill missing fields from a provider
                      [--provider openlibrary] \
                      [--dry-run] [--overwrite] [--allow-foreign-meta] \
-                     [--include-description] book.epub
+                     [--include-description] [--include-subjects] \
+                     [--cover] book.epub
 ```
 
 - `show` and `set` are always available and **offline**. `enrich` needs the
@@ -114,8 +163,47 @@ epublift meta enrich --isbn 9780… [--lang tr] \      # auto-fill missing field
 - `enrich` defaults to **fill-gaps + preview** (`--dry-run` shows the diff without
   writing). `--overwrite` replaces existing fields; `--allow-foreign-meta` keeps
   language-mismatched fields; `--include-description` opts the (often
-  publisher-authored) description in.
+  publisher-authored) description in; `--include-subjects` opts the subjects
+  in (they are listed either way).
+- `enrich` shows the catalogue's cover next to the book's own (sizes, and a
+  note when it is smaller); `--cover` makes it the book's cover.
+- `--series` takes `Name` or `Name:position`; the position starts with a digit
+  (`Dune:2`, `Dune:1-6`), so a colon inside a name stays in the name.
 - Output naming follows the project convention; the input is never mutated.
+
+## Cover
+
+`meta set --cover`, `meta enrich --cover` and the web form's Cover section
+replace the book's cover, or add one to a book that has none.
+
+- **JPEG or PNG, at most 10 MB, put in as given** — no re-encode, no resize
+  (Optimize shrinks it afterwards if wanted). Kobo shows no WebP cover in a
+  plain `.epub`, which is why the cover is not converted. The format is read
+  from the file's bytes, and the image must decode fully.
+- **What changes around it.** The declared cover's file is replaced (renamed
+  when the format changes, e.g. `cover.jpeg` → `cover.png`), and every
+  reference that *resolves* to it follows — pages, stylesheets, a `<guide>`
+  entry; a file with a similar name (`backcover.jpg`) is never touched. A cover
+  page that wraps the image in `<svg viewBox="0 0 W H">` (Calibre's) gets the
+  new image's size, or the new cover would be stretched to the old one's shape.
+- **A book with no declared cover** gets one: the image (`cover-image` in EPUB
+  3, `<meta name="cover">` in both), and a cover page first in the reading
+  order (with a viewport in a fixed-layout book). Existing pages are not
+  touched, even when the first one shows a picture.
+- **Checked:** if the result has more fatal errors and errors than the input,
+  nothing is written.
+- **Catalogue covers** are fetched by the server, from `covers.openlibrary.org`
+  and the Internet Archive only (the URL comes from the catalogue's JSON, so the
+  hosts are fixed), and shown to the browser as a `data:` URL — the browser
+  never contacts a catalogue. They are only offered: on our shelf Open Library
+  had a cover for 82 of 120 ISBNs, and it was smaller than the book's own in 62
+  of 80. Google Books covers are not offered yet.
+- **Kobo:** the library caches cover thumbnails; delete the old copy from the
+  device before copying the new one.
+
+Measured on the 544-book shelf with a 1200×1800 JPEG and a 1000×1500 PNG:
+every book got the new cover (512 replaced, 32 added), none has more errors
+than before, and all 405 SVG cover pages took the new size.
 
 ## Providers
 

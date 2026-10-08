@@ -608,6 +608,18 @@
           .m-status { font-size:12.5px; line-height:1.5; white-space:pre-wrap;
             font-family:"JetBrains Mono",monospace; color:var(--ink-soft); }
           .m-status .warn { color:#b4540a; }
+          .m-covers { display:flex; gap:12px; flex-wrap:wrap; }
+          .m-covers figure { margin:0; display:flex; flex-direction:column; gap:4px; width:110px; }
+          .m-covers img { width:110px; height:165px; object-fit:contain; border-radius:6px;
+            border:1px solid var(--ink-soft); background:var(--paper); }
+          .m-covers .m-nocover { width:110px; height:165px; border-radius:6px; border:1px dashed var(--ink-soft);
+            display:flex; align-items:center; justify-content:center; text-align:center;
+            font-size:12px; color:var(--ink-soft); padding:6px; box-sizing:border-box; }
+          .m-covers figcaption { font-size:12px; color:var(--ink-soft); line-height:1.3; }
+          .m-radio { display:flex; align-items:center; gap:8px; font-size:14px; color:var(--ink); }
+          .m-radio .btn-sm { padding:4px 12px; }
+          .m-subj-list { display:flex; flex-wrap:wrap; gap:6px 14px; margin-top:6px; }
+          .m-subj-list label { display:flex; align-items:center; gap:6px; font-size:13px; color:var(--ink); }
           .m-done { font-size:14px; }
           .m-done a { font-weight:700; color:var(--ink); }
         </style>
@@ -640,14 +652,31 @@
 
           <p class="opt-h" style="margin:6px 0 0" data-i18n="meta_details_h">Details</p>
           <label class="m-field"><span data-i18n="meta_f_title">Title</span><input id="m_title" class="m-input" /></label>
-          <label class="m-field"><span data-i18n="meta_f_subtitle">Subtitle</span><input id="m_subtitle" class="m-input" /></label>
+          <label class="m-field"><span data-i18n="meta_f_subtitle">Subtitle</span><input id="m_subtitle" class="m-input" /><small id="m_subtitle_epub2" class="m-status hide" data-i18n="meta_subtitle_epub2">EPUB 2 has no subtitle field. Put it in the title, or upgrade the book with Optimize first.</small></label>
           <label class="m-field"><span data-i18n="meta_f_authors">Authors (one per line)</span><textarea id="m_authors" class="m-input" rows="2"></textarea></label>
           <label class="m-field"><span data-i18n="meta_f_language">Language (BCP-47, e.g. tr, en, ko)</span><input id="m_language" class="m-input" /></label>
           <label class="m-field"><span data-i18n="meta_f_publisher">Publisher</span><input id="m_publisher" class="m-input" /></label>
           <label class="m-field"><span id="m_date_label" data-i18n="meta_f_date">Publication date</span><input id="m_date" class="m-input" /></label>
           <label class="m-field"><span data-i18n="meta_f_series">Series (Name or Name:position)</span><input id="m_series" class="m-input" /></label>
           <label class="m-field"><span data-i18n="meta_f_subjects">Subjects / tags (one per line)</span><textarea id="m_subjects" class="m-input" rows="2"></textarea></label>
+          <div id="m_subj_found" class="m-subjects hide"><div id="m_subj_h" class="m-status"></div><div id="m_subj_list" class="m-subj-list"></div></div>
           <label class="m-field"><span data-i18n="meta_f_description">Description</span><textarea id="m_description" class="m-input" rows="3"></textarea></label>
+
+          <p class="opt-h" style="margin:6px 0 0" data-i18n="meta_cover_h">Cover</p>
+          <div class="m-covers">
+            <figure><img id="mc_cur_img" class="hide" alt="" /><div id="mc_cur_none" class="m-nocover" data-i18n="meta_cover_none">No cover</div><figcaption id="mc_cur_cap"></figcaption></figure>
+            <figure id="mc_found_fig" class="hide"><img id="mc_found_img" alt="" /><figcaption id="mc_found_cap"></figcaption></figure>
+            <figure id="mc_own_fig" class="hide"><img id="mc_own_img" alt="" /><figcaption id="mc_own_cap"></figcaption></figure>
+          </div>
+          <label class="m-radio"><input type="radio" name="m_cover" value="keep" checked /> <span id="mc_keep_label" data-i18n="meta_cover_keep">Keep the current cover</span></label>
+          <label class="m-radio hide" id="mc_found_row"><input type="radio" name="m_cover" value="found" /> <span id="mc_found_label"></span></label>
+          <div id="mc_found_warn" class="m-status hide"><span class="warn" data-i18n="meta_cover_smaller">⚠ Smaller than the current cover.</span></div>
+          <label class="m-radio"><input type="radio" name="m_cover" value="own" /> <span data-i18n="meta_cover_own">Upload my own image</span>
+            <button type="button" class="btn-sm" id="mc_pick" data-i18n="meta_cover_pick">Choose…</button></label>
+          <input type="file" id="mc_file" accept="image/jpeg,image/png" class="hide" />
+          <div id="mc_msg" class="m-status"></div>
+          <div class="m-status" data-i18n="meta_cover_note">JPEG or PNG, up to 10 MB. The image goes in as it is; Optimize can shrink it later.</div>
+
           <button class="cta" id="m_save" style="margin-top:8px;width:100%">
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M9 15V3M9 3L4 8M9 3l5 5" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
             <span data-i18n="meta_save">Save &amp; download</span>

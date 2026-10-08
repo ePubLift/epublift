@@ -124,6 +124,37 @@ impl Http for RustlsHttp {
         }
         bail!("too many redirects (>{MAX_REDIRECTS})")
     }
+
+    fn get_cover(&self, url: &str) -> Result<Vec<u8>> {
+        self.cover(url)
+    }
+}
+
+#[cfg(feature = "metadata")]
+impl RustlsHttp {
+    fn cover(&self, url: &str) -> Result<Vec<u8>> {
+        let mut current = url.to_string();
+        for _ in 0..=MAX_REDIRECTS {
+            let (host, path) = parse_https_url(&current)?;
+            if !crate::enrich::cover_host_allowed(&host) {
+                bail!("the cover is on a host we do not fetch from: {host}");
+            }
+            // The limit is on the whole response; headers are well under 64 KiB.
+            let raw = self.fetch_once(&host, &path, crate::cover::MAX_COVER_BYTES + 64 * 1024)?;
+            let (status, headers, body) = split_response(&raw)?;
+            match status {
+                200 => return Ok(body),
+                301 | 302 | 303 | 307 | 308 => {
+                    let loc = header_value(&headers, "location")
+                        .context("redirect response had no Location header")?;
+                    current = resolve_redirect(&host, &loc);
+                }
+                404 => bail!("not found (HTTP 404)"),
+                other => bail!("unexpected HTTP status {other}"),
+            }
+        }
+        bail!("too many redirects (>{MAX_REDIRECTS})")
+    }
 }
 
 impl RustlsHttp {

@@ -19,8 +19,12 @@ choose a mode from the switcher at the top of the panel:
 - **Metadata** — fix a book's [metadata](metadata.md): drop an `.epub` to load an
   editable form, optionally **Fetch** by ISBN from **Open Library** or **Google
   Books** to fill the gaps (**language-aware** — only the book's own language),
-  then **Save & download**. The ISBN is written as a `dc:identifier` so Calibre /
-  Apple Books recognize it. The lookup runs server-side over a pure-Rust TLS
+  then **Save & download**. Subjects the lookup finds are offered as tick boxes,
+  none ticked (catalogue subjects come from many libraries, in their languages).
+  The ISBN is written as a `dc:identifier` so Calibre /
+  Apple Books recognize it. The **Cover** section keeps the book's cover, takes
+  the one the ISBN lookup found on Open Library, or uploads your own JPEG/PNG
+  ([Cover](metadata.md#cover)). The lookup runs server-side over a pure-Rust TLS
   client (no C). Google Books needs an API key for reliable use — see
   [Configuration](#configuration-env).
 - **Validate** — check a book with [epubveri](validate.md), epubcheck's message
@@ -61,15 +65,15 @@ docker run -d --name epublift-web \
 ```
 
 Then open <http://127.0.0.1:8080>. Pin a specific version with a tag instead of
-`latest`, e.g. `ghcr.io/epublift/epublift-web:1.23.0`. The image is a static musl
+`latest`, e.g. `ghcr.io/epublift/epublift-web:1.24.0`. The image is a static musl
 binary on Alpine, runs as a non-root user, and is about 23 MB.
 
 To see what a running instance is, ask it — the page footer shows the same
-(`web 1.23.0 · cli 3.2.0 · @1fb42ee`):
+(`web 1.24.0 · cli 3.3.0 · @…`):
 
 ```bash
 curl -s http://127.0.0.1:8080/version
-# {"version":"1.23.0","engine":"3.2.0","epubveri":"0.23.0","commit":"1fb42ee"}
+# {"version":"1.24.0","engine":"3.3.0","epubveri":"0.24.0","commit":"…"}
 ```
 
 `version` is the web release; `engine` is the epublift library it runs — the

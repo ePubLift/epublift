@@ -7,7 +7,7 @@ resolver = "2"
 
 [package]
 name = "epublift"
-version = "3.2.0"
+version = "3.3.0"
 edition = "2024"
 license = "AGPL-3.0-or-later"
 description = "Modernize and optimize EPUB files — upgrade structure and re-encode images"
@@ -101,12 +101,12 @@ rten = { version = "0.26", optional = true }
 # hostile document is declined instead of aborting the process. The validator
 # itself (`epublift check`) stays behind the opt-in `validate` feature; see
 # docs/validate.md.
-epubveri = "0.23.0"
+epubveri = "0.24.0"
 # epubsana, the family's confirm-each-step repairer: `epublift repair` runs its
 # core `repair()` — the same function `epubsana` and its browser build run — so
 # a book repaired here and there comes back identical. Pure Rust, on the same
 # epubveri, zip 8 and roxmltree 0.21 as we are. See docs/repair.md.
-epubsana = "0.24.0"
+epubsana = "0.25.0"
 # `--format json` on `check` and `repair`: the shared veripublica envelope.
 # epubsana already links it, so it costs the default build nothing.
 serde_json = "1"
@@ -161,6 +161,9 @@ rustls = { version = "0.23.40", default-features = false, features = ["std", "tl
 # (tracked upstream in RustCrypto/rustls-rustcrypto#107).
 rustls-rustcrypto = { git = "https://github.com/RustCrypto/rustls-rustcrypto", rev = "70f76c039e587192688af18a80d5d6435dedaf22", optional = true }
 webpki-roots = { version = "1.0.8", optional = true }
+# Catalogue subjects arrive in mixed Unicode forms (NFC/NFD); folding them is
+# how duplicates are found. Already linked through epubveri and epubsana.
+unicode-normalization = { version = "0.1", optional = true }
 
 [features]
 # Archival mode (`epublift archive` / `restore` → `.eparc`) ships by default.
@@ -177,6 +180,7 @@ metadata = [
     "dep:rustls",
     "dep:rustls-rustcrypto",
     "dep:webpki-roots",
+    "dep:unicode-normalization",
 ]
 # Experimental EPUB 3.4 output: emit AVIF / JPEG XL images under `--target 3.4`.
 # Pure Rust imazen codecs (zenavif + zenjxl, unified by zencodec); opt-in so the

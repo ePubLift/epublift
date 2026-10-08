@@ -808,26 +808,30 @@ function updateDateHint(){
 
 // Localized field names + skip reasons for the enrich status (server sends keys).
 const FLD = {
-  en: { f:{title:'title',subtitle:'subtitle',authors:'authors',publisher:'publisher',date:'date',isbn:'ISBN',subjects:'subjects',description:'description',series:'series'}, present:'already set', lang:'language mismatch', omitted:'description omitted', ed:"The matched edition is in '{e}', not '{b}' — those fields were skipped.", err:{rate_limited:"The provider's quota is exhausted (rate limited). Try again later, or set a Google Books API key.", not_found:"This ISBN wasn't found by the selected provider — try the other provider or check the number.", no_isbn:'Enter an ISBN first.', busy:'Too many requests — please wait a moment and try again.'} },
-  tr: { f:{title:'başlık',subtitle:'alt başlık',authors:'yazarlar',publisher:'yayınevi',date:'tarih',isbn:'ISBN',subjects:'konular',description:'açıklama',series:'seri'}, present:'zaten var', lang:'dil uyuşmuyor', omitted:'açıklama atlandı', ed:"Eşleşen baskı '{b}' değil '{e}' dilinde — o alanlar atlandı.", err:{rate_limited:'Sağlayıcının kotası doldu (hız sınırı). Daha sonra tekrar dene ya da bir Google Books API anahtarı tanımla.', not_found:'Bu ISBN seçili sağlayıcıda bulunamadı — diğer sağlayıcıyı dene ya da numarayı kontrol et.', no_isbn:'Önce bir ISBN gir.', busy:'Çok fazla istek — lütfen biraz bekleyip tekrar dene.'} },
-  es: { f:{title:'título',subtitle:'subtítulo',authors:'autores',publisher:'editorial',date:'fecha',isbn:'ISBN',subjects:'materias',description:'descripción',series:'serie'}, present:'ya está', lang:'idioma distinto', omitted:'descripción omitida', ed:"La edición encontrada está en '{e}', no en '{b}' — esos campos se omitieron.", err:{rate_limited:'Se agotó la cuota del proveedor (límite de peticiones). Inténtalo más tarde o configura una clave de API de Google Books.', not_found:'El proveedor seleccionado no encontró este ISBN — prueba el otro proveedor o revisa el número.', no_isbn:'Introduce primero un ISBN.', busy:'Demasiadas peticiones — espera un momento e inténtalo de nuevo.'} },
-  de: { f:{title:'Titel',subtitle:'Untertitel',authors:'Autoren',publisher:'Verlag',date:'Datum',isbn:'ISBN',subjects:'Themen',description:'Beschreibung',series:'Reihe'}, present:'bereits vorhanden', lang:'andere Sprache', omitted:'Beschreibung übersprungen', ed:"Die gefundene Ausgabe ist in '{e}', nicht '{b}' — diese Felder wurden übersprungen.", err:{rate_limited:'Das Kontingent des Anbieters ist erschöpft (Rate-Limit). Später erneut versuchen oder einen Google-Books-API-Schlüssel setzen.', not_found:'Der gewählte Anbieter hat diese ISBN nicht gefunden — anderen Anbieter versuchen oder Nummer prüfen.', no_isbn:'Zuerst eine ISBN eingeben.', busy:'Zu viele Anfragen — bitte einen Moment warten und erneut versuchen.'} },
-  fr: { f:{title:'titre',subtitle:'sous-titre',authors:'auteurs',publisher:'éditeur',date:'date',isbn:'ISBN',subjects:'sujets',description:'description',series:'série'}, present:'déjà défini', lang:'langue différente', omitted:'description ignorée', ed:"L'édition trouvée est en '{e}', pas en '{b}' — ces champs ont été ignorés.", err:{rate_limited:"Le quota du fournisseur est épuisé (limite de requêtes). Réessayez plus tard ou définissez une clé API Google Books.", not_found:"Le fournisseur sélectionné n'a pas trouvé cet ISBN — essayez l'autre fournisseur ou vérifiez le numéro.", no_isbn:"Saisissez d'abord un ISBN.", busy:'Trop de requêtes — patientez un instant puis réessayez.'} },
-  pt: { f:{title:'título',subtitle:'subtítulo',authors:'autores',publisher:'editora',date:'data',isbn:'ISBN',subjects:'assuntos',description:'descrição',series:'série'}, present:'já definido', lang:'idioma diferente', omitted:'descrição omitida', ed:"A edição encontrada está em '{e}', não em '{b}' — esses campos foram ignorados.", err:{rate_limited:'A cota do provedor esgotou (limite de requisições). Tente mais tarde ou defina uma chave de API do Google Books.', not_found:'O provedor selecionado não encontrou este ISBN — tente o outro provedor ou verifique o número.', no_isbn:'Digite um ISBN primeiro.', busy:'Muitas requisições — aguarde um momento e tente novamente.'} },
-  it: { f:{title:'titolo',subtitle:'sottotitolo',authors:'autori',publisher:'editore',date:'data',isbn:'ISBN',subjects:'soggetti',description:'descrizione',series:'collana'}, present:'già presente', lang:'lingua diversa', omitted:'descrizione saltata', ed:"L'edizione trovata è in '{e}', non in '{b}' — quei campi sono stati saltati.", err:{rate_limited:'Quota del fornitore esaurita (limite di richieste). Riprova più tardi o imposta una chiave API di Google Books.', not_found:"Il fornitore selezionato non ha trovato questo ISBN — prova l'altro fornitore o controlla il numero.", no_isbn:'Inserisci prima un ISBN.', busy:'Troppe richieste — attendi un momento e riprova.'} },
-  nl: { f:{title:'titel',subtitle:'ondertitel',authors:'auteurs',publisher:'uitgever',date:'datum',isbn:'ISBN',subjects:'onderwerpen',description:'beschrijving',series:'reeks'}, present:'al ingevuld', lang:'andere taal', omitted:'beschrijving overgeslagen', ed:"De gevonden editie is in '{e}', niet '{b}' — die velden zijn overgeslagen.", err:{rate_limited:'Het quotum van de aanbieder is op (rate limit). Probeer later opnieuw of stel een Google Books API-sleutel in.', not_found:'De gekozen aanbieder vond deze ISBN niet — probeer de andere aanbieder of controleer het nummer.', no_isbn:'Voer eerst een ISBN in.', busy:'Te veel verzoeken — wacht even en probeer opnieuw.'} },
-  pl: { f:{title:'tytuł',subtitle:'podtytuł',authors:'autorzy',publisher:'wydawca',date:'data',isbn:'ISBN',subjects:'tematy',description:'opis',series:'seria'}, present:'już jest', lang:'inny język', omitted:'opis pominięty', ed:"Znalezione wydanie jest w '{e}', nie '{b}' — te pola pominięto.", err:{rate_limited:'Wyczerpano limit dostawcy (rate limit). Spróbuj później lub ustaw klucz API Google Books.', not_found:'Wybrany dostawca nie znalazł tego ISBN — wypróbuj drugiego dostawcę lub sprawdź numer.', no_isbn:'Najpierw podaj ISBN.', busy:'Zbyt wiele żądań — odczekaj chwilę i spróbuj ponownie.'} },
-  ru: { f:{title:'название',subtitle:'подзаголовок',authors:'авторы',publisher:'издательство',date:'дата',isbn:'ISBN',subjects:'темы',description:'описание',series:'серия'}, present:'уже задано', lang:'другой язык', omitted:'описание пропущено', ed:"Найденное издание на '{e}', а не '{b}' — эти поля пропущены.", err:{rate_limited:'Квота провайдера исчерпана (ограничение запросов). Повторите позже или задайте ключ API Google Books.', not_found:'Выбранный провайдер не нашёл этот ISBN — попробуйте другого провайдера или проверьте номер.', no_isbn:'Сначала введите ISBN.', busy:'Слишком много запросов — подождите немного и повторите.'} },
-  ja: { f:{title:'タイトル',subtitle:'サブタイトル',authors:'著者',publisher:'出版社',date:'発行日',isbn:'ISBN',subjects:'件名',description:'説明',series:'シリーズ'}, present:'設定済み', lang:'言語が不一致', omitted:'説明はスキップ', ed:"見つかった版は '{b}' ではなく '{e}' です — これらの項目はスキップしました。", err:{rate_limited:'プロバイダーのクォータを使い切りました（レート制限）。後でもう一度試すか、Google Books の API キーを設定してください。', not_found:'選択したプロバイダーでこの ISBN が見つかりませんでした — 別のプロバイダーを試すか番号を確認してください。', no_isbn:'先に ISBN を入力してください。', busy:'リクエストが多すぎます — 少し待ってからもう一度お試しください。'} },
-  ko: { f:{title:'제목',subtitle:'부제',authors:'저자',publisher:'출판사',date:'날짜',isbn:'ISBN',subjects:'주제',description:'설명',series:'시리즈'}, present:'이미 있음', lang:'언어 불일치', omitted:'설명 건너뜀', ed:"찾은 판이 '{b}'가 아닌 '{e}'입니다 — 해당 항목은 건너뛰었습니다.", err:{rate_limited:'공급자 할당량이 소진되었습니다(요청 제한). 나중에 다시 시도하거나 Google Books API 키를 설정하세요.', not_found:'선택한 공급자에서 이 ISBN을 찾지 못했습니다 — 다른 공급자를 시도하거나 번호를 확인하세요.', no_isbn:'먼저 ISBN을 입력하세요.', busy:'요청이 너무 많습니다 — 잠시 후 다시 시도하세요.'} },
-  zh: { f:{title:'标题',subtitle:'副标题',authors:'作者',publisher:'出版社',date:'日期',isbn:'ISBN',subjects:'主题',description:'简介',series:'丛书'}, present:'已存在', lang:'语言不符', omitted:'已跳过简介', ed:"找到的版本为 '{e}'，而非 '{b}' —— 这些字段已跳过。", err:{rate_limited:'提供方配额已用尽（速率限制）。请稍后重试，或设置 Google Books API 密钥。', not_found:'所选提供方未找到该 ISBN——请尝试另一个提供方或核对号码。', no_isbn:'请先输入 ISBN。', busy:'请求过多——请稍候再试。'} },
+  en: { f:{title:'title',subtitle:'subtitle',authors:'authors',publisher:'publisher',date:'date',isbn:'ISBN',subjects:'subjects',description:'description',series:'series'}, present:'already set', lang:'language mismatch', omitted:'description omitted', epub2:'EPUB 2 has no subtitle field', pick:'pick them below', ed:"The matched edition is in '{e}', not '{b}' — those fields were skipped.", err:{rate_limited:"The provider's quota is exhausted (rate limited). Try again later, or set a Google Books API key.", not_found:"This ISBN wasn't found by the selected provider — try the other provider or check the number.", no_isbn:'Enter an ISBN first.', busy:'Too many requests — please wait a moment and try again.'} },
+  tr: { f:{title:'başlık',subtitle:'alt başlık',authors:'yazarlar',publisher:'yayınevi',date:'tarih',isbn:'ISBN',subjects:'konular',description:'açıklama',series:'seri'}, present:'zaten var', lang:'dil uyuşmuyor', omitted:'açıklama atlandı', epub2:'EPUB 2\'de alt başlık alanı yok', pick:'aşağıdan seç', ed:"Eşleşen baskı '{b}' değil '{e}' dilinde — o alanlar atlandı.", err:{rate_limited:'Sağlayıcının kotası doldu (hız sınırı). Daha sonra tekrar dene ya da bir Google Books API anahtarı tanımla.', not_found:'Bu ISBN seçili sağlayıcıda bulunamadı — diğer sağlayıcıyı dene ya da numarayı kontrol et.', no_isbn:'Önce bir ISBN gir.', busy:'Çok fazla istek — lütfen biraz bekleyip tekrar dene.'} },
+  es: { f:{title:'título',subtitle:'subtítulo',authors:'autores',publisher:'editorial',date:'fecha',isbn:'ISBN',subjects:'materias',description:'descripción',series:'serie'}, present:'ya está', lang:'idioma distinto', omitted:'descripción omitida', epub2:'EPUB 2 no tiene campo de subtítulo', pick:'elígelas abajo', ed:"La edición encontrada está en '{e}', no en '{b}' — esos campos se omitieron.", err:{rate_limited:'Se agotó la cuota del proveedor (límite de peticiones). Inténtalo más tarde o configura una clave de API de Google Books.', not_found:'El proveedor seleccionado no encontró este ISBN — prueba el otro proveedor o revisa el número.', no_isbn:'Introduce primero un ISBN.', busy:'Demasiadas peticiones — espera un momento e inténtalo de nuevo.'} },
+  de: { f:{title:'Titel',subtitle:'Untertitel',authors:'Autoren',publisher:'Verlag',date:'Datum',isbn:'ISBN',subjects:'Themen',description:'Beschreibung',series:'Reihe'}, present:'bereits vorhanden', lang:'andere Sprache', omitted:'Beschreibung übersprungen', epub2:'EPUB 2 hat kein Untertitelfeld', pick:'unten auswählen', ed:"Die gefundene Ausgabe ist in '{e}', nicht '{b}' — diese Felder wurden übersprungen.", err:{rate_limited:'Das Kontingent des Anbieters ist erschöpft (Rate-Limit). Später erneut versuchen oder einen Google-Books-API-Schlüssel setzen.', not_found:'Der gewählte Anbieter hat diese ISBN nicht gefunden — anderen Anbieter versuchen oder Nummer prüfen.', no_isbn:'Zuerst eine ISBN eingeben.', busy:'Zu viele Anfragen — bitte einen Moment warten und erneut versuchen.'} },
+  fr: { f:{title:'titre',subtitle:'sous-titre',authors:'auteurs',publisher:'éditeur',date:'date',isbn:'ISBN',subjects:'sujets',description:'description',series:'série'}, present:'déjà défini', lang:'langue différente', omitted:'description ignorée', epub2:'EPUB 2 n\'a pas de champ sous-titre', pick:'à choisir ci-dessous', ed:"L'édition trouvée est en '{e}', pas en '{b}' — ces champs ont été ignorés.", err:{rate_limited:"Le quota du fournisseur est épuisé (limite de requêtes). Réessayez plus tard ou définissez une clé API Google Books.", not_found:"Le fournisseur sélectionné n'a pas trouvé cet ISBN — essayez l'autre fournisseur ou vérifiez le numéro.", no_isbn:"Saisissez d'abord un ISBN.", busy:'Trop de requêtes — patientez un instant puis réessayez.'} },
+  pt: { f:{title:'título',subtitle:'subtítulo',authors:'autores',publisher:'editora',date:'data',isbn:'ISBN',subjects:'assuntos',description:'descrição',series:'série'}, present:'já definido', lang:'idioma diferente', omitted:'descrição omitida', epub2:'EPUB 2 não tem campo de subtítulo', pick:'escolha abaixo', ed:"A edição encontrada está em '{e}', não em '{b}' — esses campos foram ignorados.", err:{rate_limited:'A cota do provedor esgotou (limite de requisições). Tente mais tarde ou defina uma chave de API do Google Books.', not_found:'O provedor selecionado não encontrou este ISBN — tente o outro provedor ou verifique o número.', no_isbn:'Digite um ISBN primeiro.', busy:'Muitas requisições — aguarde um momento e tente novamente.'} },
+  it: { f:{title:'titolo',subtitle:'sottotitolo',authors:'autori',publisher:'editore',date:'data',isbn:'ISBN',subjects:'soggetti',description:'descrizione',series:'collana'}, present:'già presente', lang:'lingua diversa', omitted:'descrizione saltata', epub2:'EPUB 2 non ha un campo sottotitolo', pick:'scegli qui sotto', ed:"L'edizione trovata è in '{e}', non in '{b}' — quei campi sono stati saltati.", err:{rate_limited:'Quota del fornitore esaurita (limite di richieste). Riprova più tardi o imposta una chiave API di Google Books.', not_found:"Il fornitore selezionato non ha trovato questo ISBN — prova l'altro fornitore o controlla il numero.", no_isbn:'Inserisci prima un ISBN.', busy:'Troppe richieste — attendi un momento e riprova.'} },
+  nl: { f:{title:'titel',subtitle:'ondertitel',authors:'auteurs',publisher:'uitgever',date:'datum',isbn:'ISBN',subjects:'onderwerpen',description:'beschrijving',series:'reeks'}, present:'al ingevuld', lang:'andere taal', omitted:'beschrijving overgeslagen', epub2:'EPUB 2 heeft geen ondertitelveld', pick:'kies ze hieronder', ed:"De gevonden editie is in '{e}', niet '{b}' — die velden zijn overgeslagen.", err:{rate_limited:'Het quotum van de aanbieder is op (rate limit). Probeer later opnieuw of stel een Google Books API-sleutel in.', not_found:'De gekozen aanbieder vond deze ISBN niet — probeer de andere aanbieder of controleer het nummer.', no_isbn:'Voer eerst een ISBN in.', busy:'Te veel verzoeken — wacht even en probeer opnieuw.'} },
+  pl: { f:{title:'tytuł',subtitle:'podtytuł',authors:'autorzy',publisher:'wydawca',date:'data',isbn:'ISBN',subjects:'tematy',description:'opis',series:'seria'}, present:'już jest', lang:'inny język', omitted:'opis pominięty', epub2:'EPUB 2 nie ma pola podtytułu', pick:'wybierz poniżej', ed:"Znalezione wydanie jest w '{e}', nie '{b}' — te pola pominięto.", err:{rate_limited:'Wyczerpano limit dostawcy (rate limit). Spróbuj później lub ustaw klucz API Google Books.', not_found:'Wybrany dostawca nie znalazł tego ISBN — wypróbuj drugiego dostawcę lub sprawdź numer.', no_isbn:'Najpierw podaj ISBN.', busy:'Zbyt wiele żądań — odczekaj chwilę i spróbuj ponownie.'} },
+  ru: { f:{title:'название',subtitle:'подзаголовок',authors:'авторы',publisher:'издательство',date:'дата',isbn:'ISBN',subjects:'темы',description:'описание',series:'серия'}, present:'уже задано', lang:'другой язык', omitted:'описание пропущено', epub2:'в EPUB 2 нет поля подзаголовка', pick:'выберите ниже', ed:"Найденное издание на '{e}', а не '{b}' — эти поля пропущены.", err:{rate_limited:'Квота провайдера исчерпана (ограничение запросов). Повторите позже или задайте ключ API Google Books.', not_found:'Выбранный провайдер не нашёл этот ISBN — попробуйте другого провайдера или проверьте номер.', no_isbn:'Сначала введите ISBN.', busy:'Слишком много запросов — подождите немного и повторите.'} },
+  ja: { f:{title:'タイトル',subtitle:'サブタイトル',authors:'著者',publisher:'出版社',date:'発行日',isbn:'ISBN',subjects:'件名',description:'説明',series:'シリーズ'}, present:'設定済み', lang:'言語が不一致', omitted:'説明はスキップ', epub2:'EPUB 2 にはサブタイトルの項目がありません', pick:'下で選択', ed:"見つかった版は '{b}' ではなく '{e}' です — これらの項目はスキップしました。", err:{rate_limited:'プロバイダーのクォータを使い切りました（レート制限）。後でもう一度試すか、Google Books の API キーを設定してください。', not_found:'選択したプロバイダーでこの ISBN が見つかりませんでした — 別のプロバイダーを試すか番号を確認してください。', no_isbn:'先に ISBN を入力してください。', busy:'リクエストが多すぎます — 少し待ってからもう一度お試しください。'} },
+  ko: { f:{title:'제목',subtitle:'부제',authors:'저자',publisher:'출판사',date:'날짜',isbn:'ISBN',subjects:'주제',description:'설명',series:'시리즈'}, present:'이미 있음', lang:'언어 불일치', omitted:'설명 건너뜀', epub2:'EPUB 2에는 부제 필드가 없습니다', pick:'아래에서 선택', ed:"찾은 판이 '{b}'가 아닌 '{e}'입니다 — 해당 항목은 건너뛰었습니다.", err:{rate_limited:'공급자 할당량이 소진되었습니다(요청 제한). 나중에 다시 시도하거나 Google Books API 키를 설정하세요.', not_found:'선택한 공급자에서 이 ISBN을 찾지 못했습니다 — 다른 공급자를 시도하거나 번호를 확인하세요.', no_isbn:'먼저 ISBN을 입력하세요.', busy:'요청이 너무 많습니다 — 잠시 후 다시 시도하세요.'} },
+  zh: { f:{title:'标题',subtitle:'副标题',authors:'作者',publisher:'出版社',date:'日期',isbn:'ISBN',subjects:'主题',description:'简介',series:'丛书'}, present:'已存在', lang:'语言不符', omitted:'已跳过简介', epub2:'EPUB 2 没有副标题字段', pick:'请在下方选择', ed:"找到的版本为 '{e}'，而非 '{b}' —— 这些字段已跳过。", err:{rate_limited:'提供方配额已用尽（速率限制）。请稍后重试，或设置 Google Books API 密钥。', not_found:'所选提供方未找到该 ISBN——请尝试另一个提供方或核对号码。', no_isbn:'请先输入 ISBN。', busy:'请求过多——请稍候再试。'} },
 };
 function fldL(){ return FLD[curLang()] || FLD.en; }
 function fldName(k){ return fldL().f[k] || k; }
-function reasonText(r){ const L = fldL(); return r === 'present' ? L.present : r === 'lang' ? L.lang : L.omitted; }
+function reasonText(r){ const L = fldL(); return r === 'present' ? L.present : r === 'lang' ? L.lang : r === 'epub2' ? L.epub2 : r === 'pick' ? L.pick : L.omitted; }
 
 function fillForm(md){
   setv('m_title', md.title); setv('m_subtitle', md.subtitle);
+  // EPUB 2 has no subtitle field: the input is off, with a line saying why.
+  const epub2 = !String(md.epub_version || '').trim().startsWith('3');
+  document.getElementById('m_subtitle').disabled = epub2;
+  document.getElementById('m_subtitle_epub2').classList.toggle('hide', !epub2);
   setv('m_authors', (md.authors || []).map(authorDisplay).join('\n'));
   setv('m_language', md.language); setv('m_publisher', md.publisher);
   setv('m_date', isoToDisplay(md.date));
@@ -838,6 +842,134 @@ function fillForm(md){
   updateDateHint();
 }
 
+// Cover: keep the book's own, take the catalogue's, or upload one. The book's
+// and the catalogue's arrive from the server as data: URLs (the CSP allows
+// img-src data:), so the browser never contacts a catalogue itself.
+const MAX_COVER = 10 * 1024 * 1024;
+let cover = { cur: null, found: null, own: null, err: '' };
+const byId = (id) => document.getElementById(id);
+const coverChoice = () => document.querySelector('input[name="m_cover"]:checked').value;
+const sizeText = (o) => (o && o.width && o.height) ? `${o.width}×${o.height}` : '';
+const area = (o) => (o && o.width && o.height) ? o.width * o.height : 0;
+
+function setCoverChoice(v){
+  document.querySelector(`input[name="m_cover"][value="${v}"]`).checked = true;
+  renderCover();
+}
+
+function renderCover(){
+  const c = cover.cur, f = cover.found, o = cover.own;
+  const curImg = byId('mc_cur_img'), curNone = byId('mc_cur_none');
+  curImg.classList.toggle('hide', !(c && c.preview));
+  curNone.classList.toggle('hide', !!(c && c.preview));
+  if (c && c.preview) curImg.src = c.preview;
+  curNone.textContent = T(c ? 'meta_cover_nopreview' : 'meta_cover_none');
+  byId('mc_cur_cap').textContent = c ? [T('meta_cover_current'), sizeText(c)].filter(Boolean).join(' · ') : '';
+  byId('mc_keep_label').textContent = T(c ? 'meta_cover_keep' : 'meta_cover_keep_none');
+
+  byId('mc_found_fig').classList.toggle('hide', !f);
+  byId('mc_found_row').classList.toggle('hide', !f);
+  if (f) {
+    byId('mc_found_img').src = f.data_url;
+    byId('mc_found_cap').textContent = `${f.provider} · ${sizeText(f)}`;
+    byId('mc_found_label').textContent = fill('meta_cover_found', { p: f.provider });
+  }
+  // Catalogue covers are often smaller than the book's own: say so, still offer it.
+  byId('mc_found_warn').classList.toggle('hide', !(f && c && area(f) < area(c)));
+
+  byId('mc_own_fig').classList.toggle('hide', !o);
+  if (o) {
+    byId('mc_own_img').src = o.url;
+    byId('mc_own_cap').textContent = `${T('meta_cover_yours')} · ${sizeText(o)}`;
+  }
+
+  const choice = coverChoice(), lines = [];
+  if (cover.err) lines.push('⚠ ' + cover.err);
+  if (choice === 'own' && o && Math.min(o.width, o.height) < 600) lines.push('⚠ ' + fill('meta_cover_small', { s: sizeText(o) }));
+  if (choice !== 'keep') lines.push(T('meta_cover_kobo'));
+  byId('mc_msg').textContent = lines.join('\n');
+}
+
+function resetCover(current){
+  cover = { cur: current || null, found: null, own: null, err: '' };
+  byId('mc_file').value = '';
+  setCoverChoice('keep');
+}
+
+// The reader's own image: JPEG or PNG, at most 10 MB (the server checks again).
+function pickOwnCover(f){
+  cover.err = '';
+  if (!f) { renderCover(); return; }
+  if (!['image/jpeg', 'image/png'].includes(f.type)) cover.err = T('meta_cover_bad_type');
+  else if (f.size > MAX_COVER) cover.err = T('meta_cover_too_big');
+  if (cover.err) {
+    cover.own = null; byId('mc_file').value = '';
+    setCoverChoice('keep'); return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => {
+    const img = new Image();
+    img.onload = () => {
+      cover.own = { file: f, url: reader.result, width: img.naturalWidth, height: img.naturalHeight };
+      setCoverChoice('own');
+    };
+    img.onerror = () => { cover.own = null; cover.err = T('meta_cover_unreadable'); setCoverChoice('keep'); };
+    img.src = reader.result;
+  };
+  reader.readAsDataURL(f);
+}
+
+byId('mc_pick').addEventListener('click', (e) => { e.preventDefault(); byId('mc_file').click(); });
+byId('mc_file').addEventListener('change', () => pickOwnCover(byId('mc_file').files[0]));
+document.querySelectorAll('input[name="m_cover"]').forEach(r => r.addEventListener('change', () => {
+  // "Upload my own" with no image yet opens the picker and waits for a file.
+  if (coverChoice() === 'own' && !cover.own) { setCoverChoice('keep'); byId('mc_file').click(); return; }
+  renderCover();
+}));
+document.addEventListener('i18n:change', () => { if (mode === 'metadata') renderCover(); });
+
+// The chosen cover as a file for the save request, or null to keep the book's.
+function chosenCoverBlob(){
+  const choice = coverChoice();
+  if (choice === 'own' && cover.own) return cover.own.file;
+  if (choice === 'found' && cover.found) {
+    const [head, b64] = cover.found.data_url.split(',');
+    const bin = atob(b64), bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new Blob([bytes], { type: head.slice(5, head.indexOf(';')) });
+  }
+  return null;
+}
+
+// Subjects found by the lookup, offered one by one: a catalogue such as Open
+// Library merges many libraries' headings, in their own languages, with no
+// language tag, so none is added unless the reader ticks it.
+function subjectLines(){
+  return byId('m_subjects').value.split('\n').map(s => s.trim()).filter(Boolean);
+}
+function renderSubjectsFound(list, provider){
+  const box = byId('m_subj_found'), ul = byId('m_subj_list');
+  ul.textContent = '';
+  box.classList.toggle('hide', !(list && list.length));
+  if (!list || !list.length) return;
+  box.dataset.provider = provider;
+  byId('m_subj_h').textContent = fill('meta_subj_found', { p: provider });
+  const have = new Set(subjectLines().map(s => s.toLowerCase()));
+  for (const s of list) {
+    const label = document.createElement('label');
+    const tick = document.createElement('input'); tick.type = 'checkbox';
+    tick.checked = have.has(s.toLowerCase());
+    tick.addEventListener('change', () => {
+      const lines = subjectLines().filter(x => x.toLowerCase() !== s.toLowerCase());
+      if (tick.checked) lines.push(s);
+      byId('m_subjects').value = lines.join('\n');
+    });
+    const span = document.createElement('span'); span.textContent = s;
+    label.append(tick, span);
+    ul.appendChild(label);
+  }
+}
+
 // Read the dropped book's current metadata and reveal the editable form.
 async function loadMetadata(f){
   metaForm.classList.add('hide'); mDone.classList.add('hide');
@@ -846,7 +978,10 @@ async function loadMetadata(f){
     const fd = new FormData(); fd.append('file', f);
     const res = await fetch('/meta/read', { method:'POST', body: fd });
     if (!res.ok) throw new Error(await errMsg(res));
-    fillForm(await res.json());
+    const md = await res.json();
+    fillForm(md);
+    resetCover(md.cover);
+    renderSubjectsFound([], '');
     metaForm.classList.remove('hide');
     mStatus.textContent = '';
   } catch (e) {
@@ -884,7 +1019,7 @@ async function doEnrich(){
 function applyEnrich(data){
   const f = data.fields || {};
   if (f.title != null) setv('m_title', f.title);
-  if (f.subtitle != null) setv('m_subtitle', f.subtitle);
+  if (f.subtitle != null && !document.getElementById('m_subtitle').disabled) setv('m_subtitle', f.subtitle);
   if (f.authors != null) setv('m_authors', f.authors.map(authorDisplay).join('\n'));
   if (f.publisher != null) setv('m_publisher', f.publisher);
   if (f.date != null) setv('m_date', isoToDisplay(f.date));
@@ -892,6 +1027,12 @@ function applyEnrich(data){
   if (f.subjects != null) setv('m_subjects', f.subjects.join('\n'));
   if (f.series != null) setv('m_series', seriesStr(f.series));
   if (f.isbn != null) setv('m_isbn', f.isbn);
+
+  const provider = document.getElementById('m_provider');
+  const providerName = provider.options[provider.selectedIndex].text;
+  renderSubjectsFound(data.subjects_found || [], providerName);
+  cover.found = data.cover ? { ...data.cover, provider: providerName } : null;
+  if (!cover.found && coverChoice() === 'found') setCoverChoice('keep'); else renderCover();
 
   // Build a localized status from the structured applied/skipped/warnings.
   const lines = [];
@@ -912,8 +1053,9 @@ async function doSave(){
   const fd = new FormData();
   fd.append('file', selectedFile);
   ['title','subtitle','language','publisher','series','isbn'].forEach(k => {
-    const v = document.getElementById('m_' + k).value.trim();
-    if (v) fd.append(k, v);
+    const input = document.getElementById('m_' + k);
+    const v = input.value.trim();
+    if (v && !input.disabled) fd.append(k, v);
   });
   ['authors','subjects','description'].forEach(k => {
     const v = document.getElementById('m_' + k).value.trim();
@@ -922,6 +1064,8 @@ async function doSave(){
   // Date: store ISO 8601 in the file regardless of the localized display format.
   const dateIso = displayToIso(document.getElementById('m_date').value);
   if (dateIso) fd.append('date', dateIso);
+  const coverBlob = chosenCoverBlob();
+  if (coverBlob) fd.append('cover', coverBlob, coverBlob.type === 'image/png' ? 'cover.png' : 'cover.jpg');
   const label = mSave.querySelector('span');
   const prev = label.textContent;
   mSave.disabled = true; mSave.style.opacity = .7; label.textContent = T('meta_saving');

@@ -22,6 +22,18 @@ pub fn parse_xml(text: &str) -> Result<roxmltree::Document<'_>> {
     Ok(roxmltree::Document::parse(text)?)
 }
 
+/// [`parse_xml`] for a content document, which may carry a DOCTYPE (XHTML 1.1
+/// pages do; roxmltree refuses one unless asked). The guard has already
+/// bounded entity expansion.
+pub fn parse_xml_with_dtd(text: &str) -> Result<roxmltree::Document<'_>> {
+    epubveri::xmlguard::check(text)?;
+    let opts = roxmltree::ParsingOptions {
+        allow_dtd: true,
+        ..roxmltree::ParsingOptions::default()
+    };
+    Ok(roxmltree::Document::parse_with_options(text, opts)?)
+}
+
 /// Characters that Python's `urllib.parse.quote` leaves untouched by default:
 /// unreserved characters (`A-Z a-z 0-9 _ . - ~`) plus the `/` path separator
 /// (because `quote` uses `safe='/'` by default).

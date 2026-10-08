@@ -920,7 +920,7 @@ checksum = "f8e1bd41ecce82c300d0c84fa35b080fa6db50a5398b18f1abf0357bb067549e"
 
 [[package]]
 name = "epublift"
-version = "3.2.0"
+version = "3.3.0"
 dependencies = [
  "almost-enough",
  "any_ascii",
@@ -951,6 +951,7 @@ dependencies = [
  "sha2",
  "structured-zstd",
  "tempfile",
+ "unicode-normalization",
  "walkdir",
  "webpki-roots",
  "xz2",
@@ -963,10 +964,11 @@ dependencies = [
 
 [[package]]
 name = "epublift-web"
-version = "1.23.0"
+version = "1.24.0"
 dependencies = [
  "anyhow",
  "axum",
+ "base64",
  "epublift",
  "serde",
  "serde_json",
@@ -983,22 +985,23 @@ dependencies = [
 
 [[package]]
 name = "epubsana"
-version = "0.24.0"
+version = "0.25.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fc50e6bd32f488cb5faafcf7561bb2aa74ef6aa1a7ceeabdb89bc03b88df24ab"
+checksum = "b21216b216123594d69f7f68002733427fa9e225c6de48c913a96f041ad05075"
 dependencies = [
  "epubveri",
  "roxmltree",
  "serde",
  "serde_json",
+ "unicode-normalization",
  "zip",
 ]
 
 [[package]]
 name = "epubveri"
-version = "0.23.0"
+version = "0.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "19aa55e2485dde27415c9730d33af0d50e21a98da46c60c46458a2f3cb33aba1"
+checksum = "89acdfefff8e1cee3d038ff3672ab393cedeb16a9ec925f6a07ebd64a687c4b6"
 dependencies = [
  "roxmltree",
  "serde",

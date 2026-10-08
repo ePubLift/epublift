@@ -991,7 +991,17 @@ fn stash(state: &AppState, name: String, bytes: Vec<u8>, content_type: &'static 
 async fn read_upload(
     multipart: &mut Multipart,
 ) -> Result<(Vec<u8>, String, HashMap<String, String>), ApiError> {
+    let (bytes, name, fields, _cover) = read_upload_with_cover(multipart).await?;
+    Ok((bytes, name, fields))
+}
+
+/// [`read_upload`], also keeping a binary `cover` part (the Metadata form's
+/// new cover image).
+async fn read_upload_with_cover(
+    multipart: &mut Multipart,
+) -> Result<(Vec<u8>, String, HashMap<String, String>, Option<Vec<u8>>), ApiError> {
     let mut file_bytes: Option<Vec<u8>> = None;
+    let mut cover: Option<Vec<u8>> = None;
     let mut file_name = String::new();
     let mut fields: HashMap<String, String> = HashMap::new();
 
@@ -1013,6 +1023,12 @@ async fn read_upload(
                 .await
                 .map_err(|e| bad_request(format!("could not read file: {e}")))?;
             file_bytes = Some(bytes.to_vec());
+        } else if name == "cover" {
+            let bytes = field
+                .bytes()
+                .await
+                .map_err(|e| bad_request(format!("could not read the cover image: {e}")))?;
+            cover = Some(bytes.to_vec());
         } else {
             let v = field.text().await.unwrap_or_default();
             fields.insert(name, v);
@@ -1023,7 +1039,7 @@ async fn read_upload(
     if bytes.is_empty() {
         return Err(bad_request("the uploaded file is empty"));
     }
-    Ok((bytes, file_name, fields))
+    Ok((bytes, file_name, fields, cover))
 }
 
 /// Whether a text multipart field reads as "on".
@@ -1268,23 +1284,6 @@ fn parse_lines(fields: &HashMap<String, String>, key: &str) -> Option<Vec<String
     (!items.is_empty()).then_some(items)
 }
 
-/// `Name` or `Name:position` → a `Series`.
-fn parse_series(s: &str) -> epublift::meta::Series {
-    if let Some((name, pos)) = s.rsplit_once(':')
-        && !pos.is_empty()
-        && pos.chars().all(|c| c.is_ascii_digit() || c == '.')
-    {
-        return epublift::meta::Series {
-            name: name.to_string(),
-            position: Some(pos.to_string()),
-        };
-    }
-    epublift::meta::Series {
-        name: s.to_string(),
-        position: None,
-    }
-}
-
 fn too_many_requests() -> ApiError {
     ApiError(
         StatusCode::TOO_MANY_REQUESTS,
@@ -1338,6 +1337,27 @@ fn metadata_json(md: &epublift::meta::Metadata) -> serde_json::Value {
 }
 
 /// Write an uploaded EPUB's bytes to a temp file and read its current metadata.
+/// The metadata and the declared cover of an uploaded EPUB.
+fn read_book_from_bytes(
+    name: &str,
+    bytes: &[u8],
+) -> anyhow::Result<(
+    epublift::meta::Metadata,
+    Option<epublift::cover::CurrentCover>,
+)> {
+    let tmp = tempfile::Builder::new().prefix("epublift_web_").tempdir()?;
+    let path = tmp.path().join(if name.trim().is_empty() {
+        "book.epub"
+    } else {
+        name
+    });
+    std::fs::write(&path, bytes)?;
+    Ok((
+        epublift::read_metadata(&path)?,
+        epublift::read_cover(&path)?,
+    ))
+}
+
 fn read_metadata_from_bytes(name: &str, bytes: &[u8]) -> anyhow::Result<epublift::meta::Metadata> {
     let tmp = tempfile::Builder::new().prefix("epublift_web_").tempdir()?;
     let safe = if name.trim().is_empty() {
@@ -1348,6 +1368,29 @@ fn read_metadata_from_bytes(name: &str, bytes: &[u8]) -> anyhow::Result<epublift
     let path = tmp.path().join(safe);
     std::fs::write(&path, bytes)?;
     epublift::read_metadata(&path)
+}
+
+/// A `data:` URL for an image, for the form's cover previews.
+fn data_url(media_type: &str, bytes: &[u8]) -> String {
+    use base64::Engine;
+    format!(
+        "data:{media_type};base64,{}",
+        base64::engine::general_purpose::STANDARD.encode(bytes)
+    )
+}
+
+/// The book's current cover for the form: its size and a preview.
+fn current_cover_json(c: Option<&epublift::cover::CurrentCover>) -> serde_json::Value {
+    match c {
+        None => serde_json::Value::Null,
+        Some(c) => serde_json::json!({
+            "width": c.width,
+            "height": c.height,
+            "media_type": c.media_type,
+            "bytes": c.bytes.len(),
+            "preview": epublift::cover::preview(c).map(|(mt, b)| data_url(&mt, &b)),
+        }),
+    }
 }
 
 /// Read the current metadata of an uploaded EPUB (to populate the editor form).
@@ -1361,11 +1404,13 @@ async fn meta_read(
         return Err(too_many_requests());
     }
     let (file_bytes, name, _fields) = read_upload(&mut multipart).await?;
-    let md = tokio::task::spawn_blocking(move || read_metadata_from_bytes(&name, &file_bytes))
+    let (md, cover) = tokio::task::spawn_blocking(move || read_book_from_bytes(&name, &file_bytes))
         .await
         .map_err(|_| ApiError(StatusCode::INTERNAL_SERVER_ERROR, "crashed".into()))?
         .map_err(|e| bad_request(format!("could not read this EPUB: {e}")))?;
-    Ok(Json(metadata_json(&md)))
+    let mut json = metadata_json(&md);
+    json["cover"] = current_cover_json(cover.as_ref());
+    Ok(Json(json))
 }
 
 /// Look up an ISBN on Open Library and return the language-aware suggestion.
@@ -1386,6 +1431,8 @@ async fn meta_enrich(
         overwrite: field_on(&fields, "overwrite"),
         allow_foreign_meta: field_on(&fields, "allow_foreign_meta"),
         include_description: field_on(&fields, "include_description"),
+        // The form offers the subjects one by one instead (`subjects_found`).
+        include_subjects: false,
     };
 
     let _permit = state
@@ -1394,13 +1441,36 @@ async fn meta_enrich(
         .await
         .map_err(|_| ApiError(StatusCode::SERVICE_UNAVAILABLE, "server busy".into()))?;
 
-    let plan =
-        tokio::task::spawn_blocking(move || -> anyhow::Result<epublift::enrich::EnrichPlan> {
+    type Found = (
+        epublift::enrich::EnrichPlan,
+        Option<epublift::cover::CoverImage>,
+        Vec<String>,
+    );
+    let (plan, found_cover, subjects_found) =
+        tokio::task::spawn_blocking(move || -> anyhow::Result<Found> {
             let existing = read_metadata_from_bytes(&name, &file_bytes)?;
             let http = epublift::http::RustlsHttp::new()?;
             let fetched =
                 epublift::enrich::fetch_isbn(&provider, &isbn, &http, opts.include_description)?;
-            epublift::enrich::plan_enrich(&existing, &fetched, &opts)
+            // The catalogue's cover, offered next to the book's own; a cover
+            // that cannot be fetched or read is simply not offered.
+            let cover = fetched
+                .cover_url
+                .as_deref()
+                .and_then(|url| epublift::enrich::fetch_cover(url, &http).ok());
+            // The subjects to offer: the cleaned list, minus what the book has.
+            let have: Vec<String> = existing.subjects.iter().map(|s| s.to_lowercase()).collect();
+            let subjects = fetched
+                .subjects
+                .iter()
+                .filter(|s| !have.contains(&s.to_lowercase()))
+                .cloned()
+                .collect();
+            Ok((
+                epublift::enrich::plan_enrich(&existing, &fetched, &opts)?,
+                cover,
+                subjects,
+            ))
         })
         .await
         .map_err(|_| ApiError(StatusCode::INTERNAL_SERVER_ERROR, "crashed".into()))?
@@ -1423,6 +1493,8 @@ async fn meta_enrich(
                 SkipReason::AlreadySet => "present",
                 SkipReason::LanguageMismatch => "lang",
                 SkipReason::DescriptionOmitted => "omitted",
+                SkipReason::NoSubtitleInEpub2 => "epub2",
+                SkipReason::SubjectsOmitted => "pick",
             };
             serde_json::json!({"field": s.field, "reason": reason})
         })
@@ -1453,7 +1525,13 @@ async fn meta_enrich(
             "subjects": u.subjects,
             "series": u.series.as_ref().map(|s| serde_json::json!({"name": s.name, "position": s.position})),
             "isbn": u.isbn,
-        }
+        },
+        "subjects_found": subjects_found,
+        "cover": found_cover.map(|c| serde_json::json!({
+            "width": c.width,
+            "height": c.height,
+            "data_url": data_url(c.format.media_type(), &c.bytes),
+        })),
     })))
 }
 
@@ -1474,12 +1552,16 @@ async fn meta_write(
     if !state.limiter.allow(client_ip(&headers, peer)) {
         return Err(too_many_requests());
     }
-    let (file_bytes, raw_name, fields) = read_upload(&mut multipart).await?;
+    let (file_bytes, raw_name, fields, cover) = read_upload_with_cover(&mut multipart).await?;
     let file_name = if raw_name.trim().is_empty() {
         "book.epub".to_string()
     } else {
         raw_name
     };
+    let cover = cover
+        .map(epublift::cover::CoverImage::from_bytes)
+        .transpose()
+        .map_err(|e| bad_request(format!("{e:#}")))?;
 
     let update = epublift::meta::MetadataUpdate {
         title: nonempty(&fields, "title"),
@@ -1490,10 +1572,10 @@ async fn meta_write(
         date: nonempty(&fields, "date"),
         description: nonempty(&fields, "description"),
         subjects: parse_lines(&fields, "subjects"),
-        series: nonempty(&fields, "series").map(|s| parse_series(&s)),
+        series: nonempty(&fields, "series").map(|s| epublift::meta::Series::parse(&s)),
         isbn: nonempty(&fields, "isbn"),
     };
-    if update.is_empty() {
+    if update.is_empty() && cover.is_none() {
         return Err(bad_request("nothing to save — fill in at least one field"));
     }
 
@@ -1509,11 +1591,12 @@ async fn meta_write(
             let input = tmp.path().join(&file_name);
             std::fs::write(&input, &file_bytes)?;
             let output = tmp.path().join("output.epub");
-            let md = epublift::write_metadata(&input, &update, &output)?;
+            let written =
+                epublift::write_metadata_and_cover(&input, &update, cover.as_ref(), &output)?;
             let bytes = std::fs::read(&output)?;
             let resp = MetaWriteResponse {
                 output_name: format!("{}_meta.epub", file_stem_or(&file_name, "book")),
-                metadata: metadata_json(&md),
+                metadata: metadata_json(&written.metadata),
                 download_token: String::new(),
             };
             Ok((resp, bytes))

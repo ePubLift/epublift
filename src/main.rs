@@ -392,6 +392,9 @@ struct MetaSetArgs {
     /// Set the print ISBN (written as `dc:source` `urn:isbn:…`).
     #[arg(long)]
     isbn: Option<String>,
+    /// Make this JPEG or PNG the cover (put in as given, at most 10 MB).
+    #[arg(long, value_name = "IMAGE")]
+    cover: Option<PathBuf>,
     /// Output path (default: `<name>_meta.epub` next to the input).
     #[arg(short, long)]
     output: Option<PathBuf>,
@@ -424,6 +427,13 @@ struct MetaEnrichArgs {
     /// Also fetch and write the description (often publisher-authored).
     #[arg(long)]
     include_description: bool,
+    /// Also write the catalogue's subjects. Off by default: Open Library merges
+    /// many libraries' headings, some in other languages (they are listed).
+    #[arg(long)]
+    include_subjects: bool,
+    /// Also make the catalogue's cover the book's cover, when it has one.
+    #[arg(long)]
+    cover: bool,
     /// Output path (default: `<name>_meta.epub` next to the input).
     #[arg(short, long)]
     output: Option<PathBuf>,
@@ -745,17 +755,84 @@ fn run_meta(args: &MetaArgs) -> Result<()> {
                 .canonicalize()
                 .with_context(|| format!("Input file not found: {}", s.input.display()))?;
             let md = epublift::read_metadata(&input)?;
+            let cover = epublift::read_cover(&input)?;
             // `--json` is the older spelling of `--format metadata`.
             if s.json || s.format == MetaFormat::Metadata {
-                println!("{}", md.to_json());
+                let json = md.to_json();
+                let body = json.strip_suffix("\n}").unwrap_or(&json);
+                println!("{body},\n  \"cover\": {}\n}}", cover_json(cover.as_ref()));
             } else {
                 print!("{}", md.to_text());
+                println!("{:<14}{}", "Cover:", cover_line(cover.as_ref()));
             }
             Ok(())
         }
         MetaAction::Set(s) => run_meta_set(s),
         #[cfg(feature = "metadata")]
         MetaAction::Enrich(e) => run_meta_enrich(e),
+    }
+}
+
+/// "OEBPS/cover.jpeg (image/jpeg, 600×800, 85 KB)", or "none".
+fn cover_line(c: Option<&epublift::cover::CurrentCover>) -> String {
+    match c {
+        None => "none".to_string(),
+        Some(c) => format!(
+            "{} ({}, {}, {} KB)",
+            c.path,
+            c.media_type,
+            size_text(c.width, c.height),
+            c.bytes.len().div_ceil(1024)
+        ),
+    }
+}
+
+fn size_text(w: Option<u32>, h: Option<u32>) -> String {
+    match (w, h) {
+        (Some(w), Some(h)) => format!("{w}×{h}"),
+        _ => "size unknown".to_string(),
+    }
+}
+
+/// The `cover` member of `meta show --format metadata`.
+fn cover_json(c: Option<&epublift::cover::CurrentCover>) -> String {
+    match c {
+        None => "null".to_string(),
+        Some(c) => serde_json::json!({
+            "path": c.path,
+            "media_type": c.media_type,
+            "width": c.width,
+            "height": c.height,
+            "bytes": c.bytes.len(),
+        })
+        .to_string(),
+    }
+}
+
+/// Read and check a `--cover` image.
+fn load_cover(path: &Path) -> Result<epublift::cover::CoverImage> {
+    let bytes =
+        std::fs::read(path).with_context(|| format!("could not read {}", path.display()))?;
+    epublift::cover::CoverImage::from_bytes(bytes).with_context(|| format!("{}", path.display()))
+}
+
+/// Report a cover change after a write.
+fn print_cover_change(c: &epublift::cover::CoverChange) {
+    match &c.replaced {
+        Some(old) => println!(
+            "[+] Cover replaced: {old} -> {} ({}×{})",
+            c.path, c.width, c.height
+        ),
+        None => println!("[+] Cover added: {} ({}×{})", c.path, c.width, c.height),
+    }
+    if let Some(page) = &c.cover_page_added {
+        println!("    cover page added first in the reading order: {page}");
+    }
+    if !c.pages_updated.is_empty() {
+        println!("    pages updated: {}", c.pages_updated.join(", "));
+    }
+    if c.kept_old_image {
+        println!("    the old image was kept: a page that uses it could not be updated");
     }
 }
 
@@ -784,23 +861,27 @@ fn run_meta_set(s: &MetaSetArgs) -> Result<()> {
         date: s.date.clone(),
         description: s.description.clone(),
         subjects: (!s.subjects.is_empty()).then(|| s.subjects.clone()),
-        series: s.series.as_deref().map(parse_series),
+        series: s.series.as_deref().map(epublift::meta::Series::parse),
         isbn: s.isbn.clone(),
     };
-    if update.is_empty() {
+    if update.is_empty() && s.cover.is_none() {
         anyhow::bail!(
             "nothing to set — pass at least one field (e.g. --title). See `epublift meta set --help`."
         );
     }
+    let cover = s.cover.as_deref().map(load_cover).transpose()?;
 
     let output = s
         .output
         .clone()
         .unwrap_or_else(|| default_meta_output(&input));
 
-    let md = epublift::write_metadata(&input, &update, &output)?;
+    let written = epublift::write_metadata_and_cover(&input, &update, cover.as_ref(), &output)?;
     println!("[+] Wrote updated metadata to: {}", output.display());
-    print!("{}", md.to_text());
+    if let Some(c) = &written.cover {
+        print_cover_change(c);
+    }
+    print!("{}", written.metadata.to_text());
     Ok(())
 }
 
@@ -1146,6 +1227,7 @@ fn run_meta_enrich(e: &MetaEnrichArgs) -> Result<()> {
         overwrite: e.overwrite,
         allow_foreign_meta: e.allow_foreign_meta,
         include_description: e.include_description,
+        include_subjects: e.include_subjects,
     };
 
     let provider_label = match e.provider.as_str() {
@@ -1158,12 +1240,52 @@ fn run_meta_enrich(e: &MetaEnrichArgs) -> Result<()> {
     let plan = enrich::plan_enrich(&existing, &fetched, &opts)?;
 
     print!("{}", plan.to_text());
+    if !e.include_subjects && !fetched.subjects.is_empty() {
+        println!(
+            "[i] {provider_label} lists {} subject(s), from many libraries and not all in the \
+             book's language: {}. Pass --include-subjects to add them.",
+            fetched.subjects.len(),
+            fetched.subjects.join("; ")
+        );
+    }
+
+    // The catalogue's cover: shown next to the book's own, applied only on
+    // --cover (often it is smaller than the one the book has).
+    let mut cover = None;
+    match &fetched.cover_url {
+        None => println!("[i] {provider_label} has no cover for this ISBN."),
+        Some(url) => match enrich::fetch_cover(url, &http) {
+            Err(err) => println!("[!] {provider_label}'s cover could not be used: {err:#}"),
+            Ok(c) => {
+                let current = epublift::read_cover(&input)?;
+                let mine = current.as_ref().map(|c| size_text(c.width, c.height));
+                println!(
+                    "[i] {provider_label} has a cover: {}×{} (the book's: {}).",
+                    c.width,
+                    c.height,
+                    mine.as_deref().unwrap_or("none")
+                );
+                if current.as_ref().is_some_and(|cur| {
+                    cur.width.zip(cur.height).is_some_and(|(w, h)| {
+                        u64::from(w) * u64::from(h) > u64::from(c.width) * u64::from(c.height)
+                    })
+                }) {
+                    println!("    It is smaller than the book's own cover.");
+                }
+                if e.cover {
+                    cover = Some(c);
+                } else {
+                    println!("    Pass --cover to make it the book's cover.");
+                }
+            }
+        },
+    }
 
     if e.dry_run {
         println!("[i] Dry run — no changes written.");
         return Ok(());
     }
-    if plan.update.is_empty() {
+    if plan.update.is_empty() && cover.is_none() {
         return Ok(());
     }
 
@@ -1171,29 +1293,14 @@ fn run_meta_enrich(e: &MetaEnrichArgs) -> Result<()> {
         .output
         .clone()
         .unwrap_or_else(|| default_meta_output(&input));
-    let md = epublift::write_metadata(&input, &plan.update, &output)?;
+    let written =
+        epublift::write_metadata_and_cover(&input, &plan.update, cover.as_ref(), &output)?;
     println!("[+] Wrote enriched metadata to: {}", output.display());
-    print!("{}", md.to_text());
+    if let Some(c) = &written.cover {
+        print_cover_change(c);
+    }
+    print!("{}", written.metadata.to_text());
     Ok(())
-}
-
-/// Parse a `--series` argument: `Name` or `Name:position` (the position is taken
-/// only when the text after the last `:` looks numeric, so colons in names are
-/// safe).
-fn parse_series(s: &str) -> epublift::meta::Series {
-    if let Some((name, pos)) = s.rsplit_once(':')
-        && !pos.is_empty()
-        && pos.chars().all(|c| c.is_ascii_digit() || c == '.')
-    {
-        return epublift::meta::Series {
-            name: name.to_string(),
-            position: Some(pos.to_string()),
-        };
-    }
-    epublift::meta::Series {
-        name: s.to_string(),
-        position: None,
-    }
 }
 
 /// The default (no-subcommand) optimize path — the original CLI behavior.

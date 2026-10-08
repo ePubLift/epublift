@@ -10,6 +10,88 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+## [cli-v3.3.0] - 2026-10-08
+
+### Added
+- **Change a book's cover** (issue #61). `meta set --cover new.jpg` makes a
+  JPEG or PNG (up to 10 MB) the cover; `meta enrich` shows Open Library's
+  cover next to the book's own, with both sizes, and `--cover` uses it;
+  `meta show` prints the cover. The image goes in as given. Every page that
+  shows the old cover follows, including Calibre's SVG cover pages, which
+  take the new size; a book with no cover gets one, with a cover page first in
+  the reading order. Nothing is written if the result would have more errors.
+  On 544 books every cover was set and none came out with more errors. See
+  `docs/metadata.md` § Cover.
+
+### Fixed
+- **Editing an EPUB 2 book's metadata no longer makes it invalid.** The writer
+  put EPUB 3 markup (`refines`, `property` metas, `dcterms:modified`) into
+  EPUB 2 packages: re-writing just the title added RSC-005 errors to 457 of
+  457 EPUB 2 books on our shelf (2,285 in all). EPUB 2 is now written in
+  EPUB 2's own syntax (`opf:role`, `opf:file-as`, `opf:scheme="ISBN"`,
+  Calibre's series metas). An EPUB 2 book has no subtitle field, so
+  `--subtitle` on one is refused with a message instead of written, and
+  `meta enrich` no longer proposes one.
+- **Setting a field to the value it already has changes nothing.** Before, it
+  dropped every `dc:language` but the first, and added a second copy of an
+  ISBN the book already carried.
+- **An author who stays keeps their role and sort name** (`file-as`); a
+  translator listed as a creator was turned into an author.
+- **Metadata edits work on Calibre 0.7-era books** that write the OPF namespace
+  as `ns0:` (6 books on our shelf failed with "unknown namespace prefix").
+- **A series position may be a range** (`--series "Dune:1-6"`); it was read as
+  part of the name.
+- **Catalogue text is cleaned.** HTML entities are decoded (`Computers &amp;
+  the internet` was written as is) and duplicate subjects are dropped,
+  including broken copies (`Einfu hrung` next to `Einführung`).
+
+Measured on 544 books: setting every field to its own value changes no field
+on any book, a real edit (title, authors, publisher, series, ISBN) adds no
+error to any book, and every author keeps role and sort name.
+
+### Changed
+- **`meta enrich` no longer writes subjects unless `--include-subjects` is
+  given; it lists them.** Open Library merges many libraries' subject headings
+  in their own languages with no language tag, so an English book got German
+  and Dutch subjects.
+- **`epublift check` runs epubveri 0.24.0 and `epublift repair` runs epubsana
+  0.25.0.** epubveri checks SVG attributes per element and their keyword values
+  as epubcheck 5.4.0 does (EPUB 2: RSC-005 errors; EPUB 3: RSC-025 usage
+  only), and no longer flags a padded keyword (`fill-rule=" evenodd"`) or
+  `paint-order`, `transform-box`, `transform-origin` at EPUB 3. epubsana reads
+  ids and links as epubcheck does (whitespace trimmed, `%`-escapes resolved,
+  NFC/NFD names match). Measured on 544 books, cli-v3.2.0 vs this release: the
+  same findings, statuses and exit codes on every book, and every repaired file
+  is byte-identical.
+
+## [web-v1.24.0] - 2026-10-08
+
+### Added
+- **Cover in the Metadata form** (issue #61): keep the current cover, use the
+  one the ISBN lookup found on Open Library (shown next to the book's own, with
+  sizes, and a note when it is smaller), or upload a JPEG/PNG up to 10 MB. The
+  covers are previewed as `data:` URLs; the browser never contacts a catalogue.
+  The cover is changed as in cli-v3.3.0.
+- **Subjects from a lookup are offered as tick boxes**, none ticked: catalogue
+  subjects come from many libraries, in their languages.
+
+### Fixed
+- **Saving metadata no longer makes an EPUB 2 book invalid** — the form sends
+  every field, so every save did it before (see cli-v3.3.0). The Subtitle field
+  is off for an EPUB 2 book, which has none, and says why.
+- **Saving keeps what the form does not show:** further `dc:language` values,
+  an ISBN's own markup, authors' roles and sort names.
+- **A metadata save reads the book with the zip-bomb limits** (entry count,
+  decompressed size) the other modes already had.
+- Catalogue text is cleaned, as in cli-v3.3.0.
+
+### Changed
+- **Validate runs epubveri 0.24.0 and Repair runs epubsana 0.25.0** in the
+  browser, the same versions as cli-v3.3.0 (`vendor/VENDOR.md`). On 544 books
+  the browser's Validate gives the same report as `epublift check`, and the
+  browser's Repair (every fix ticked, another round while it reveals more)
+  writes the same bytes as `epublift repair --yes`.
+
 ## [cli-v3.2.0] - 2026-10-08
 
 ### Changed

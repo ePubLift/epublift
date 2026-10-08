@@ -24,6 +24,29 @@ use crate::meta::{Metadata, MetadataUpdate};
 pub trait Http {
     /// Fetch `url`, returning the response body as text.
     fn get(&self, url: &str) -> Result<String>;
+
+    /// Fetch a cover image: `https` only, every hop (redirects included) on a
+    /// [`cover_host_allowed`] host, at most [`crate::cover::MAX_COVER_BYTES`].
+    fn get_cover(&self, url: &str) -> Result<Vec<u8>> {
+        anyhow::bail!("this client cannot download cover images ({url})")
+    }
+}
+
+/// The hosts a catalogue's cover URL may lead to. The URL comes from the
+/// catalogue's JSON, so it is not ours to trust: without this list a lookup
+/// could make the server fetch any address. Open Library's covers redirect to
+/// the Internet Archive (`archive.org`, then an `ia*.us.archive.org` node).
+pub fn cover_host_allowed(host: &str) -> bool {
+    let host = host.to_ascii_lowercase();
+    host == "covers.openlibrary.org" || host == "archive.org" || host.ends_with(".archive.org")
+}
+
+/// Download and check the cover at `url` (a [`Fetched::cover_url`]).
+pub fn fetch_cover(url: &str, http: &dyn Http) -> Result<crate::cover::CoverImage> {
+    let bytes = http
+        .get_cover(url)
+        .context("could not download the cover")?;
+    crate::cover::CoverImage::from_bytes(bytes)
 }
 
 /// A provider-neutral, normalized lookup result. Edition-level fields (title,
@@ -57,6 +80,9 @@ pub struct EnrichOptions {
     pub allow_foreign_meta: bool,
     /// Fetch and write the description (often publisher-authored; opt-in).
     pub include_description: bool,
+    /// Write the catalogue's subjects (opt-in: Open Library merges the subject
+    /// headings of many libraries, in their languages, with no language tag).
+    pub include_subjects: bool,
 }
 
 /// Why a field was not written.
@@ -68,6 +94,10 @@ pub enum SkipReason {
     LanguageMismatch,
     /// The description was found but `--include-description` wasn't given.
     DescriptionOmitted,
+    /// A subtitle was found, but the book is EPUB 2, which has no subtitle field.
+    NoSubtitleInEpub2,
+    /// Subjects were found but `--include-subjects` wasn't given.
+    SubjectsOmitted,
 }
 
 /// A field that will be written, with its (stable) key and display value.
@@ -135,6 +165,8 @@ impl EnrichPlan {
                     SkipReason::AlreadySet => "already set",
                     SkipReason::LanguageMismatch => "language mismatch",
                     SkipReason::DescriptionOmitted => "omitted; use --include-description",
+                    SkipReason::NoSubtitleInEpub2 => "EPUB 2 has no subtitle field",
+                    SkipReason::SubjectsOmitted => "omitted; use --include-subjects",
                 };
                 o.push_str(&format!("      {} ({reason})\n", s.field));
             }
@@ -266,13 +298,108 @@ pub fn fetch_isbn(
     http: &dyn Http,
     want_description: bool,
 ) -> Result<Fetched> {
-    match provider {
-        "openlibrary" | "ol" => OpenLibrary.fetch(isbn, http, want_description),
+    let mut f = match provider {
+        "openlibrary" | "ol" => OpenLibrary.fetch(isbn, http, want_description)?,
         "google" | "googlebooks" | "google-books" => {
-            GoogleBooks.fetch(isbn, http, want_description)
+            GoogleBooks.fetch(isbn, http, want_description)?
         }
         other => anyhow::bail!("unknown provider '{other}'. Supported: openlibrary, google."),
+    };
+    // Catalogue text is sometimes still HTML-escaped (`Computers &amp; the
+    // internet`); written as is, the book would show the entity.
+    for s in [
+        &mut f.title,
+        &mut f.subtitle,
+        &mut f.publisher,
+        &mut f.description,
+    ]
+    .into_iter()
+    .flatten()
+    {
+        *s = decode_entities(s);
     }
+    for a in &mut f.authors {
+        *a = decode_entities(a);
+    }
+    f.subjects = clean_subjects(&f.subjects);
+    Ok(f)
+}
+
+/// Decode the HTML character references a catalogue leaves in its text:
+/// `&amp; &lt; &gt; &quot; &apos; &#39;` and numeric ones.
+fn decode_entities(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut rest = s;
+    while let Some(i) = rest.find('&') {
+        out.push_str(&rest[..i]);
+        rest = &rest[i..];
+        let decoded = rest.find(';').filter(|&e| e <= 10).and_then(|e| {
+            let c = match &rest[1..e] {
+                "amp" => Some('&'),
+                "lt" => Some('<'),
+                "gt" => Some('>'),
+                "quot" => Some('"'),
+                "apos" => Some('\''),
+                n if n.starts_with("#x") || n.starts_with("#X") => u32::from_str_radix(&n[2..], 16)
+                    .ok()
+                    .and_then(char::from_u32),
+                n if n.starts_with('#') => n[1..].parse().ok().and_then(char::from_u32),
+                _ => None,
+            }?;
+            Some((c, e + 1))
+        });
+        match decoded {
+            Some((c, len)) => {
+                out.push(c);
+                rest = &rest[len..];
+            }
+            None => {
+                out.push('&');
+                rest = &rest[1..];
+            }
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
+/// A catalogue's subject list, cleaned: entities decoded, Unicode composed
+/// (NFC), spaces collapsed, and duplicates dropped — compared without case,
+/// accents and spaces, because the same heading arrives broken as often as
+/// not (`Einfu hrung` next to `Einführung`); of two the one with fewer spaces
+/// is kept, in the first one's place.
+pub fn clean_subjects(raw: &[String]) -> Vec<String> {
+    use unicode_normalization::UnicodeNormalization;
+    use unicode_normalization::char::is_combining_mark;
+    let fold = |s: &str| -> String {
+        s.nfd()
+            .filter(|c| !is_combining_mark(*c) && !c.is_whitespace())
+            .flat_map(char::to_lowercase)
+            .collect()
+    };
+    let mut out: Vec<String> = Vec::new();
+    let mut keys: Vec<String> = Vec::new();
+    for s in raw {
+        let s: String = decode_entities(s).nfc().collect();
+        let s = s.split_whitespace().collect::<Vec<_>>().join(" ");
+        if s.is_empty() {
+            continue;
+        }
+        let key = fold(&s);
+        match keys.iter().position(|k| *k == key) {
+            Some(i) => {
+                let spaces = |x: &str| x.chars().filter(|c| *c == ' ').count();
+                if spaces(&s) < spaces(&out[i]) {
+                    out[i] = s;
+                }
+            }
+            None => {
+                keys.push(key);
+                out.push(s);
+            }
+        }
+    }
+    out
 }
 
 /// Strip hyphens/spaces from an ISBN.
@@ -523,10 +650,21 @@ pub fn plan_enrich(
         .titles
         .iter()
         .any(|t| t.title_type.as_deref() == Some("subtitle"));
+    let epub3 = existing
+        .epub_version
+        .as_deref()
+        .is_some_and(|v| v.trim_start().starts_with('3'));
     if let Some(s) = &fetched.subtitle {
-        consider!("subtitle", s.clone(), has_sub, edition_ok, {
-            plan.update.subtitle = Some(s.clone());
-        });
+        if epub3 {
+            consider!("subtitle", s.clone(), has_sub, edition_ok, {
+                plan.update.subtitle = Some(s.clone());
+            });
+        } else {
+            plan.skipped.push(Skipped {
+                field: "subtitle",
+                reason: SkipReason::NoSubtitleInEpub2,
+            });
+        }
     }
     // Authors (edition-level).
     if !fetched.authors.is_empty() {
@@ -575,7 +713,12 @@ pub fn plan_enrich(
         });
     }
     // Subjects (work-level).
-    if !fetched.subjects.is_empty() {
+    if !fetched.subjects.is_empty() && !opts.include_subjects {
+        plan.skipped.push(Skipped {
+            field: "subjects",
+            reason: SkipReason::SubjectsOmitted,
+        });
+    } else if !fetched.subjects.is_empty() {
         consider!(
             "subjects",
             fetched.subjects.join(", "),
@@ -648,7 +791,11 @@ mod tests {
             edition_language: Some("tr".to_string()),
             ..Fetched::default()
         };
-        let plan = plan_enrich(&turkish_book(), &fetched, &EnrichOptions::default()).unwrap();
+        let opts = EnrichOptions {
+            include_subjects: true,
+            ..EnrichOptions::default()
+        };
+        let plan = plan_enrich(&turkish_book(), &fetched, &opts).unwrap();
 
         // Title already present → skipped; authors/publisher/date/isbn filled.
         assert!(plan.update.authors.is_some());
@@ -665,6 +812,104 @@ mod tests {
     }
 
     #[test]
+    fn subjects_are_written_only_when_asked() {
+        let fetched = Fetched {
+            subjects: vec!["Computer science".to_string()],
+            edition_language: Some("en".to_string()),
+            ..Fetched::default()
+        };
+        let book = Metadata {
+            languages: vec!["en".to_string()],
+            ..Metadata::default()
+        };
+        let plan = plan_enrich(&book, &fetched, &EnrichOptions::default()).unwrap();
+        assert!(plan.update.subjects.is_none());
+        assert!(
+            plan.skipped
+                .iter()
+                .any(|s| s.reason == SkipReason::SubjectsOmitted)
+        );
+        let opts = EnrichOptions {
+            include_subjects: true,
+            ..EnrichOptions::default()
+        };
+        let plan = plan_enrich(&book, &fetched, &opts).unwrap();
+        assert!(plan.update.subjects.is_some());
+    }
+
+    #[test]
+    fn subjects_are_cleaned_as_open_library_sends_them() {
+        // ISBN 9780137909100, as Open Library returned it on 2026-10-08.
+        let raw: Vec<String> = [
+            "Computer programming",
+            "Coding theory",
+            "Datenverarbeitung",
+            "Computers",
+            "Hardware",
+            "Coderingstheorie",
+            "Programmatuurtechniek",
+            "Einfu hrung",
+            "Einführung",
+            "Machine theory",
+            "Computers &amp; the internet",
+            "Computer science",
+            "computers",
+            "Einfu\u{308}hrung",
+        ]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+        let clean = clean_subjects(&raw);
+        assert!(clean.contains(&"Computers & the internet".to_string()));
+        assert_eq!(
+            clean
+                .iter()
+                .filter(|s| s.contains("hrung"))
+                .collect::<Vec<_>>(),
+            ["Einführung"]
+        );
+        assert_eq!(
+            clean
+                .iter()
+                .filter(|s| s.eq_ignore_ascii_case("computers"))
+                .count(),
+            1
+        );
+        // The heading that was broken keeps its place in the list.
+        assert_eq!(clean.iter().position(|s| s == "Einführung"), Some(7));
+        assert_eq!(
+            decode_entities("A &#38; B &#x26; C &bogus; D &"),
+            "A & B & C &bogus; D &"
+        );
+    }
+
+    #[test]
+    fn a_subtitle_is_offered_to_epub3_only() {
+        let fetched = Fetched {
+            subtitle: Some("Bir Alt Başlık".to_string()),
+            edition_language: Some("tr".to_string()),
+            ..Fetched::default()
+        };
+        let epub2 = Metadata {
+            epub_version: Some("2.0".to_string()),
+            ..turkish_book()
+        };
+        let plan = plan_enrich(&epub2, &fetched, &EnrichOptions::default()).unwrap();
+        assert!(plan.update.subtitle.is_none());
+        assert!(
+            plan.skipped
+                .iter()
+                .any(|s| s.field == "subtitle" && s.reason == SkipReason::NoSubtitleInEpub2)
+        );
+        let epub3 = Metadata {
+            epub_version: Some("3.0".to_string()),
+            ..turkish_book()
+        };
+        let plan = plan_enrich(&epub3, &fetched, &EnrichOptions::default()).unwrap();
+        assert_eq!(plan.update.subtitle.as_deref(), Some("Bir Alt Başlık"));
+    }
+
+    #[test]
     fn allow_foreign_keeps_subjects() {
         let fetched = Fetched {
             subjects: vec!["Psychology".to_string()],
@@ -673,6 +918,7 @@ mod tests {
         };
         let opts = EnrichOptions {
             allow_foreign_meta: true,
+            include_subjects: true,
             ..EnrichOptions::default()
         };
         let plan = plan_enrich(&turkish_book(), &fetched, &opts).unwrap();
