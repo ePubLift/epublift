@@ -71,7 +71,7 @@ required-features = ["img-calib"]
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
-zip = { version = "8", default-features = false, features = ["deflate"] }
+zip = { version = "9", default-features = false, features = ["deflate"] }
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 zenwebp = "0.4"
 quick-xml = "0.42"
@@ -238,7 +238,7 @@ webpki-roots = ["dep:webpki-roots"]
 
 [dev-dependencies]
 # Used by the integration tests to assemble EPUB fixtures and inspect output.
-zip = { version = "8", default-features = false, features = ["deflate"] }
+zip = { version = "9", default-features = false, features = ["deflate"] }
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 tempfile = "3"
 

@@ -65,7 +65,7 @@ anyhow = "1"
 tempfile = "3"
 # Safely unpacking an uploaded Markdown-plus-images .zip for import. Matches the
 # epublift core's zip version. default-features off keeps it pure Rust (deflate).
-zip = { version = "8", default-features = false, features = ["deflate"] }
+zip = { version = "9", default-features = false, features = ["deflate"] }
 uuid = { version = "1", features = ["v4"] }
 # Cover previews in the Metadata form travel as `data:` URLs (the CSP allows
 # `img-src data:`, so the browser never contacts a catalogue itself).
