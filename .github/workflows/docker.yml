@@ -77,8 +77,9 @@ jobs:
           # version/commit link (build.rs reads $GIT_SHA).
           build-args: |
             GIT_SHA=${{ github.sha }}
+          # No cache-to: a cache written under a tag ref is never readable by
+          # the next tag (see release.yml), and exporting it cost ~87 s a run.
           cache-from: type=gha,scope=${{ env.PLATFORM_PAIR }}
-          cache-to: type=gha,mode=max,scope=${{ env.PLATFORM_PAIR }}
           outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
 
       - name: Export digest

@@ -69,10 +69,15 @@ jobs:
         if: endsWith(matrix.target, '-linux-musl')
         run: sudo apt-get update && sudo apt-get install -y musl-tools
 
+      # Restore only: a cache saved under a tag ref is never readable by the
+      # next tag (GitHub scopes caches to the ref that wrote them; a tag can
+      # read only its own and the default branch's), so saving one here just
+      # fills the repo's 10 GB quota and evicts main's CI cache.
       - name: Cache cargo registry and build
         uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.target }}
+          save-if: false
 
       # Ship the optional features in the released binaries:
       #   - `epub34`   — experimental EPUB 3.4 image codecs (AVIF / JPEG XL;
