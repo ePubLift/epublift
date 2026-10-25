@@ -37,7 +37,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 use styloria::{
-    BlockItem, Cascade, Element, ImportRule, Rule, Sheet, Stylesheet, ValueCheck,
+    BlockItem, Cascade, Element, ImportRule, Rule, Sheet, Stylesheet, Token, Tokenizer, ValueCheck,
     check_declaration, decode_stylesheet, parse_block_contents, parse_import_rule,
     parse_stylesheet,
 };
@@ -121,6 +121,11 @@ pub fn convert_book(root: &Path, package_dir: &Path, progress: &dyn Fn(&str)) ->
         for (class, decls) in &rules {
             css.push_str(&format!(".{class} {{ {decls} }}\n"));
         }
+        // Each rule passed `rule_clean` on its own; the sheet must too.
+        debug_assert!(
+            rule_clean(&css),
+            "the written stylesheet has findings:\n{css}"
+        );
         fs::write(&css_path, css)?;
         summary.stylesheet = css_path
             .file_name()
@@ -210,12 +215,14 @@ fn convert_document(
     rules: &mut BTreeMap<String, String>,
 ) -> Option<String> {
     let doc = util::parse_xml_with_dtd(text).ok()?;
-    // A declaration a browser would drop is a bug in the mapping, never shipped.
+    // A declaration a browser would drop is a bug in the mapping, never shipped;
+    // nor is a rule epubveri would report in the stylesheet.
     let candidates: Vec<Conversion> = plan(&doc)
         .into_iter()
         .filter(|c| {
             c.targets.iter().all(|(_, d)| {
-                let ok = declarations_valid(&d.css);
+                let ok = declarations_valid(&d.css)
+                    && rule_clean(&format!(".{} {{ {} }}", d.class, d.css));
                 debug_assert!(ok, "invalid declaration written: {}", d.css);
                 ok
             })
@@ -674,7 +681,7 @@ fn plan_element(node: Node<'_, '_>, element: &str) -> Option<Conversion> {
             {
                 targets.push(Decl {
                     class: format!("epublift-font-family-{}", slug(face)),
-                    css: format!("font-family: {face}"),
+                    css: format!("font-family: {}", font_family_value(face)?),
                     props: &["font-family"],
                 });
             }
@@ -701,6 +708,86 @@ fn plan_element(node: Node<'_, '_>, element: &str) -> Option<Conversion> {
         }
         _ => None,
     }
+}
+
+/// `face` as a `font-family` value that is safe to write: a comma-separated
+/// list of family names, each one CSS string or a run of identifiers, written
+/// back with styloria's serializer so it means what it meant and nothing more.
+/// `None` for anything else — a comment, a `;` or a brace, an unterminated
+/// string, a CSS-wide keyword — and the `font` element is left as it is.
+fn font_family_value(face: &str) -> Option<String> {
+    use styloria::serialize::{serialize_ident, serialize_string};
+    const RESERVED: &[&str] = &[
+        "inherit",
+        "initial",
+        "unset",
+        "revert",
+        "revert-layer",
+        "default",
+    ];
+
+    let mut families: Vec<Vec<Token<'_>>> = vec![Vec::new()];
+    let mut end = 0;
+    for t in Tokenizer::new(face).spanned() {
+        // The tokenizer skips comments, which leaves a gap between spans.
+        if t.span.start != end {
+            return None;
+        }
+        end = t.span.end;
+        match t.node {
+            Token::Whitespace => {}
+            Token::Comma => families.push(Vec::new()),
+            Token::Ident(_) => families.last_mut()?.push(t.node),
+            Token::String(_) if string_closed(t.span.slice(face)) => {
+                families.last_mut()?.push(t.node)
+            }
+            _ => return None,
+        }
+    }
+    if end != face.len() {
+        return None;
+    }
+    let mut out = Vec::new();
+    for family in &families {
+        let mut name = String::new();
+        match family.as_slice() {
+            [Token::String(v)] => serialize_string(v, &mut name),
+            [] => return None,
+            idents => {
+                for t in idents {
+                    let Token::Ident(v) = t else { return None };
+                    if RESERVED.iter().any(|r| v.eq_ignore_ascii_case(r)) {
+                        return None;
+                    }
+                    if !name.is_empty() {
+                        name.push(' ');
+                    }
+                    serialize_ident(v, &mut name);
+                }
+            }
+        }
+        out.push(name);
+    }
+    Some(out.join(", "))
+}
+
+/// Whether a string token's source ends with its own closing quote; an
+/// unterminated one runs to the end of the value instead.
+fn string_closed(src: &str) -> bool {
+    let Some(q) = src.chars().next() else {
+        return false;
+    };
+    let body = &src[q.len_utf8()..];
+    body.strip_suffix(q)
+        .is_some_and(|inner| inner.chars().rev().take_while(|c| *c == '\\').count() % 2 == 0)
+}
+
+/// Whether epubveri finds nothing to report in `css`, as the stylesheet the
+/// upgrade writes would hold it.
+fn rule_clean(css: &str) -> bool {
+    epubveri::check_style_text(css, STYLESHEET_NAME, &epubveri::Options::default())
+        .messages
+        .is_empty()
 }
 
 /// The rules for parsing a legacy font size (§15.3.4): `+N` and `-N` are
@@ -1477,6 +1564,82 @@ mod tests {
             "<center><img src=\"c\" alt=\"\"/></center>",
         );
         assert_eq!((s.elements, s.left_css_sets), (0, 1));
+    }
+
+    #[test]
+    fn font_face_is_reserialized() {
+        for (face, want) in [
+            ("Times New Roman, serif", "Times New Roman, serif"),
+            ("Arial", "Arial"),
+            ("\"Book Antiqua\", serif", "\"Book Antiqua\", serif"),
+            (
+                "'Palatino Linotype',Georgia",
+                "\"Palatino Linotype\", Georgia",
+            ),
+            ("  Verdana ,  sans-serif ", "Verdana, sans-serif"),
+            ("'It\\'s'", "\"It's\""),
+        ] {
+            assert_eq!(font_family_value(face).as_deref(), Some(want), "{face}");
+        }
+    }
+
+    #[test]
+    fn font_face_that_is_not_a_family_list_is_declined() {
+        for face in [
+            // Unterminated strings: valid tokens, but parse errors.
+            "\"Book Antiqua",
+            "'Times",
+            "'a\\'",
+            // A comment would swallow what follows it in the stylesheet.
+            "a /* b",
+            "a /* b */ c",
+            // Breaking out of the declaration or the rule.
+            "x; color: red",
+            "a } body { display: none",
+            "a { b",
+            // Not a family name.
+            "inherit",
+            "Default Font",
+            "3D Font",
+            "Arial,",
+            ", Arial",
+            "\"a\" b",
+            "url(x)",
+        ] {
+            assert_eq!(font_family_value(face), None, "{face}");
+        }
+    }
+
+    #[test]
+    fn hostile_font_face_leaves_the_element() {
+        // The `font` stays as written: the face is not CSS we can write safely.
+        for face in [
+            "&quot;Book Antiqua",
+            "a } body { display: none",
+            "x; color: red",
+            "a /* b",
+        ] {
+            let (_d, s, text, css) = run(
+                "",
+                "",
+                &format!("<p><font face=\"{face}\" size=\"+1\">F</font></p>"),
+            );
+            assert_eq!(s.elements, 0, "{face}");
+            assert!(text.contains("<font face="), "{face}: {text}");
+            assert!(!css.contains("font-family"), "{face}: {css}");
+        }
+        // A quoted family goes through, quoted as styloria writes it.
+        let (_d, s, _, css) = run(
+            "",
+            "",
+            "<p><font face=\"'Book Antiqua', serif\">F</font></p>",
+        );
+        assert_eq!(s.elements, 1);
+        assert!(
+            css.contains("{ font-family: \"Book Antiqua\", serif }"),
+            "{css}"
+        );
+        assert!(rule_clean(&css), "{css}");
     }
 
     #[test]

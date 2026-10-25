@@ -238,8 +238,11 @@ keyword (`size="2"` → `small`, `+1` → `large`). The same checks apply, with 
 type selector such as `font { … }` or `div { … }` in the book's CSS counting as
 a selector that would match differently. Left as written: a `center` around
 anything but text, images and inline markup (`<center>` also centres blocks,
-which `text-align` does not), `<font color>`, and `size="7"`, whose
-`xxx-large` older readers don't know.
+which `text-align` does not), `<font color>`, `size="7"`, whose
+`xxx-large` older readers don't know, and a `face` that is not a plain list of
+family names (a comment, a `;` or a brace, an unterminated quote, a CSS-wide
+keyword such as `inherit`). A face that is goes into the stylesheet re-quoted,
+and every rule is checked with epubveri before it is written.
 
 ### Kobo `.kepub` output (`--kepub`)
 

@@ -11,6 +11,13 @@ are tagged with the component they belong to.
 ## [Unreleased]
 
 ### Fixed
+- **A `<font face>` is written into the upgrade's stylesheet only when it is
+  a plain list of family names**, re-quoted by styloria, and every rule is
+  checked with epubveri first. Before, the face went in as written: a face
+  such as `"Book Antiqua` (unterminated quote) or `a /* b` made the
+  stylesheet invalid and swallowed the next rule, and `a } body { display:
+  none` added a rule of its own. Such a `<font>` is now left as written. On
+  the 562-book test shelf the 5 books with a `face` upgrade byte-identically.
 - **An `-o` that names the input is refused** (exit 2) on the default
   command, `meta set`, `meta enrich` and `import`, as `repair` already did.
   Before, `epublift -i book.epub -o book.epub` replaced the original book.
