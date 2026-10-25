@@ -15,7 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use anyhow::{Context, Result};
-use clap::Parser;
+use clap::{CommandFactory, Parser};
 use epublift::{EpubVersion, ImageStrategy, Options};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -526,7 +526,15 @@ struct RestoreArgs {
 }
 
 fn main() -> ExitCode {
-    let args = Args::parse();
+    let args = match Args::try_parse() {
+        Ok(args) => args,
+        Err(e) => {
+            if let Some(long) = help_requested(std::env::args_os().skip(1)) {
+                print_help_for(std::env::args_os().skip(1), long);
+            }
+            e.exit()
+        }
+    };
     match run(args) {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
@@ -536,6 +544,51 @@ fn main() -> ExitCode {
             ExitCode::FAILURE
         }
     }
+}
+
+/// A help request short-circuits (veripublica conventions CLI.md §5): `-h` /
+/// `--help` anywhere before `--` wins over a malformed rest of the line.
+/// `Some(true)` for `--help` (long help), `Some(false)` for `-h`.
+fn help_requested(argv: impl Iterator<Item = std::ffi::OsString>) -> Option<bool> {
+    let mut found = None;
+    for a in argv.take_while(|a| a != "--") {
+        if a == "--help" {
+            return Some(true);
+        }
+        if a == "-h" {
+            found = Some(false);
+        }
+    }
+    found
+}
+
+/// Prints the help of the deepest subcommand named on the line and exits 0.
+fn print_help_for(argv: impl Iterator<Item = std::ffi::OsString>, long: bool) -> ! {
+    let mut cmd = Args::command();
+    let mut path = Vec::new();
+    for a in argv.take_while(|a| a != "--") {
+        let Some(name) = a.to_str() else { continue };
+        let found = path
+            .iter()
+            .fold(&cmd, |c: &clap::Command, n: &String| {
+                c.find_subcommand(n).expect("walked")
+            })
+            .find_subcommand(name)
+            .map(|sub| sub.get_name().to_owned());
+        if let Some(n) = found {
+            path.push(n);
+        }
+    }
+    cmd.build();
+    let target = path
+        .iter()
+        .fold(&mut cmd, |c, n| c.find_subcommand_mut(n).expect("walked"));
+    let _ = if long {
+        target.print_long_help()
+    } else {
+        target.print_help()
+    };
+    std::process::exit(0)
 }
 
 fn run(args: Args) -> Result<()> {

@@ -10,6 +10,12 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+### Fixed
+- **`-h` / `--help` now wins over a malformed line** (veripublica conventions
+  CLI.md §5): `epublift meta enrich --typo --help` prints the `meta enrich`
+  help and exits 0 instead of failing on the unknown option. After `--` it is
+  still an operand.
+
 ## [cli-v4.4.1] - 2026-10-24
 
 ### Security
