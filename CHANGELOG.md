@@ -11,10 +11,39 @@ are tagged with the component they belong to.
 ## [Unreleased]
 
 ### Fixed
+- **An `-o` that names the input is refused** (exit 2) on the default
+  command, `meta set`, `meta enrich` and `import`, as `repair` already did.
+  Before, `epublift -i book.epub -o book.epub` replaced the original book.
 - **`-h` / `--help` now wins over a malformed line** (veripublica conventions
   CLI.md §5): `epublift meta enrich --typo --help` prints the `meta enrich`
   help and exits 0 instead of failing on the unknown option. After `--` it is
   still an operand.
+
+### Added
+- **`-i, --input` on every command** (`check` takes it more than once), the
+  form epublift's sibling tools use. A path without `-i` still works, with a
+  warning, until 5.0.0.
+- **`-f, --force`** on every command that writes files. Until 5.0.0 an
+  existing output is still replaced without it, with a warning; from 5.0.0
+  it is refused.
+- **`--format human`** on the commands that had no `--format` (the default
+  command, `archive`, `restore`, `import`, `meta set`, `meta enrich`).
+- An **Exit codes** section and examples in every command's help.
+
+### Changed
+- `-h` prints the same full help as `--help`.
+- A flag given twice (`--webp --webp`) means the same as once instead of
+  failing; an option with a value given twice still fails.
+- Errors start with `error:` and warnings with `warning:` (was
+  `[!] Fatal Error:`).
+
+### Deprecated
+- `-q` / `-r` for `--quality` / `--report` (default command; `-q` on
+  `restore`): `-q` is the family's `--quiet`. They warn and go in 5.0.0.
+- Paths without `-i`, and several paths to `archive` / `restore` (one `-i`
+  per run, a file or a folder, from 5.0.0).
+
+See docs/usage.md, "Moving to 5.0.0".
 
 ## [cli-v4.4.1] - 2026-10-24
 

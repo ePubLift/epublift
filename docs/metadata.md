@@ -145,17 +145,17 @@ ISBN) adds no error on any book, and every author keeps role and sort name.
 ## CLI
 
 ```
-epublift meta show   book.epub                       # print current metadata and the cover (table; --format metadata for JSON)
+epublift meta show   -i book.epub                       # print current metadata and the cover (table; --format metadata for JSON)
 
 epublift meta set    --title "…" --author "…" \      # manual edit (repeatable flags for multi-valued fields)
                      --subject "…" --series "…:1" \
-                     [--cover new.jpg] book.epub      # --cover: make this JPEG/PNG the cover
+                     [--cover new.jpg] -i book.epub   # --cover: make this JPEG/PNG the cover
 
 epublift meta enrich --isbn 9780… [--assume-language tr] \  # auto-fill missing fields from a provider
                      [--provider openlibrary] \
                      [--dry-run] [--overwrite] [--allow-foreign-meta] \
                      [--include-description] [--include-subjects] \
-                     [--include-cover] book.epub
+                     [--include-cover] -i book.epub
 ```
 
 - `show` and `set` are always available and **offline**. `enrich` needs the
@@ -175,7 +175,10 @@ epublift meta enrich --isbn 9780… [--assume-language tr] \  # auto-fill missin
   them.
 - `--series` takes `Name` or `Name:position`; the position starts with a digit
   (`Dune:2`, `Dune:1-6`), so a colon inside a name stays in the name.
-- Output naming follows the project convention; the input is never mutated.
+- Output naming follows the project convention; the input is never mutated,
+  and an `-o` that names the input is refused (exit 2). `-f` permits replacing
+  an existing output (until 5.0.0 it is still replaced without it, with a
+  warning). A path without `-i` still works, with a warning, until 5.0.0.
 
 ## Cover
 

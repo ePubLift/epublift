@@ -38,19 +38,22 @@ feature (included in the release binaries).
 ## Usage
 
 ```sh
-epublift check book.epub
+epublift check -i book.epub
 ```
 
-Validate several at once (e.g. a whole shelf):
+Validate several at once by repeating `-i`, or let the shell build the line
+(e.g. a whole shelf):
 
 ```sh
-epublift check *.epub
+epublift check -i a.epub -i b.epub
+find . -name '*.epub' -print0 | xargs -0 -n1 epublift check -i
 ```
 
 ### Options
 
 | Flag | Meaning |
 | --- | --- |
+| `-i`, `--input <EPUB>` | The book to validate; repeat it for more. A path without `-i` still works, with a warning, until 5.0.0. |
 | `--profile <name>` | Validate against an EPUB extension profile: `dict` (dictionaries), `edupub`, `idx` (indexes) or `preview`. Default: base EPUB 3. |
 | `--format <human\|json>` | `human` (default): the report for people. `json`: the machine-readable [envelope](#json). Any other value, or `--format` given twice, exits `2`. |
 | `--json` | Same as `--format json` — the older spelling, kept so existing scripts keep working. Can't be combined with `--format`. |
@@ -74,7 +77,9 @@ The `1`/`2` split is what lets a script tell *"this book is bad"* apart from
 are non-zero, so an ordinary gate still works unchanged:
 
 ```sh
-epublift check dist/*.epub || { echo "validation failed"; exit 1; }
+for f in dist/*.epub; do
+  epublift check -i "$f" || { echo "validation failed: $f"; exit 1; }
+done
 ```
 
 Multiple inputs are **all** processed even when an earlier one fails, so one
@@ -168,8 +173,8 @@ Worth knowing when consuming it:
 - **`convention`** is epublift's own claim about this output: the envelope meets
   [FORMATS.md](https://github.com/veripublica/conventions/blob/main/FORMATS.md)
   of veripublica conventions 0.7. It is a claim about the JSON, not yet about the
-  whole command line: `check` now takes `--format` as conventions' CLI.md asks,
-  but still takes positional paths rather than `-i`.
+  whole command line: `check` takes `-i` and `--format` as conventions' CLI.md
+  asks, but positional paths are still accepted (with a warning) until 5.0.0.
 - Fields that don't apply are **omitted**, and unknown fields **must be ignored**:
   the shape gains optional fields over time without breaking consumers.
 

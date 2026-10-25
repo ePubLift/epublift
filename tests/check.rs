@@ -28,6 +28,7 @@ fn malformed_epub_is_a_verdict_with_exit_1() {
     let path = tmp_file("not-a-real.epub", b"this is plainly not an epub");
     let out = Command::new(bin())
         .arg("check")
+        .arg("-i")
         .arg(&path)
         .output()
         .expect("run epublift check");
@@ -48,6 +49,7 @@ fn fatal_findings_are_counted_in_the_human_summary() {
     let path = tmp_file("fatal-count.epub", b"not an epub either");
     let out = Command::new(bin())
         .arg("check")
+        .arg("-i")
         .arg(&path)
         .output()
         .expect("run epublift check");
@@ -71,6 +73,7 @@ fn json_is_the_shared_envelope_and_flags_invalid() {
     let path = tmp_file("bad-for-json.epub", b"still not an epub");
     let out = Command::new(bin())
         .args(["check", "--json"])
+        .arg("-i")
         .arg(&path)
         .output()
         .expect("run epublift check --json");
@@ -126,6 +129,7 @@ fn json_is_the_shared_envelope_and_flags_invalid() {
 fn unreadable_input_exits_2_not_1() {
     let out = Command::new(bin())
         .arg("check")
+        .arg("-i")
         .arg("/no/such/path/definitely-missing.epub")
         .output()
         .expect("run epublift check on a missing file");
@@ -143,7 +147,9 @@ fn every_input_is_processed_even_after_an_unreadable_one() {
     let bad = tmp_file("batch-graded.epub", b"not an epub");
     let out = Command::new(bin())
         .args(["check", "--json"])
+        .arg("-i")
         .arg("/no/such/path/missing-first.epub")
+        .arg("-i")
         .arg(&bad)
         .output()
         .expect("run epublift check on a mixed batch");
@@ -168,6 +174,7 @@ fn check_with(args: &[&str], path: &std::path::Path) -> (Option<i32>, String, St
     let out = Command::new(bin())
         .arg("check")
         .args(args)
+        .arg("-i")
         .arg(path)
         .output()
         .expect("run epublift check");

@@ -15,7 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use anyhow::{Context, Result};
-use clap::{CommandFactory, Parser};
+use clap::{ArgAction, CommandFactory, FromArgMatches, Parser};
 use epublift::{EpubVersion, ImageStrategy, Options};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -49,7 +49,7 @@ impl From<ZstdModeArg> for epublift::ZstdMode {
     // `-V` / `--version`: `epublift <semver>[+<hash>[.dirty]]` (see build.rs).
     version = concat!(env!("CARGO_PKG_VERSION"), env!("EPUBLIFT_BUILD")),
     about = "Optimize EPUBs to 3.3 (default), or archive/restore them as .eparc.",
-    after_help = "Examples:\n  epublift -i book.epub -q 75\n  epublift archive ~/Books            # shrink a library to .eparc\n  epublift restore book.eparc         # back to a content-exact .epub",
+    after_help = "Examples:\n  epublift -i book.epub                # upgrade to book_v3.3.epub\n  epublift -i book.epub --kepub        # a Kobo book_v3.3.kepub.epub\n  epublift check -i book.epub          # validate\n  epublift archive -i ~/Books          # shrink a library to .eparc\n\nExit codes:\n  0  the book was upgraded\n  1  it could not be upgraded (the message says why)\n  2  usage error, or a refusal (the output would replace the input)",
     args_conflicts_with_subcommands = true
 )]
 struct Args {
@@ -67,12 +67,21 @@ struct Args {
 
     /// Image quality, 1 to 100, when images are re-encoded (`--webp`, or the
     /// AVIF/JPEG XL of `--target 3.4`).
-    #[arg(short, long, default_value_t = 80)]
+    // `-q` is the family's `--quiet` (conventions CLI.md §3.2): the old short
+    // spelling still works, with a warning, until the next major.
+    #[arg(long, short_alias = 'q', default_value_t = 80)]
     quality: i32,
 
     /// Path to write the summary size report [default: <input>_report.txt beside the output]
-    #[arg(short, long)]
+    // `-r`: deprecated like `-q` (the short-flag set is closed).
+    #[arg(long, short_alias = 'r')]
     report: Option<PathBuf>,
+
+    #[arg(short, long, help = FORCE_HELP)]
+    force: bool,
+
+    #[arg(long, help = FORMAT_HELP, value_enum, value_name = "human", default_value_t = HumanFormat::Human)]
+    format: HumanFormat,
 
     /// Transliterate auto-generated output/report names to ASCII
     /// (e.g. "Işık Doğudan" -> "Isik_Dogudan"). Ignored when -o/-r are given.
@@ -186,13 +195,25 @@ enum Command {
 /// Exit: 0 = the goal was met; 1 = defects remain; 2 = the book could not be
 /// repaired at all (unreadable, or the output path is the input).
 #[derive(clap::Args, Debug)]
+#[command(
+    after_help = "Examples:\n  epublift repair -i book.epub         # safe fixes; asks about the rest\n  epublift repair -i book.epub -y      # every fix, no questions\n\nExit codes:\n  0  the goal was met (or already was)\n  1  defects remain\n  2  the book could not be repaired (unreadable, or the output is the input)"
+)]
 struct RepairArgs {
     /// EPUB file to repair (never modified; a new file is written).
-    #[arg(value_name = "EPUB")]
-    input: PathBuf,
+    #[arg(
+        short,
+        long,
+        value_name = "EPUB",
+        required_unless_present = "positional"
+    )]
+    input: Option<PathBuf>,
+    #[arg(value_name = "EPUB", hide = true, conflicts_with = "input")]
+    positional: Option<PathBuf>,
     /// Output path (default: `<name>_repaired.epub` next to the input).
     #[arg(short, long)]
     output: Option<PathBuf>,
+    #[arg(short, long, help = FORCE_HELP)]
+    force: bool,
     /// Report what would be fixed without writing anything.
     #[arg(long, conflicts_with = "yes")]
     dry_run: bool,
@@ -242,6 +263,17 @@ const ENVELOPE_CONVENTION: &str = "0.7";
 const FORMAT_HELP: &str =
     "Report format. `human` (the default) is always supported; `json` is reserved for FORMATS.md.";
 
+/// `-f`'s canonical one-liner (CLI.md §3.1), plus how it stands until 5.0.
+const FORCE_HELP: &str = "Permit replacing existing output files. Never lifts the output-equals-input refusal. (Until the next major release, files are still replaced without it, with a warning.)";
+
+/// `--format` on a command whose only report is for people: `human` is all
+/// there is, but every command accepts the option (CLI.md §3.6).
+#[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+enum HumanFormat {
+    /// A report for people.
+    Human,
+}
+
 /// What `check --format` and `repair --format` can emit (veripublica
 /// conventions CLI.md §3.6).
 #[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
@@ -259,10 +291,20 @@ enum ReportFormat {
 /// one is invalid; 2 = an input could not be read at all. See docs/validate.md.
 #[cfg(feature = "validate")]
 #[derive(clap::Args, Debug)]
+#[command(
+    after_help = "Examples:\n  epublift check -i book.epub\n  epublift check -i a.epub -i b.epub --format json\n\nExit codes:\n  0  every input is valid\n  1  every input was validated, and at least one is invalid\n  2  an input could not be read at all"
+)]
 struct CheckArgs {
-    /// EPUB file(s) to validate.
-    #[arg(required = true, value_name = "EPUB")]
-    paths: Vec<PathBuf>,
+    /// EPUB file to validate (repeat -i for more).
+    #[arg(
+        short,
+        long,
+        value_name = "EPUB",
+        required_unless_present = "positional"
+    )]
+    input: Vec<PathBuf>,
+    #[arg(value_name = "EPUB", hide = true, conflicts_with = "input")]
+    positional: Vec<PathBuf>,
 
     /// Validate against an EPUB extension profile: `dict` (dictionaries),
     /// `edupub`, `idx` (indexes) or `preview`. Default: base EPUB 3 only.
@@ -294,6 +336,9 @@ struct CheckArgs {
 /// EPUB (routed by file extension). See docs/pdf-import.md.
 #[cfg(any(feature = "pdf", feature = "markdown"))]
 #[derive(clap::Args, Debug)]
+#[command(
+    after_help = "Examples:\n  epublift import -i book.pdf          # writes book.epub\n  epublift import -i notes/            # a folder of Markdown, one book\n\nExit codes:\n  0  the EPUB was written\n  1  the import failed (the message says why)\n  2  usage error, or a refusal (the output would replace the input)"
+)]
 struct ImportArgs {
     /// Path to the input file (PDF or Markdown, by extension).
     #[arg(short, long)]
@@ -302,6 +347,12 @@ struct ImportArgs {
     /// Path to write the EPUB (default: alongside the input).
     #[arg(short, long)]
     output: Option<PathBuf>,
+
+    #[arg(short, long, help = FORCE_HELP)]
+    force: bool,
+
+    #[arg(long, help = FORMAT_HELP, value_enum, value_name = "human", default_value_t = HumanFormat::Human)]
+    format: HumanFormat,
 
     /// [PDF only] Output layout: "reflow" (default, a real reflowable ebook) or
     /// "fixed" (preserve the page images — picture books, comics).
@@ -334,10 +385,20 @@ enum MetaAction {
 }
 
 #[derive(clap::Args, Debug)]
+#[command(
+    after_help = "Exit codes:\n  0  the metadata was printed\n  1  the book could not be read"
+)]
 struct MetaShowArgs {
     /// EPUB file to read.
-    #[arg(value_name = "EPUB")]
-    input: PathBuf,
+    #[arg(
+        short,
+        long,
+        value_name = "EPUB",
+        required_unless_present = "positional"
+    )]
+    input: Option<PathBuf>,
+    #[arg(value_name = "EPUB", hide = true, conflicts_with = "input")]
+    positional: Option<PathBuf>,
     // The canonical one-liner, verbatim (CLI.md §3.1, §7). It holds here too:
     // `json` is *reserved*, which is why this command offers `metadata` instead.
     #[arg(
@@ -367,10 +428,20 @@ enum MetaFormat {
 }
 
 #[derive(clap::Args, Debug)]
+#[command(
+    after_help = "Exit codes:\n  0  the new EPUB was written (or there was nothing to change)\n  1  it could not be written (the message says why)\n  2  usage error, or a refusal (the output would replace the input)"
+)]
 struct MetaSetArgs {
     /// EPUB file to edit (never modified; a new file is written).
-    #[arg(value_name = "EPUB")]
-    input: PathBuf,
+    #[arg(
+        short,
+        long,
+        value_name = "EPUB",
+        required_unless_present = "positional"
+    )]
+    input: Option<PathBuf>,
+    #[arg(value_name = "EPUB", hide = true, conflicts_with = "input")]
+    positional: Option<PathBuf>,
     /// Set the main title.
     #[arg(long)]
     title: Option<String>,
@@ -408,14 +479,28 @@ struct MetaSetArgs {
     /// Output path (default: `<name>_meta.epub` next to the input).
     #[arg(short, long)]
     output: Option<PathBuf>,
+    #[arg(short, long, help = FORCE_HELP)]
+    force: bool,
+    #[arg(long, help = FORMAT_HELP, value_enum, value_name = "human", default_value_t = HumanFormat::Human)]
+    format: HumanFormat,
 }
 
 #[cfg(feature = "metadata")]
 #[derive(clap::Args, Debug)]
+#[command(
+    after_help = "Exit codes:\n  0  the new EPUB was written (or there was nothing to change)\n  1  it could not be written (the message says why)\n  2  usage error, or a refusal (the output would replace the input)"
+)]
 struct MetaEnrichArgs {
     /// EPUB file to enrich (never modified; a new file is written).
-    #[arg(value_name = "EPUB")]
-    input: PathBuf,
+    #[arg(
+        short,
+        long,
+        value_name = "EPUB",
+        required_unless_present = "positional"
+    )]
+    input: Option<PathBuf>,
+    #[arg(value_name = "EPUB", hide = true, conflicts_with = "input")]
+    positional: Option<PathBuf>,
     /// ISBN to look up (ISBN-13 recommended; hyphens allowed).
     #[arg(long)]
     isbn: String,
@@ -457,30 +542,68 @@ struct MetaEnrichArgs {
     /// Output path (default: `<name>_meta.epub` next to the input).
     #[arg(short, long)]
     output: Option<PathBuf>,
+    #[arg(short, long, help = FORCE_HELP)]
+    force: bool,
+    #[arg(long, help = FORMAT_HELP, value_enum, value_name = "human", default_value_t = HumanFormat::Human)]
+    format: HumanFormat,
 }
 
 #[cfg(feature = "archival")]
 #[derive(clap::Args, Debug)]
+#[command(
+    after_help = "Examples:\n  epublift archive -i book.epub        # writes book.eparc\n  epublift archive -i ~/Books          # every .epub in the folder\n\nExit codes:\n  0  every book was archived\n  1  a book could not be archived (the run stops there)"
+)]
 struct ArchiveArgs {
-    /// EPUB file(s), or a directory whose `.epub` files are all archived.
-    #[arg(required = true, value_name = "EPUB|DIR")]
-    paths: Vec<PathBuf>,
+    /// An EPUB file, or a directory whose `.epub` files are all archived.
+    #[arg(
+        short,
+        long,
+        value_name = "EPUB|DIR",
+        required_unless_present = "positional"
+    )]
+    input: Option<PathBuf>,
+    // Deprecated: one or more positional paths, until the next major.
+    #[arg(value_name = "EPUB|DIR", hide = true, conflicts_with = "input")]
+    positional: Vec<PathBuf>,
 
     /// Directory to write `.eparc` files into (default: next to each input).
     #[arg(short, long)]
     output: Option<PathBuf>,
+
+    #[arg(short, long, help = FORCE_HELP)]
+    force: bool,
+
+    #[arg(long, help = FORMAT_HELP, value_enum, value_name = "human", default_value_t = HumanFormat::Human)]
+    format: HumanFormat,
 }
 
 #[cfg(feature = "archival")]
 #[derive(clap::Args, Debug)]
+#[command(
+    after_help = "Examples:\n  epublift restore -i book.eparc       # back to a content-exact book.epub\n  epublift restore -i ~/Books --kepub  # every .eparc, as Kobo books\n\nExit codes:\n  0  every archive was restored\n  1  an archive could not be restored (the run stops there)"
+)]
 struct RestoreArgs {
-    /// `.eparc` archive file(s), or a directory of them.
-    #[arg(required = true, value_name = "EPARC|DIR")]
-    paths: Vec<PathBuf>,
+    /// An `.eparc` archive, or a directory of them.
+    #[arg(
+        short,
+        long,
+        value_name = "EPARC|DIR",
+        required_unless_present = "positional"
+    )]
+    input: Option<PathBuf>,
+    // Deprecated: one or more positional paths, until the next major.
+    #[arg(value_name = "EPARC|DIR", hide = true, conflicts_with = "input")]
+    positional: Vec<PathBuf>,
 
     /// Directory to write restored `.epub` files into (default: next to each input).
     #[arg(short, long)]
     output: Option<PathBuf>,
+
+    #[arg(short, long, help = FORCE_HELP)]
+    force: bool,
+
+    #[arg(long, help = FORMAT_HELP, value_enum, value_name = "human", default_value_t = HumanFormat::Human)]
+    format: HumanFormat,
 
     /// Re-emit at a specific EPUB version instead of content-exact: "3.3", or
     /// "3.4" (experimental, AVIF/JXL — needs the `epub34` build feature).
@@ -514,7 +637,8 @@ struct RestoreArgs {
 
     /// Image quality (1-100) when re-targeting re-encodes images (`--webp`,
     /// `--target 3.4`).
-    #[arg(short, long, default_value_t = 80)]
+    // `-q`: deprecated short spelling, as on the default command.
+    #[arg(long, short_alias = 'q', default_value_t = 80)]
     quality: i32,
 
     /// [EXPERIMENTAL] Image format for a 3.4 re-target (implies --target 3.4):
@@ -526,45 +650,77 @@ struct RestoreArgs {
 }
 
 fn main() -> ExitCode {
-    let args = match Args::try_parse() {
-        Ok(args) => args,
+    let matches = match cli().try_get_matches() {
+        Ok(m) => m,
         Err(e) => {
-            if let Some(long) = help_requested(std::env::args_os().skip(1)) {
-                print_help_for(std::env::args_os().skip(1), long);
+            if help_requested(std::env::args_os().skip(1)) {
+                print_help_for(std::env::args_os().skip(1));
             }
             e.exit()
         }
     };
+    let args = Args::from_arg_matches(&matches).unwrap_or_else(|e| e.exit());
+    warn_short_spellings(&args);
     match run(args) {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
             // `{:#}` prints the full anyhow context chain (e.g. "… failed:
             // rate limited (HTTP 429) …") so the root cause is visible.
-            eprintln!("\n[!] Fatal Error: {:#}", e);
-            ExitCode::FAILURE
+            eprintln!("error: {:#}", e);
+            if e.downcast_ref::<Refusal>().is_some() {
+                ExitCode::from(2)
+            } else {
+                ExitCode::FAILURE
+            }
         }
     }
+}
+
+/// The parser, with the family's `-h` / `-V` and repeated-flag rules applied
+/// to every subcommand (veripublica conventions CLI.md §3.1, §3.4, §7).
+fn cli() -> clap::Command {
+    conform(Args::command()).disable_version_flag(true).arg(
+        clap::Arg::new("version")
+            .short('V')
+            .long("version")
+            .action(ArgAction::Version)
+            .help("Print `<tool> <semver>` to stdout and exit `0`."),
+    )
+}
+
+/// `-h` and `--help` print the same (long) help, and a boolean flag given
+/// twice means the same as once; then the same for each subcommand.
+fn conform(cmd: clap::Command) -> clap::Command {
+    cmd.mut_args(|a| {
+        if matches!(a.get_action(), ArgAction::SetTrue) {
+            let id = a.get_id().clone();
+            a.overrides_with(id)
+        } else {
+            a
+        }
+    })
+    .disable_help_flag(true)
+    .arg(
+        clap::Arg::new("help")
+            .short('h')
+            .long("help")
+            .action(ArgAction::HelpLong)
+            .help("Print help to stdout and exit `0`."),
+    )
+    .mut_subcommands(conform)
 }
 
 /// A help request short-circuits (veripublica conventions CLI.md §5): `-h` /
 /// `--help` anywhere before `--` wins over a malformed rest of the line.
-/// `Some(true)` for `--help` (long help), `Some(false)` for `-h`.
-fn help_requested(argv: impl Iterator<Item = std::ffi::OsString>) -> Option<bool> {
-    let mut found = None;
-    for a in argv.take_while(|a| a != "--") {
-        if a == "--help" {
-            return Some(true);
-        }
-        if a == "-h" {
-            found = Some(false);
-        }
-    }
-    found
+fn help_requested(mut argv: impl Iterator<Item = std::ffi::OsString>) -> bool {
+    argv.by_ref()
+        .take_while(|a| a != "--")
+        .any(|a| a == "-h" || a == "--help")
 }
 
 /// Prints the help of the deepest subcommand named on the line and exits 0.
-fn print_help_for(argv: impl Iterator<Item = std::ffi::OsString>, long: bool) -> ! {
-    let mut cmd = Args::command();
+fn print_help_for(argv: impl Iterator<Item = std::ffi::OsString>) -> ! {
+    let mut cmd = cli();
     let mut path = Vec::new();
     for a in argv.take_while(|a| a != "--") {
         let Some(name) = a.to_str() else { continue };
@@ -583,12 +739,104 @@ fn print_help_for(argv: impl Iterator<Item = std::ffi::OsString>, long: bool) ->
     let target = path
         .iter()
         .fold(&mut cmd, |c, n| c.find_subcommand_mut(n).expect("walked"));
-    let _ = if long {
-        target.print_long_help()
-    } else {
-        target.print_help()
-    };
+    let _ = target.print_long_help();
     std::process::exit(0)
+}
+
+/// Warn about `-q` / `-r`, the old short spellings of `--quality` /
+/// `--report`: the family keeps `-q` for `--quiet` and closes the short-flag
+/// set (CLI.md §3.2). They go in the next major.
+fn warn_short_spellings(args: &Args) {
+    let (quality, report) = match &args.command {
+        None => (true, true),
+        #[cfg(feature = "archival")]
+        Some(Command::Restore(_)) => (true, false),
+        _ => return,
+    };
+    if quality && short_given('q') {
+        deprecated("-q", "--quality");
+    }
+    if report && short_given('r') {
+        deprecated("-r", "--report");
+    }
+}
+
+/// Whether `-<c>` is on the line: alone, with its value attached (`-q80`),
+/// or after `-f` in a bundle (`-fq80`).
+fn short_given(c: char) -> bool {
+    std::env::args_os()
+        .skip(1)
+        .take_while(|a| a != "--")
+        .filter_map(|a| a.into_string().ok())
+        .any(|a| {
+            a.strip_prefix('-')
+                .filter(|rest| !rest.starts_with('-'))
+                .is_some_and(|rest| rest.trim_start_matches('f').starts_with(c))
+        })
+}
+
+/// The book named by `-i`, or by the deprecated positional path.
+fn one_input(flag: &Option<PathBuf>, positional: &Option<PathBuf>) -> PathBuf {
+    match (flag, positional) {
+        (Some(p), _) => p.clone(),
+        (None, Some(p)) => {
+            deprecated_positional();
+            p.clone()
+        }
+        (None, None) => unreachable!("clap requires -i or the positional path"),
+    }
+}
+
+/// The paths named by `-i`, or by the deprecated positional paths.
+fn inputs<'a>(flag: &'a [PathBuf], positional: &'a [PathBuf]) -> &'a [PathBuf] {
+    if flag.is_empty() {
+        deprecated_positional();
+        positional
+    } else {
+        flag
+    }
+}
+
+fn deprecated_positional() {
+    deprecated("a path without -i", "-i <PATH>");
+}
+
+/// A refusal the user can fix on the command line. It exits 2, like a usage
+/// error (CLI.md §4, §6), never 1 like a run that failed.
+#[derive(Debug)]
+struct Refusal(String);
+
+impl std::fmt::Display for Refusal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for Refusal {}
+
+/// Refuse an output that names the input (CLI.md §4); `-f` never lifts this.
+/// `input` must already be canonical.
+fn refuse_input_as_output(input: &Path, output: &Path) -> Result<()> {
+    if same_file(input, output) {
+        return Err(Refusal(format!(
+            "the output path is the input ({}); epublift never modifies the original, \
+             so choose a different -o",
+            output.display()
+        ))
+        .into());
+    }
+    Ok(())
+}
+
+/// Replacing an existing file needs `-f` from the next major release (CLI.md
+/// §4); until then it still happens, with a warning.
+fn warn_overwrite(path: &Path, force: bool) {
+    if !force && path.exists() {
+        eprintln!(
+            "warning: replacing {}; the next major release refuses this without -f/--force",
+            path.display()
+        );
+    }
 }
 
 fn run(args: Args) -> Result<()> {
@@ -616,6 +864,10 @@ fn run_import(args: &ImportArgs) -> Result<()> {
         .output
         .clone()
         .unwrap_or_else(|| args.input.with_extension("epub"));
+    if let Ok(input) = args.input.canonicalize() {
+        refuse_input_as_output(&input, &output)?;
+    }
+    warn_overwrite(&output, args.force);
     let ext = args
         .input
         .extension()
@@ -703,8 +955,7 @@ fn run_check(args: &CheckArgs) -> Result<()> {
     // One Input per path, in command-line order, each self-contained — the shape
     // the envelope wants. Every input is processed even if an earlier one could
     // not be read: a broken book must not hide the reports for the rest.
-    let inputs: Vec<Input> = args
-        .paths
+    let inputs: Vec<Input> = inputs(&args.input, &args.positional)
         .iter()
         .map(|path| {
             let name = path.display().to_string();
@@ -830,10 +1081,10 @@ fn plural(n: usize) -> &'static str {
 fn run_meta(args: &MetaArgs) -> Result<()> {
     match &args.action {
         MetaAction::Show(s) => {
-            let input = s
-                .input
+            let path = one_input(&s.input, &s.positional);
+            let input = path
                 .canonicalize()
-                .with_context(|| format!("Input file not found: {}", s.input.display()))?;
+                .with_context(|| format!("Input file not found: {}", path.display()))?;
             let md = epublift::read_metadata(&input)?;
             let cover = epublift::read_cover(&input)?;
             // `--json` is the older spelling of `--format metadata`.
@@ -930,10 +1181,10 @@ fn default_meta_output(input: &Path) -> PathBuf {
 
 /// `epublift meta set …` — apply manual metadata edits.
 fn run_meta_set(s: &MetaSetArgs) -> Result<()> {
-    let input = s
-        .input
+    let path = one_input(&s.input, &s.positional);
+    let input = path
         .canonicalize()
-        .with_context(|| format!("Input file not found: {}", s.input.display()))?;
+        .with_context(|| format!("Input file not found: {}", path.display()))?;
 
     let update = epublift::meta::MetadataUpdate {
         title: s.title.clone(),
@@ -958,6 +1209,8 @@ fn run_meta_set(s: &MetaSetArgs) -> Result<()> {
         .output
         .clone()
         .unwrap_or_else(|| default_meta_output(&input));
+    refuse_input_as_output(&input, &output)?;
+    warn_overwrite(&output, s.force);
 
     let written = epublift::write_metadata_and_cover(&input, &update, cover.as_ref(), &output)?;
     println!("[+] Wrote updated metadata to: {}", output.display());
@@ -997,7 +1250,7 @@ fn run_repair(args: &RepairArgs) -> Result<()> {
             std::process::exit(1)
         }
         Err(e) => {
-            eprintln!("\n[!] Fatal Error: {e:#}");
+            eprintln!("error: {e:#}");
             std::process::exit(2)
         }
     }
@@ -1008,21 +1261,15 @@ fn repair_book(args: &RepairArgs) -> Result<bool> {
     use epubsana::{Confirmer, Policy, Workspace};
     use std::io::IsTerminal;
 
-    let input = args
-        .input
+    let path = one_input(&args.input, &args.positional);
+    let input = path
         .canonicalize()
-        .with_context(|| format!("Input file not found: {}", args.input.display()))?;
+        .with_context(|| format!("Input file not found: {}", path.display()))?;
     let output = args
         .output
         .clone()
         .unwrap_or_else(|| default_repair_output(&input));
-    if same_file(&input, &output) {
-        anyhow::bail!(
-            "the output path is the input ({}); repair never modifies the original, \
-             so choose a different --output",
-            output.display()
-        );
-    }
+    refuse_input_as_output(&input, &output)?;
     let bytes =
         std::fs::read(&input).with_context(|| format!("could not read {}", input.display()))?;
     let mut ws = Workspace::load(&bytes)
@@ -1064,6 +1311,7 @@ fn repair_book(args: &RepairArgs) -> Result<bool> {
     let written = if args.dry_run {
         (!report.fixes.is_empty()).then(|| output.clone())
     } else if report.changed() {
+        warn_overwrite(&output, args.force);
         let repaired = ws
             .serialize()
             .map_err(|e| anyhow::anyhow!("could not write the repaired EPUB: {e}"))?;
@@ -1076,7 +1324,7 @@ fn repair_book(args: &RepairArgs) -> Result<bool> {
 
     if args.format == ReportFormat::Json {
         let input = epubsana::envelope::input(
-            args.input.display().to_string(),
+            path.display().to_string(),
             written.as_ref().map(|p| p.display().to_string()),
             &report,
         );
@@ -1297,7 +1545,7 @@ fn print_repair_report(
 /// Warn that `old` is a deprecated spelling, on stderr so `--format metadata`
 /// output stays clean.
 fn deprecated(old: &str, new: &str) {
-    eprintln!("[!] {old} is deprecated and goes in the next major release; use {new}.");
+    eprintln!("warning: {old} is deprecated and goes in the next major release; use {new}.");
 }
 
 /// `epublift meta enrich …` — fill missing metadata from an online catalogue.
@@ -1305,10 +1553,10 @@ fn deprecated(old: &str, new: &str) {
 fn run_meta_enrich(e: &MetaEnrichArgs) -> Result<()> {
     use epublift::enrich::{self, EnrichOptions};
 
-    let input = e
-        .input
+    let path = one_input(&e.input, &e.positional);
+    let input = path
         .canonicalize()
-        .with_context(|| format!("Input file not found: {}", e.input.display()))?;
+        .with_context(|| format!("Input file not found: {}", path.display()))?;
     let existing = epublift::read_metadata(&input)?;
     if e.lang.is_some() {
         deprecated("--lang", "--assume-language");
@@ -1389,6 +1637,8 @@ fn run_meta_enrich(e: &MetaEnrichArgs) -> Result<()> {
         .output
         .clone()
         .unwrap_or_else(|| default_meta_output(&input));
+    refuse_input_as_output(&input, &output)?;
+    warn_overwrite(&output, e.force);
     let written =
         epublift::write_metadata_and_cover(&input, &plan.update, cover.as_ref(), &output)?;
     println!("[+] Wrote enriched metadata to: {}", output.display());
@@ -1515,6 +1765,11 @@ fn run_convert(args: Args) -> Result<()> {
         )),
     };
 
+    refuse_input_as_output(&input, &output_path)?;
+    refuse_input_as_output(&input, &report_path)?;
+    warn_overwrite(&output_path, args.force);
+    warn_overwrite(&report_path, args.force);
+
     let input_name = input
         .file_name()
         .unwrap_or_default()
@@ -1561,7 +1816,10 @@ fn run_convert(args: Args) -> Result<()> {
 fn run_archive(args: &ArchiveArgs) -> Result<()> {
     use anyhow::bail;
 
-    let epubs = collect_with_ext(&args.paths, "epub");
+    let epubs = match &args.input {
+        Some(p) => collect_with_ext(std::slice::from_ref(p), "epub"),
+        None => collect_with_ext(inputs(&[], &args.positional), "epub"),
+    };
     if epubs.is_empty() {
         bail!("no .epub files found in the given paths");
     }
@@ -1573,6 +1831,7 @@ fn run_archive(args: &ArchiveArgs) -> Result<()> {
     let (mut total_in, mut total_out) = (0u64, 0u64);
     for epub in &epubs {
         let out = sibling_path(epub, "eparc", args.output.as_deref());
+        warn_overwrite(&out, args.force);
         let stats = epublift::eparc::archive_epub(epub, &out)
             .with_context(|| format!("Failed to archive {}", epub.display()))?;
         total_in += stats.original_size;
@@ -1605,7 +1864,10 @@ fn run_archive(args: &ArchiveArgs) -> Result<()> {
 fn run_restore(args: &RestoreArgs) -> Result<()> {
     use anyhow::bail;
 
-    let archives = collect_with_ext(&args.paths, "eparc");
+    let archives = match &args.input {
+        Some(p) => collect_with_ext(std::slice::from_ref(p), "eparc"),
+        None => collect_with_ext(inputs(&[], &args.positional), "eparc"),
+    };
     if archives.is_empty() {
         bail!("no .eparc files found in the given paths");
     }
@@ -1648,6 +1910,7 @@ fn run_restore(args: &RestoreArgs) -> Result<()> {
     for eparc in &archives {
         if !retarget {
             let out = sibling_path(eparc, "epub", args.output.as_deref());
+            warn_overwrite(&out, args.force);
             let stats = epublift::eparc::restore_eparc(eparc, &out)
                 .with_context(|| format!("Failed to restore {}", eparc.display()))?;
             println!(
@@ -1701,6 +1964,7 @@ fn run_restore(args: &RestoreArgs) -> Result<()> {
             .unwrap_or_else(|| "book".to_string());
         let name_basis = out_dir.join(format!("{stem}.epub"));
         let final_out = epublift::default_output_path(&name_basis, &options);
+        warn_overwrite(&final_out, args.force);
         let options = Options {
             output: Some(final_out.clone()),
             ..options

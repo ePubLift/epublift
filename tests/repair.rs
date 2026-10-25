@@ -103,6 +103,7 @@ fn duplicate_spine_book(dir: &Path) -> PathBuf {
 fn repair(book: &Path, args: &[&str]) -> Output {
     Command::new(bin())
         .arg("repair")
+        .arg("-i")
         .arg(book)
         .args(args)
         .stdin(Stdio::null())

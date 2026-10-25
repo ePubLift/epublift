@@ -11,8 +11,8 @@ For the optimizer (`-i` / convert mode), see the [Usage guide](usage.md).
 
 ```bash
 # Archive one book, or a whole folder (one .eparc per book):
-epublift archive book.epub
-epublift archive ~/Books -o ~/Archive      # recurses the folder
+epublift archive -i book.epub
+epublift archive -i ~/Books -o ~/Archive      # recurses the folder
 ```
 
 `archive` accepts EPUB files or directories (scanned recursively); it writes one
@@ -25,7 +25,7 @@ By default you get back a **content-exact** `.epub` — the original book,
 byte-for-byte per entry:
 
 ```bash
-epublift restore book.eparc
+epublift restore -i book.eparc
 ```
 
 `restore` also accepts directories of `.eparc` files, and `-o` for the output
@@ -37,10 +37,10 @@ The archive is your **canonical master** — on restore you pick the output for 
 reader you're using (nothing extra is stored; it re-runs the optimizer):
 
 ```bash
-epublift restore book.eparc                 # content-exact original (default)
-epublift restore book.eparc --target 3.3    # re-emit as EPUB 3.3 (original images)
-epublift restore book.eparc --webp          # re-emit as EPUB 3.3, images re-encoded to WebP
-epublift restore book.eparc --kepub         # → book_v3.3.kepub.epub for Kobo
+epublift restore -i book.eparc                 # content-exact original (default)
+epublift restore -i book.eparc --target 3.3    # re-emit as EPUB 3.3 (original images)
+epublift restore -i book.eparc --webp          # re-emit as EPUB 3.3, images re-encoded to WebP
+epublift restore -i book.eparc --kepub         # → book_v3.3.kepub.epub for Kobo
 ```
 
 | Flag | Effect |
@@ -51,7 +51,8 @@ epublift restore book.eparc --kepub         # → book_v3.3.kepub.epub for Kobo
 | `--webp` | Re-target, and re-encode JPEG/PNG to WebP where smaller |
 | `--keep-images` | Re-target, keeping original images (the default; kept for existing scripts) |
 | `--kepub` | Produce a Kobo `.kepub.epub` |
-| `-q`, `--quality` | WebP quality (1-100) when re-targeting |
+| `--quality` | WebP quality (1-100) when re-targeting (`-q` still works, with a warning, until 5.0.0) |
+| `-f`, `--force` | Permit replacing existing `.epub` files (until 5.0.0 they are still replaced without it, with a warning) |
 
 > EPUB **3.4** (AVIF/JXL) isn't published yet, so `--target` accepts **3.3**
 > today; it'll gain 3.4 when that spec ships.

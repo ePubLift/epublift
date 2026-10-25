@@ -78,7 +78,7 @@ old devices, SD cards, or sync tools. The book's on-screen title isn't affected.
 ## Advanced options
 
 ```bash
-epublift -i book.epub -o optimized_book.epub -q 85 -r stats_report.txt
+epublift -i book.epub -o optimized_book.epub --quality 85 --report stats_report.txt
 ```
 
 ## Command-line options
@@ -87,8 +87,10 @@ epublift -i book.epub -o optimized_book.epub -q 85 -r stats_report.txt
 | :--- | :--- | :--- | :--- |
 | `-i` | `--input` | **[Required]** Path to the original EPUB file | *None* |
 | `-o` | `--output` | Path to save the modernized EPUB | `<input>_v3.3.epub` |
-| `-q` | `--quality`| Image quality (1-100) when images are re-encoded (`--webp`, `--target 3.4`) | `80` |
-| `-r` | `--report` | Path to write the conversion audit report | `<input>_report.txt`, beside the output |
+| | `--quality`| Image quality (1-100) when images are re-encoded (`--webp`, `--target 3.4`). `-q` still works, with a warning, until 5.0.0 | `80` |
+| | `--report` | Path to write the conversion audit report. `-r` still works, with a warning, until 5.0.0 | `<input>_report.txt`, beside the output |
+| `-f` | `--force` | Permit replacing existing output files (never the input). Until 5.0.0 an existing file is still replaced without it, with a warning | *off* |
+| | `--format` | Report format: `human`, the only one this command has | `human` |
 | | `--ascii` | Transliterate the auto-generated output/report names to ASCII | *off* |
 | | `--webp` | Re-encode JPEG/PNG images to WebP (size-safe: only when smaller) | *off* |
 | | `--keep-images` | Keep original images. The default; kept so existing scripts work, and it overrides `--target 3.4`'s image conversion | *on* |
@@ -101,6 +103,25 @@ for the experimental `import` subcommand — PDF → reflowable EPUB — see the
 [PDF import guide](pdf-import.md), and Markdown → reflowable EPUB in the
 [Markdown import guide](markdown-import.md).)
 
+### Moving to 5.0.0
+
+epublift is moving to the [veripublica CLI conventions](https://github.com/veripublica/conventions/blob/main/CLI.md),
+the command line its sibling tools (epubveri, epubsana, kepubverto) already
+share. Since 4.5.0 every command takes `-i` and `--format`, `-f/--force`
+exists, `-h` and `--help` print the same help, and a flag given twice is
+the same as once. Until 5.0.0, these old spellings still work, each with a
+`warning:` on stderr:
+
+| Today (warns) | From 5.0.0 |
+| :--- | :--- |
+| A path without `-i` (`epublift check book.epub`) | `epublift check -i book.epub` (repeat `-i` for more books in `check`) |
+| `archive` / `restore` with several paths | one `-i` per run: a file or a folder |
+| `-q 85` / `-r report.txt` (default command, `restore`) | `--quality 85` / `--report report.txt` (`-q` is the family's `--quiet`) |
+| An existing output file is replaced | refused (exit 2) unless `-f` is given |
+
+An `-o` that names the input has been refused (exit 2) since 4.5.0, with or
+without `-f`.
+
 ### Read & edit metadata (`meta`)
 
 The `meta` subcommand reads, hand-edits, or auto-fills a book's metadata. It never
@@ -108,14 +129,14 @@ modifies the input; edits are written to `<name>_meta.epub` (or `-o <path>`).
 
 ```bash
 # Print the current metadata (add --format metadata for JSON)
-epublift meta show book.epub
+epublift meta show -i book.epub
 
 # Edit by hand (repeat --author / --subject for multiple values)
-epublift meta set book.epub --title "…" --author "…" --language tr --series "Dune:2"
+epublift meta set -i book.epub --title "…" --author "…" --language tr --series "Dune:2"
 
 # Auto-fill missing fields by ISBN (needs the `metadata` feature)
-epublift meta enrich book.epub --isbn 9780… --dry-run                 # Open Library (default)
-epublift meta enrich book.epub --isbn 9780… --provider google         # Google Books
+epublift meta enrich -i book.epub --isbn 9780… --dry-run                 # Open Library (default)
+epublift meta enrich -i book.epub --isbn 9780… --provider google         # Google Books
 ```
 
 `meta enrich` is **language-aware**: it fills only fields in the book's own
@@ -138,15 +159,15 @@ problems with epubcheck-compatible message IDs. It uses
 alternative to W3C `epubcheck` — so there's no Java and no external process.
 
 ```sh
-epublift check book.epub                 # human-readable report
-epublift check *.epub --quiet            # only print files with problems
-epublift check book.epub --format json   # machine-readable: one envelope per run
-epublift check dict.epub --profile dict  # validate against an extension profile
+epublift check -i book.epub                 # human-readable report
+epublift check -i a.epub -i b.epub --quiet  # only print files with problems
+epublift check -i book.epub --format json   # machine-readable: one envelope per run
+epublift check -i dict.epub --profile dict  # validate against an extension profile
 ```
 
 The exit code follows grep's convention — `0` if every input is valid (no
 error- or fatal-severity finding), `1` if any book is invalid, `2` if an input
-couldn't be read at all — so it drops straight into a build script: `epublift check dist/*.epub || exit 1`. It's
+couldn't be read at all — so it drops straight into a build script: `for f in dist/*.epub; do epublift check -i "$f" || exit 1; done`. It's
 compiled only with the opt-in `validate` feature
 (`cargo build --features validate`; included in the release binaries). epubveri
 is **pre-1.0** (99.7% message-ID recall on epubcheck's own test suite — not yet

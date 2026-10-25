@@ -40,8 +40,8 @@ ePubLift began as a Rust port of an earlier Python implementation but has since 
 *   **📦 Archive your library (`.eparc`)**: `epublift archive` shrinks EPUB(s) into compact, **lossless** `.eparc` archives to save disk space; `epublift restore` brings any book back — content-exact by default, or re-targeted for a specific reader (`--target 3.3`, `--webp`, `--kepub`). Pure-Rust solid Zstandard on text + fonts, media stored verbatim, so it never grows a book. See [Archive your library](#-archive-your-library-eparc).
 *   **🏷️ Fix book metadata (`meta`)**: Read, hand-edit, or **auto-fill** a book's metadata by ISBN from **Open Library** or **Google Books** — `epublift meta show` / `set` / `enrich`. **Language-aware**: fields are filled only in the book's own language. The lookup uses a **100% pure-Rust** HTTPS client (rustls + RustCrypto — no C), behind the opt-in `metadata` build feature. See the [Metadata guide](docs/metadata.md).
 *   **📄 Import a PDF (`import`, experimental)**: Turn a PDF into a **reflowable** EPUB — `epublift import -i book.pdf`. Works for PDFs that carry a text layer (born-digital books and already-searchable scans), including modern **Type0/CID** fonts, with accurate word spacing from the font's real glyph widths (matched a publisher's own EPUB at ~99.8% word overlap in testing). Carries figures over too. Scanned-only PDFs (no text layer) are handled by **OCR** (pure-Rust ocrs + rten, models download on first use) behind the heavier opt-in `pdf-ocr` feature — best-effort (~92% on clean prose scans). 100% pure-Rust. See the [PDF import guide](docs/pdf-import.md).
-*   **✅ Validate an EPUB (`check`)**: Check any EPUB against the spec — `epublift check book.epub` — with epubcheck-compatible message IDs (`RSC-005`, `OPF-053`, …). Powered by [**epubveri**](https://github.com/veripublica/epubveri), our own **pure-Rust, JVM-free** alternative to W3C's `epubcheck` (no Java, no external process), behind the opt-in `validate` build feature. Grep-style exit code for CI; `--format json` for tooling. Pre-1.0 (99.7% message-ID recall on epubcheck's own test suite — not yet full parity). See the [Validation guide](docs/validate.md).
-*   **🔧 Fix EPUB issues (`repair`)**: `epublift repair book.epub` fixes what `check` finds wherever a fix is certain to be right — undeclared entities, invalid ids, broken spine and manifest entries, empty metadata and more — with the veripublica family's repairer, [epubsana](https://github.com/veripublica/epubsana). Safe fixes are applied; a fix that needs a decision is asked about first. Writes a new file; the input is never touched. Ships in the default build. See the [Repair guide](docs/repair.md).
+*   **✅ Validate an EPUB (`check`)**: Check any EPUB against the spec — `epublift check -i book.epub` — with epubcheck-compatible message IDs (`RSC-005`, `OPF-053`, …). Powered by [**epubveri**](https://github.com/veripublica/epubveri), our own **pure-Rust, JVM-free** alternative to W3C's `epubcheck` (no Java, no external process), behind the opt-in `validate` build feature. Grep-style exit code for CI; `--format json` for tooling. Pre-1.0 (99.7% message-ID recall on epubcheck's own test suite — not yet full parity). See the [Validation guide](docs/validate.md).
+*   **🔧 Fix EPUB issues (`repair`)**: `epublift repair -i book.epub` fixes what `check` finds wherever a fix is certain to be right — undeclared entities, invalid ids, broken spine and manifest entries, empty metadata and more — with the veripublica family's repairer, [epubsana](https://github.com/veripublica/epubsana). Safe fixes are applied; a fix that needs a decision is asked about first. Writes a new file; the input is never touched. Ships in the default build. See the [Repair guide](docs/repair.md).
 *   **📊 Detailed Audit Reports**: Generates a detailed size comparison table and conversion metrics report in an easy-to-read text file.
 *   **🌐 Browser & Docker Ready**: A hardened [web service](#-hosted-web-service-epublift-web) does it all in the browser — **optimize** an EPUB, **archive** a book to a compact `.eparc`, **restore** one back, or fix its **metadata** — with uploads processed in memory and deleted immediately. Ships as a multi-arch Docker image for one-command self-hosting.
 
@@ -167,12 +167,12 @@ epublift -i book.epub            # modernize + shrink images → book_v3.3.epub
 | Reading on a Kobo | `epublift -i book.epub --kepub` |
 | Images blank after `--webp` | convert again without `--webp` |
 | ASCII-only output filename | `epublift -i book.epub --ascii` |
-| Shrink a whole library to `.eparc` | `epublift archive ~/Books` |
-| Restore an archived book | `epublift restore book.eparc` |
-| See a book's metadata | `epublift meta show book.epub` |
-| Fill missing metadata by ISBN | `epublift meta enrich book.epub --isbn 9780…` |
+| Shrink a whole library to `.eparc` | `epublift archive -i ~/Books` |
+| Restore an archived book | `epublift restore -i book.eparc` |
+| See a book's metadata | `epublift meta show -i book.epub` |
+| Fill missing metadata by ISBN | `epublift meta enrich -i book.epub --isbn 9780…` |
 | Turn a PDF into a reflowable EPUB (experimental) | `epublift import -i book.pdf` |
-| Validate an EPUB against the spec | `epublift check book.epub` |
+| Validate an EPUB against the spec | `epublift check -i book.epub` |
 
 Every flag, per-situation recipes, and sandbox testing are in the **[Usage guide](docs/usage.md)**. epublift is also a Rust **library** — build `Options`, call `convert()`, inspect the `Report`.
 
@@ -183,8 +183,8 @@ Every flag, per-situation recipes, and sandbox testing are in the **[Usage guide
 Shrink a personal EPUB collection to save disk, and get any book back on demand — **losslessly**. `epublift archive` packs each book into a compact `.eparc` (pure-Rust solid [Zstandard](https://facebook.github.io/zstd/) on text + fonts, already-compressed media stored verbatim, so it **never grows a book**); `epublift restore` brings it back content-exact, or re-targeted for your reader.
 
 ```bash
-epublift archive ~/Books         # one .eparc per book; recurses the folder
-epublift restore book.eparc      # → content-exact .epub (or --target 3.3 / --webp / --kepub)
+epublift archive -i ~/Books         # one .eparc per book; recurses the folder
+epublift restore -i book.eparc      # → content-exact .epub (or --target 3.3 / --webp / --kepub)
 ```
 
 Lossless, runs anywhere from a Raspberry Pi to a NAS. Full guide: **[Archiving guide](docs/archiving.md)** · design notes: [format](docs/design/eparc-format.md), [codec choice](docs/design/eparc-codec-choice.md).

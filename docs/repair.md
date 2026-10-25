@@ -53,7 +53,7 @@ before repair can be 29 after the first pass and none after the second.
 ## Usage
 
 ```sh
-epublift repair book.epub
+epublift repair -i book.epub
 ```
 
 Writes `book_repaired.epub` next to the input. In a terminal, it applies the

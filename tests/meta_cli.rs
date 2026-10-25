@@ -35,6 +35,7 @@ fn show(args: &[&str], epub: &std::path::Path) -> (Option<i32>, String, String) 
     let out = Command::new(bin())
         .args(["meta", "show"])
         .args(args)
+        .arg("-i")
         .arg(epub)
         .output()
         .expect("run epublift meta show");
@@ -84,6 +85,7 @@ fn enrich_old_and_new_spellings_conflict() {
         let out = Command::new(bin())
             .args(["meta", "enrich", "--isbn", "9780000000002"])
             .args(pair)
+            .arg("-i")
             .arg(&epub)
             .output()
             .expect("run epublift meta enrich");
