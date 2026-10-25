@@ -271,4 +271,8 @@ opt-level = 1
 
 [profile.release]
 opt-level = 3
-lto = true
+# Thin, not fat: fat LTO was 74% of a cold release build (193 s vs 83 s,
+# measured 2026-10-26), for no measurable speed (webp, AVIF, JXL, OCR,
+# archive within a few percent either way; outputs identical). The binary
+# grows 20.6 → 24.0 MB.
+lto = "thin"

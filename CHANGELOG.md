@@ -43,6 +43,12 @@ are tagged with the component they belong to.
 - Paths without `-i`, and several paths to `archive` / `restore` (one `-i`
   per run, a file or a folder, from 5.0.0).
 
+### Build
+- Release binaries are built with thin LTO instead of fat: a cold release
+  build takes 83 s instead of 193 s (measured locally), with no measurable
+  change in speed and identical output; the binary grows from 20.6 to
+  24.0 MB (macOS arm64).
+
 See docs/usage.md, "Moving to 5.0.0".
 
 ## [cli-v4.4.1] - 2026-10-24
