@@ -10,6 +10,22 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+## [web-v1.29.2] - 2026-10-26
+
+### Fixed
+- **Optimize writes a `<font face>` into the book's new stylesheet only when
+  it is a plain list of family names**, re-quoted, and every rule is checked
+  with epubveri first. Before, a face such as `"Book Antiqua` (unterminated
+  quote) or `a /* b` made the stylesheet invalid, and `a } body { display:
+  none` added a rule of its own. Such a `<font>` is now left as written.
+
+### Build
+- Thin LTO instead of fat, and the image's dependencies built in their own
+  cached layer (cargo-chef): faster image builds, no change in what the
+  service does.
+
+## [cli-v4.5.0] - 2026-10-26
+
 ### Fixed
 - **A `<font face>` is written into the upgrade's stylesheet only when it is
   a plain list of family names**, re-quoted by styloria, and every rule is

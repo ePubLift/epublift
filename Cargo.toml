@@ -7,7 +7,7 @@ resolver = "2"
 
 [package]
 name = "epublift"
-version = "4.4.1"
+version = "4.5.0"
 edition = "2024"
 license = "AGPL-3.0-or-later"
 description = "EPUB toolbox: upgrade to EPUB 3.3, optionally shrink images to WebP, validate, repair, edit metadata, archive"
