@@ -28,6 +28,8 @@ permissions:
 env:
   # GHCR paths must be lowercase; the org is ePubLift.
   IMAGE: ghcr.io/epublift/epublift-web
+  # The build cache (see "Build and push by digest"), apart from the image.
+  CACHE: ghcr.io/epublift/epublift-web-buildcache
 
 jobs:
   build:
@@ -77,9 +79,14 @@ jobs:
           # version/commit link (build.rs reads $GIT_SHA).
           build-args: |
             GIT_SHA=${{ github.sha }}
-          # No cache-to: a cache written under a tag ref is never readable by
-          # the next tag (see release.yml), and exporting it cost ~87 s a run.
-          cache-from: type=gha,scope=${{ env.PLATFORM_PAIR }}
+          # A registry cache, not gha: a gha cache written under a tag ref is
+          # never readable by the next tag (see release.yml), a registry one
+          # is. It lives in its own package so the image's public tag list
+          # stays clean, one ref per platform, and keeps the cargo-chef
+          # dependency layer (Dockerfile) from one release to the next. A
+          # failed cache export never fails the release.
+          cache-from: type=registry,ref=${{ env.CACHE }}:${{ env.PLATFORM_PAIR }}
+          cache-to: type=registry,ref=${{ env.CACHE }}:${{ env.PLATFORM_PAIR }},mode=max,ignore-error=true
           outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
 
       - name: Export digest
