@@ -10,6 +10,12 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+### Fixed
+- **`import` gives every book its own random UUID** as its unique identifier.
+  Before, it wrote `urn:uuid:epublift-import-<chapter count>`: not a UUID,
+  and the same for every import with as many chapters, so a reading system
+  or library that tells books apart by it could take two books for one.
+
 ## [web-v1.29.2] - 2026-10-26
 
 ### Fixed

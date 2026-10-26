@@ -165,7 +165,7 @@ pub(crate) fn package_epub(
             r#"<?xml version="1.0" encoding="utf-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid">
  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
-  <dc:identifier id="bookid">urn:uuid:epublift-import-{n}</dc:identifier>
+  <dc:identifier id="bookid">urn:uuid:{uuid}</dc:identifier>
   <dc:title>{title}</dc:title>
   <dc:language>{lang}</dc:language>
   <meta property="dcterms:modified">2026-01-01T00:00:00Z</meta>
@@ -176,7 +176,9 @@ pub(crate) fn package_epub(
  <spine>
 {spine} </spine>
 </package>"#,
-            n = chapters.len(),
+            // A new book with no ISBN: a random UUID, made once (each import
+            // is a book of its own, so two never share an identifier).
+            uuid = uuid::Uuid::new_v4(),
             title = esc(title),
             lang = esc(language),
             cover_meta = cover_meta,

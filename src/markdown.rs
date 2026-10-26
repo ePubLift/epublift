@@ -765,6 +765,30 @@ mod tests {
     }
 
     #[test]
+    fn every_import_gets_its_own_random_uuid() {
+        // Two imports of the same file, same chapter count: still two books.
+        let dir = tempfile::tempdir().unwrap();
+        let md = dir.path().join("book.md");
+        std::fs::write(&md, "# One\n\nalpha\n").unwrap();
+        let ids: Vec<uuid::Uuid> = ["a.epub", "b.epub"]
+            .iter()
+            .map(|name| {
+                let out = dir.path().join(name);
+                import(&md, &out, &ImportOptions::default()).unwrap();
+                let opf = read_entry(&out, "OEBPS/content.opf");
+                let id = opf
+                    .split("<dc:identifier id=\"bookid\">urn:uuid:")
+                    .nth(1)
+                    .and_then(|rest| rest.split('<').next())
+                    .unwrap();
+                uuid::Uuid::parse_str(id).unwrap()
+            })
+            .collect();
+        assert_eq!(ids[0].get_version(), Some(uuid::Version::Random));
+        assert_ne!(ids[0], ids[1]);
+    }
+
+    #[test]
     fn folder_of_markdown_becomes_one_book_with_a_cover() {
         // A non-trivial PNG that actually shrinks when re-encoded to WebP, so the
         // cover exercises the size-safe optimization path.

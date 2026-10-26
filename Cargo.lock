@@ -960,6 +960,7 @@ dependencies = [
  "styloria",
  "tempfile",
  "unicode-normalization",
+ "uuid",
  "walkdir",
  "webpki-roots",
  "xz2",
