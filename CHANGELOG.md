@@ -10,6 +10,13 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+### Changed
+- crypto-bigint 0.7.10 and ctutils 0.4.6 in the HTTPS stack used by `meta
+  enrich`, `--cover` and the OCR model download (the web's Metadata lookups
+  and Smart Import too). 0.7.6 was yanked upstream for a breaking change,
+  not a vulnerability; the move also brings 0.7.7's correctness fixes
+  (`invert_odd_mod` truncation, `mul_mod_special` boundary cases).
+
 ### Fixed
 - **`import` gives every book its own random UUID** as its unique identifier.
   Before, it wrote `urn:uuid:epublift-import-<chapter count>`: not a UUID,
