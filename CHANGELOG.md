@@ -10,7 +10,25 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+## [cli-v4.5.1] - 2026-10-29
+
+### Security
+- **zip 9.1.3** (was 9.0.4), for GHSA-m665-v7pm-7grj (CVE-2026-115905: the
+  local header and the central directory disagree), GHSA-gmfj-vffv-32pw and
+  GHSA-wjr6-mhvj-cjvm. Every book epublift reads is opened with zip, so they
+  reached us. **pulldown-cmark 0.13.5** (was 0.13.4) for RUSTSEC-2026-0414;
+  Markdown import never enables wikilinks, so that one did not.
+
 ### Changed
+- **epubveri 0.35.0, epubsana 0.36.0, kepubverto 0.3.1, styloria 0.17**
+  (were 0.33.0, 0.35.0, 0.3.0, 0.16), in the CLI and in the web's in-browser
+  Validate and Repair alike. `check` reads a damaged ZIP as epubcheck reads
+  it; `repair` and `--kepub` keep every entry they leave unchanged byte for
+  byte, headers included. Measured on 562 books, old vs new: `check`
+  findings identical in all 562 (and the browser build agrees with the CLI
+  in all 562); `repair -y` findings and entry contents identical in all 257
+  books it changes; the upgraded book differs in no entry but the
+  `dcterms:modified` time in all 562, `--kepub` likewise in the 50 measured.
 - crypto-bigint 0.7.10 and ctutils 0.4.6 in the HTTPS stack used by `meta
   enrich`, `--cover` and the OCR model download (the web's Metadata lookups
   and Smart Import too). 0.7.6 was yanked upstream for a breaking change,
@@ -22,6 +40,37 @@ are tagged with the component they belong to.
   Before, it wrote `urn:uuid:epublift-import-<chapter count>`: not a UUID,
   and the same for every import with as many chapters, so a reading system
   or library that tells books apart by it could take two books for one.
+
+## [web-v1.29.3] - 2026-10-29
+
+### Security
+- **zip 9.1.3** (was 9.0.4), for GHSA-m665-v7pm-7grj (CVE-2026-115905: the
+  local header and the central directory disagree), GHSA-gmfj-vffv-32pw and
+  GHSA-wjr6-mhvj-cjvm. Every book epublift reads is opened with zip, so they
+  reached us. **pulldown-cmark 0.13.5** (was 0.13.4) for RUSTSEC-2026-0414;
+  Markdown import never enables wikilinks, so that one did not.
+
+### Changed
+- **epubveri 0.35.0, epubsana 0.36.0, kepubverto 0.3.1, styloria 0.17**
+  (were 0.33.0, 0.35.0, 0.3.0, 0.16), in the web's in-browser Validate and
+  Repair, and in the CLI they ship with. `check` reads a damaged ZIP as
+  epubcheck reads it; `repair` and `--kepub` keep every entry they leave
+  unchanged byte for byte, headers included. Measured on 562 books, old vs
+  new: `check` findings identical in all 562 (and the browser build agrees
+  with the CLI in all 562); `repair -y` findings and entry contents identical
+  in all 257 books it changes; the upgraded book differs in no entry but the
+  `dcterms:modified` time in all 562, `--kepub` likewise in the 50 measured.
+- crypto-bigint 0.7.10 and ctutils 0.4.6 in the HTTPS stack used by the web's
+  Metadata lookups and Smart Import. 0.7.6 was yanked upstream for a breaking
+  change, not a vulnerability; the move also brings 0.7.7's correctness fixes
+  (`invert_odd_mod` truncation, `mul_mod_special` boundary cases).
+
+### Fixed
+- **Import and Smart Import give every book their own random UUID** as its
+  unique identifier. Before, they wrote `urn:uuid:epublift-import-<chapter
+  count>`: not a UUID, and the same for every import with as many chapters,
+  so a reading system or library that tells books apart by it could take two
+  books for one.
 
 ## [web-v1.29.2] - 2026-10-26
 

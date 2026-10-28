@@ -925,7 +925,7 @@ checksum = "877362cb7b70d1c617f0cd3c67708bd58d894a86af5104018e2c10ebaee3c02f"
 
 [[package]]
 name = "epublift"
-version = "4.5.0"
+version = "4.5.1"
 dependencies = [
  "almost-enough",
  "any_ascii",
@@ -973,7 +973,7 @@ dependencies = [
 
 [[package]]
 name = "epublift-web"
-version = "1.29.2"
+version = "1.29.3"
 dependencies = [
  "anyhow",
  "axum",
@@ -994,9 +994,9 @@ dependencies = [
 
 [[package]]
 name = "epubsana"
-version = "0.35.0"
+version = "0.36.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f6eb223e5d8a674d61de2472ceb578ae5ea232ab9d93d96aeecd07e61b79d1c0"
+checksum = "c5b2fe361b056329bbeb42a4c1ab923de1eb5da0c7feea050b564a60b44028bf"
 dependencies = [
  "epubveri",
  "flate2",
@@ -1010,9 +1010,9 @@ dependencies = [
 
 [[package]]
 name = "epubveri"
-version = "0.33.0"
+version = "0.35.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9fd5a202e296516beb0170bebe0209ebc808ebb8c8d4808b2c52347dfcdce085"
+checksum = "f911f16d3c7e93b40cc7f46d59007dda51a1a1bc33538216f906fb5a42a59f88"
 dependencies = [
  "flate2",
  "roxmltree",
@@ -1218,9 +1218,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "300e883d756b2e4ec94e02791f39b04b522276138852cfc41d9fb7e904106099"
 dependencies = [
  "cfg-if",
+ "js-sys",
  "libc",
  "r-efi 6.0.0",
  "rand_core 0.10.1",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -1526,9 +1528,9 @@ dependencies = [
 
 [[package]]
 name = "kepubverto"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14994ac6b5f55cee8ca964ac54ce4357a5bdb26bab76d29fb5b93f91e3a7068d"
+checksum = "ba1173c72c915a0b077569405810b5776c7d46ea89bf3d16864dc613f7a03195"
 dependencies = [
  "epubveri",
  "flate2",
@@ -2142,9 +2144,9 @@ dependencies = [
 
 [[package]]
 name = "pulldown-cmark"
-version = "0.13.4"
+version = "0.13.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e9f068eba8e7071c5f9511831b44f32c740d5adf574e990f946ddb53db2f314e"
+checksum = "278e9268c93b9e498a2da46c34d90ba93a3255eb99009646398f34bc73ab36eb"
 dependencies = [
  "bitflags 2.13.2",
  "memchr",
@@ -2919,9 +2921,9 @@ dependencies = [
 
 [[package]]
 name = "styloria"
-version = "0.16.1"
+version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ea36bbe5bd655e822e14682b4fb5f39b18ad449657408d2d92639006a88b16ef"
+checksum = "9814e8b6ef237b9cb64991d4ee5ac9e6c1fdacc2ed812a728df488b451fd6686"
 
 [[package]]
 name = "subtle"
@@ -3201,9 +3203,9 @@ checksum = "86a801b3cea342a06d468c8710662aa29e5e05e4f5c0d62f00bbb7f2ad7941c2"
 
 [[package]]
 name = "typed-path"
-version = "0.12.3"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e28f89b80c87b8fb0cf04ab448d5dd0dd0ade2f8891bae878de66a75a28600e"
+checksum = "9ce898823d8cd0f028662d2f349694b1af0a5cc9be83f1d213a00d3147445e1e"
 
 [[package]]
 name = "typeid"
@@ -3866,16 +3868,18 @@ checksum = "e13084392c5e4bc371903e2935a5eaeed24905a7511356b883835e18a78f6879"
 
 [[package]]
 name = "zip"
-version = "9.0.4"
+version = "9.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a954114b47a54df49f83d2722814e86b23d4bb1b54a1b90fb7d92b41619ddc22"
+checksum = "1156b39d142a34b999c2310a50455e0cb3760bf7efad0122f796d813bee26ccb"
 dependencies = [
  "crc32fast",
  "flate2",
+ "getrandom 0.4.3",
  "indexmap",
  "memchr",
  "nix",
  "typed-path",
+ "windows-sys 0.61.2",
  "zopfli",
 ]
 
