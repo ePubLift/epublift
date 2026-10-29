@@ -1500,9 +1500,9 @@ dependencies = [
 
 [[package]]
 name = "jxl-encoder"
-version = "0.3.1"
+version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0a2883a4596ba0212a4f005c29f55cc7d4e91603cc6574a91fe67338091849ac"
+checksum = "630118972a621da35a54494c7b0a1efb5d672cdc42f0b531cdff2ae9e20f4328"
 dependencies = [
  "archmage",
  "bytemuck",
@@ -1518,11 +1518,12 @@ dependencies = [
 
 [[package]]
 name = "jxl-encoder-simd"
-version = "0.3.0"
+version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f88c8baa7c73e9a4f7fdd58b9d996f2fef793416b4ea099f16adbe9b454e39f6"
+checksum = "99ef8d24e3c244a039668df09ee80af9bf833024eff1e8ba8e9eff1b1f260989"
 dependencies = [
  "archmage",
+ "libm",
  "magetypes",
 ]
 
@@ -1672,11 +1673,12 @@ dependencies = [
 
 [[package]]
 name = "magetypes"
-version = "0.9.26"
+version = "0.9.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c4d045ccf3f9d697e15f0b438f73b812ef93eb5e9d29cf5f5cb48dcf09f12e10"
+checksum = "5726fd3335b1d2814036c420a5c8d105abcc0e0b43eebb477e48f8c725fc8fb2"
 dependencies = [
  "archmage",
+ "libm",
  "rustversion",
 ]
 

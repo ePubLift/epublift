@@ -10,6 +10,17 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+### Changed
+- **jxl-encoder 0.3.4** (was 0.3.1), the JPEG XL encoder of `--target 3.4`
+  / `--image-format jxl`, and magetypes 0.9.30 (was held at 0.9.26). 0.3.2–0.3.4
+  backport upstream's fixes to the 0.3 line: the ARM64 build against newer
+  magetypes, two out-of-bounds index panics and an endless loop on crafted
+  input, and several streams that decoders could not read (lossless
+  grayscale + alpha, multi-group lossless at effort 9, alpha in progressive
+  frames). Measured on 5 books (359 images, `--image-format jxl`): every
+  image decodes with libjxl's `djxl`, before and after; total size +0.01%;
+  old vs new pixels differ by at most 16 of 255 (PSNR ≥ 62 dB, median ~90).
+
 ## [cli-v4.5.1] - 2026-10-29
 
 ### Security

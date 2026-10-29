@@ -14,13 +14,6 @@ updates:
     groups:
       cargo-minor-patch:
         update-types: [minor, patch]
-    ignore:
-      # 0.9.27+ no longer compiles jxl-encoder-simd 0.3.0 (the JPEG XL encoder)
-      # on ARM64 — CI runs on x86 and would not notice. Drop this when
-      # jxl-encoder ships a release built against a newer archmage.
-      - dependency-name: archmage
-      - dependency-name: archmage-macros
-      - dependency-name: magetypes
 
   - package-ecosystem: github-actions
     directory: /
