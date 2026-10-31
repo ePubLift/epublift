@@ -11,19 +11,26 @@ are tagged with the component they belong to.
 ## [Unreleased]
 
 ### Changed
-- **PDF import now runs on paginaverto 0.1.0**, the veripublica family's new
+- **PDF import now runs on paginaverto**, the veripublica family's new
   PDF reader. It took over reading the PDF — classifying it, extracting the
   text layer, OCR and finding the chapters — and its first release does
   exactly what epublift did; epublift still writes the EPUB. Measured on 18
   local PDFs (text layer and scans, with OCR): 17 EPUBs identical entry by
   entry apart from the modification date and the random identifier, the same
   refusal on the 18th, the same `epublift check` results, the same wall time.
-  Language and OCR work continues in paginaverto.
+  Language and OCR work continues in paginaverto, which epublift takes from
+  crates.io (pinned at `=0.1.3`).
 - **The OCR models are checked against their published SHA-256** on every
   load, downloaded or cached; a file that doesn't match is refused (it was
   trusted on TLS alone).
 
 ### Fixed
+- **OCR works again on a machine that has never downloaded the models.** The
+  ocrs project stopped serving the `.rten` model files (HTTP 403), so a fresh
+  install could not OCR a scan. epublift now downloads the `.onnx` files ocrs
+  serves today, checked against their SHA-256. They carry the same weights:
+  on the two scans measured the text was byte-identical, at the same speed.
+  A cache that already holds the `.rten` files keeps using them.
 - **Grayscale images converted to WebP keep their tones.** They were handed to
   zenwebp as one-channel gray, a path that writes gray straight into WebP's
   limited-range luma, so every reader stretched the contrast and clipped

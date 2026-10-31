@@ -1938,8 +1938,9 @@ dependencies = [
 
 [[package]]
 name = "paginaverto"
-version = "0.1.0"
-source = "git+https://github.com/veripublica/paginaverto?tag=v0.1.0#92027488e3fd243ab4435af6122ed5ee773588a1"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8760990783346ca2118501745110225e3cf0634d6a715d761034ab5c006620ec"
 dependencies = [
  "image",
  "lopdf",
@@ -1949,8 +1950,9 @@ dependencies = [
 
 [[package]]
 name = "paginaverto-ocr"
-version = "0.1.0"
-source = "git+https://github.com/veripublica/paginaverto?tag=v0.1.0#92027488e3fd243ab4435af6122ed5ee773588a1"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c7ee26b5ef3dcef9e8e6209fb05415acca40253ca0e259ec7cd0d576d20d288b"
 dependencies = [
  "image",
  "ocrs",

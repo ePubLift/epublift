@@ -50,7 +50,9 @@ The `import` subcommand exists when the binary is built `--features pdf` (the
 pre-built release binaries include it). **OCR of scanned PDFs additionally needs
 `--features pdf-ocr`** (also in the pre-built binaries); on a scanned PDF the
 first run downloads the OCR models (~12 MB) to a cache dir — set
-`EPUBLIFT_OCR_MODELS` to use a directory you've pre-populated instead.
+`EPUBLIFT_OCR_MODELS` to use a directory you've pre-populated instead, with
+ocrs's `text-detection.onnx` and `text-recognition.onnx` (a cache from before
+cli-v4.5.2 holds the same models as `.rten` files and keeps working).
 
 ## Accuracy
 

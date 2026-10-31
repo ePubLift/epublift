@@ -2,18 +2,19 @@
 //!
 //! Recognition itself is paginaverto's (ocrs on the rten tensor engine, pure
 //! Rust); it takes the model bytes and never touches the network. Fetching
-//! them is ours: `text-detection.rten` + `text-recognition.rten` (~12 MB)
+//! them is ours: `text-detection.onnx` + `text-recognition.onnx` (~12 MB)
 //! download on first use into a per-user cache dir (override with
 //! `EPUBLIFT_OCR_MODELS`), over the same pure-Rust rustls client used for
 //! metadata enrichment, and every load is checked against the SHA-256
-//! paginaverto publishes.
+//! paginaverto publishes. A cache from before 2026-11 holds the same models in
+//! `.rten` form, which ocrs no longer serves (403); it keeps being used.
 
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
-use paginaverto::{MODEL_BASE_URL, MODELS, ModelFile, Ocr};
+use paginaverto::{MODEL_BASE_URL, MODELS, ModelFile, ONNX_MODELS, Ocr};
 
-/// Where to find `text-detection.rten` + `text-recognition.rten`.
+/// Where the OCR models are cached.
 fn models_dir() -> PathBuf {
     if let Ok(d) = std::env::var("EPUBLIFT_OCR_MODELS") {
         return PathBuf::from(d);
@@ -35,10 +36,16 @@ fn models_dir() -> PathBuf {
 /// refused, whether downloaded now or found in the cache.
 pub(crate) fn models() -> Result<Ocr> {
     let dir = models_dir();
-    if MODELS.iter().any(|m| !dir.join(m.name).exists()) {
-        download_models(&dir).context("could not download the OCR models")?;
+    // An older cache's `.rten` pair carries the same weights; use it as is.
+    let files = if MODELS.iter().all(|m| dir.join(m.name).exists()) {
+        MODELS
+    } else {
+        ONNX_MODELS
+    };
+    if files.iter().any(|m| !dir.join(m.name).exists()) {
+        download_models(&dir, &files).context("could not download the OCR models")?;
     }
-    let [detection, recognition] = MODELS.map(|m| load_checked(&dir, &m));
+    let [detection, recognition] = files.map(|m| load_checked(&dir, &m));
     Ok(Ocr::Models {
         detection: detection?,
         recognition: recognition?,
@@ -69,11 +76,11 @@ fn sha256_hex(data: &[u8]) -> String {
 }
 
 /// Fetch the OCR models (~12 MB) into `dir` over the pure-Rust HTTPS client.
-fn download_models(dir: &Path) -> Result<()> {
+fn download_models(dir: &Path, files: &[ModelFile]) -> Result<()> {
     std::fs::create_dir_all(dir)
         .with_context(|| format!("creating model cache {}", dir.display()))?;
     let http = crate::http::RustlsHttp::new()?;
-    for ModelFile { name, .. } in MODELS {
+    for &ModelFile { name, .. } in files {
         let path = dir.join(name);
         if path.exists() {
             continue;
@@ -85,7 +92,7 @@ fn download_models(dir: &Path) -> Result<()> {
             .with_context(|| format!("downloading {name}"))?;
         // Write to a temp name then rename, so an interrupted download can't
         // leave a half-written model that looks valid.
-        let tmp = path.with_extension("rten.part");
+        let tmp = dir.join(format!("{name}.part"));
         std::fs::write(&tmp, &bytes).with_context(|| format!("writing {}", tmp.display()))?;
         std::fs::rename(&tmp, &path)?;
     }
