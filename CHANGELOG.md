@@ -10,6 +10,26 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+### Fixed
+- **Grayscale images converted to WebP keep their tones.** They were handed to
+  zenwebp as one-channel gray, a path that writes gray straight into WebP's
+  limited-range luma, so every reader stretched the contrast and clipped
+  shadows and highlights (a 0–255 ramp came back with 16 as 0 and 235 as 253).
+  They now go in as RGB; WebP stores no gray mode, so the files are no larger.
+  Measured on the 562-book shelf at the default quality (1,617 grayscale
+  images without alpha): luma PSNR against the source median 31.3 → 38.4 dB,
+  5th percentile 24.8 → 32.3 dB, total WebP bytes −3.7%, the same 1,155
+  images converted. 312 pure black-and-white PNGs that the old path happened
+  to keep exact now come out at ≥ 38.9 dB (median 45.2).
+- **The source JPEG's quality is read correctly.** The cap that keeps a
+  re-encode from going above the source's quality compared the JPEG's
+  quantisation table, stored in zigzag order, with the standard table in row
+  order, and read most JPEGs 1–7 points low (up to 26 on unusual tables), so
+  re-encodes lost more than intended. It is now exact at every quality for
+  libjpeg-style tables. On the shelf, 4,468 JPEGs get a higher cap at the
+  default quality 80; their WebP output is 7.7% larger, and 95 of them (was
+  10) now keep their original because the re-encode is no longer smaller.
+
 ### Changed
 - **jxl-encoder 0.3.4** (was 0.3.1), the JPEG XL encoder of `--target 3.4`
   / `--image-format jxl`, and magetypes 0.9.30 (was held at 0.9.26). 0.3.2–0.3.4

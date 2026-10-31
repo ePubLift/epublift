@@ -4,7 +4,7 @@
 use crate::opf::{ImageChange, ManifestItem};
 use crate::util::{basename, quote, unquote, with_ext};
 use anyhow::Result;
-use image::{ColorType, DynamicImage};
+use image::DynamicImage;
 use std::collections::HashMap;
 use std::fs;
 use std::io::Cursor;
@@ -369,38 +369,22 @@ fn encode_image(
     }
 }
 
-/// Encode a decoded image to WebP bytes at `quality` (1-100), choosing the
-/// pixel layout that matches the image: grayscale images stay grayscale (L8 /
-/// La8) so we never spend bits on empty colour channels.
+/// Encode a decoded image to WebP bytes at `quality` (1-100). Grayscale is
+/// handed to zenwebp as RGB: lossy WebP has no gray mode (it stores YUV either
+/// way, so the file is the same size), and zenwebp 0.4's `L8`/`La8` input path
+/// copies gray straight into the limited-range Y plane, so every decoder
+/// stretches the contrast and clips shadows and highlights (a 0-255 ramp came
+/// back at 27.8 dB, 16 → 0 and 235 → 253; through RGB, 49.5 dB).
 fn encode_webp(dynimg: &DynamicImage, quality: u8) -> Result<Vec<u8>> {
     let config = LossyConfig::new().with_quality(quality as f32);
-    let gray = matches!(
-        dynimg.color(),
-        ColorType::L8 | ColorType::La8 | ColorType::L16 | ColorType::La16
-    );
-    let alpha = dynimg.color().has_alpha();
-
-    let memory = match (gray, alpha) {
-        (true, false) => {
-            let g = dynimg.to_luma8();
-            let (w, h) = (g.width(), g.height());
-            EncodeRequest::lossy(&config, &g, PixelLayout::L8, w, h).encode()?
-        }
-        (true, true) => {
-            let g = dynimg.to_luma_alpha8();
-            let (w, h) = (g.width(), g.height());
-            EncodeRequest::lossy(&config, &g, PixelLayout::La8, w, h).encode()?
-        }
-        (false, true) => {
-            let rgba = dynimg.to_rgba8();
-            let (w, h) = (rgba.width(), rgba.height());
-            EncodeRequest::lossy(&config, &rgba, PixelLayout::Rgba8, w, h).encode()?
-        }
-        (false, false) => {
-            let rgb = dynimg.to_rgb8();
-            let (w, h) = (rgb.width(), rgb.height());
-            EncodeRequest::lossy(&config, &rgb, PixelLayout::Rgb8, w, h).encode()?
-        }
+    let memory = if dynimg.color().has_alpha() {
+        let rgba = dynimg.to_rgba8();
+        let (w, h) = (rgba.width(), rgba.height());
+        EncodeRequest::lossy(&config, &rgba, PixelLayout::Rgba8, w, h).encode()?
+    } else {
+        let rgb = dynimg.to_rgb8();
+        let (w, h) = (rgb.width(), rgb.height());
+        EncodeRequest::lossy(&config, &rgb, PixelLayout::Rgb8, w, h).encode()?
     };
     Ok(memory)
 }
@@ -486,10 +470,21 @@ const STD_LUMA_QT: [u16; 64] = [
     72, 92, 95, 98, 112, 100, 103,  99,
 ];
 
-/// Estimate the quality factor (1-100) a JPEG was saved at, by comparing its
-/// luminance quantization table against the standard one. Returns `None` if the
-/// JPEG can't be parsed. This is a heuristic — the IJG/libjpeg quality scale —
-/// good enough to avoid re-encoding a low-quality source at a higher quality.
+/// Natural (row-major) index of the k-th coefficient in zigzag order, the order
+/// a DQT segment stores its 64 entries in.
+#[rustfmt::skip]
+const ZIGZAG_TO_NATURAL: [usize; 64] = [
+     0,  1,  8, 16,  9,  2,  3, 10, 17, 24, 32, 25, 18, 11,  4,  5,
+    12, 19, 26, 33, 40, 48, 41, 34, 27, 20, 13,  6,  7, 14, 21, 28,
+    35, 42, 49, 56, 57, 50, 43, 36, 29, 22, 15, 23, 30, 37, 44, 51,
+    58, 59, 52, 45, 38, 31, 39, 46, 53, 60, 61, 54, 47, 55, 62, 63,
+];
+
+/// Estimate the quality factor (1-100) a JPEG was saved at: the IJG/libjpeg
+/// quality whose scaled standard luminance table is closest to the JPEG's own
+/// (exact, 1 to 100, for encoders that scale the table the libjpeg way). Returns
+/// `None` if the JPEG can't be parsed. Used to avoid re-encoding a low-quality
+/// source at a higher quality.
 fn estimate_jpeg_quality(data: &[u8]) -> Option<u8> {
     let mut i = 2; // skip the SOI marker
     while i + 4 <= data.len() {
@@ -520,27 +515,33 @@ fn estimate_jpeg_quality(data: &[u8]) -> Option<u8> {
                     break;
                 }
                 if precision == 0 && table_id == 0 {
-                    let table = &data[p..p + 64];
-                    let mut sum = 0.0f64;
-                    let mut count = 0;
-                    for (k, &q) in table.iter().enumerate() {
-                        let q = q as u16;
-                        if q == 0 || q >= 255 {
-                            continue; // saturated entries carry no quality signal
-                        }
-                        sum += q as f64 * 100.0 / STD_LUMA_QT[k] as f64;
-                        count += 1;
+                    // The DQT is in zigzag order; STD_LUMA_QT is row-major.
+                    let mut table = [0u16; 64];
+                    for (k, &q) in data[p..p + 64].iter().enumerate() {
+                        table[ZIGZAG_TO_NATURAL[k]] = q as u16;
                     }
-                    if count == 0 {
+                    if table.contains(&0) {
                         return None;
                     }
-                    let s = sum / count as f64;
-                    let quality = if s < 100.0 {
-                        (200.0 - s) / 2.0
-                    } else {
-                        5000.0 / s
+                    // libjpeg's scaling: 5000/q below 50, 200-2q from 50 up.
+                    let distance = |quality: u32| -> u32 {
+                        let scale = if quality < 50 {
+                            5000 / quality
+                        } else {
+                            200 - 2 * quality
+                        };
+                        STD_LUMA_QT
+                            .iter()
+                            .zip(&table)
+                            .map(|(&std, &q)| {
+                                let scaled = ((std as u32 * scale + 50) / 100).clamp(1, 255);
+                                scaled.abs_diff(q as u32)
+                            })
+                            .sum()
                     };
-                    return Some(quality.round().clamp(1.0, 100.0) as u8);
+                    // On a tie (a non-libjpeg table) the lowest quality wins.
+                    let quality = (1..=100).min_by_key(|&q| distance(q))?;
+                    return Some(quality as u8);
                 }
                 p += n;
             }
@@ -643,27 +644,36 @@ mod tests {
     }
 
     #[test]
-    fn estimates_jpeg_quality_within_tolerance() {
-        // The estimate is a heuristic (encoders differ slightly from the IJG
-        // scale), so allow some slack. What matters for capping is that it's in
-        // the right neighbourhood and ordered by quality.
-        let mut prev = 0u8;
-        for q in [40u8, 60, 75, 90] {
+    fn estimates_jpeg_quality_exactly() {
+        // The `image` crate scales the Annex K table the libjpeg way, so the
+        // estimate is exact at every quality.
+        // (The DQT is stored in zigzag order: comparing it unmapped with the
+        // row-major table under-estimated by up to 7, e.g. q75 as 71.)
+        for q in 1u8..=100 {
             let est = estimate_jpeg_quality(&jpeg_at(q)).expect("should parse a real JPEG");
-            assert!(
-                (est as i32 - q as i32).abs() <= 10,
-                "quality {q} estimated as {est}"
-            );
-            assert!(
-                est >= prev,
-                "estimate should rise with quality (q{q} -> {est})"
-            );
-            prev = est;
+            assert_eq!(est, q, "quality {q} estimated as {est}");
         }
     }
 
     #[test]
     fn estimate_returns_none_for_non_jpeg() {
         assert!(estimate_jpeg_quality(b"this is not a jpeg at all").is_none());
+    }
+
+    #[test]
+    fn webp_keeps_a_gray_image_tones() {
+        // A 0-255 ramp: through zenwebp's L8 input, 16 came back as 0 and 235
+        // as 253 (limited-range Y written as full range). Through RGB it stays.
+        let ramp = DynamicImage::ImageLuma8(image::GrayImage::from_fn(256, 16, |x, _| {
+            image::Luma([x as u8])
+        }));
+        for q in [80u8, 95] {
+            let (rgb, w, _) =
+                zenwebp::oneshot::decode_rgb(&encode_webp(&ramp, q).unwrap()).unwrap();
+            for x in [16u32, 64, 128, 192, 235] {
+                let v = rgb[((8 * w + x) * 3) as usize] as i32;
+                assert!((v - x as i32).abs() <= 3, "q{q}: {x} came back as {v}");
+            }
+        }
     }
 }
