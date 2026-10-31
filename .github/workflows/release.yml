@@ -44,13 +44,13 @@ jobs:
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             archive: zip
-          # Both macOS targets build on the arm64 runner: macos-15 cross-compiles
+          # Both macOS targets build on the arm64 runner: macos-latest cross-compiles
           # the x86_64 binary fine, and avoids the scarce/slow Intel
           # runner pool that previously left this job queued indefinitely.
-          - os: macos-15
+          - os: macos-latest
             target: x86_64-apple-darwin
             archive: tar.gz
-          - os: macos-15
+          - os: macos-latest
             target: aarch64-apple-darwin
             archive: tar.gz
 
