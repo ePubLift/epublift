@@ -10,6 +10,8 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+## [cli-v4.5.2] - 2026-11-01
+
 ### Changed
 - **PDF import now runs on paginaverto**, the veripublica family's new
   PDF reader. It took over reading the PDF — classifying it, extracting the
@@ -23,6 +25,15 @@ are tagged with the component they belong to.
 - **The OCR models are checked against their published SHA-256** on every
   load, downloaded or cached; a file that doesn't match is refused (it was
   trusted on TLS alone).
+- **jxl-encoder 0.3.4** (was 0.3.1), the JPEG XL encoder of `--target 3.4`
+  / `--image-format jxl`, and magetypes 0.9.30 (was held at 0.9.26). 0.3.2–0.3.4
+  backport upstream's fixes to the 0.3 line: the ARM64 build against newer
+  magetypes, two out-of-bounds index panics and an endless loop on crafted
+  input, and several streams that decoders could not read (lossless
+  grayscale + alpha, multi-group lossless at effort 9, alpha in progressive
+  frames). Measured on 5 books (359 images, `--image-format jxl`): every
+  image decodes with libjxl's `djxl`, before and after; total size +0.01%;
+  old vs new pixels differ by at most 16 of 255 (PSNR ≥ 62 dB, median ~90).
 
 ### Fixed
 - **OCR works again on a machine that has never downloaded the models.** The
@@ -50,7 +61,18 @@ are tagged with the component they belong to.
   default quality 80; their WebP output is 7.7% larger, and 95 of them (was
   10) now keep their original because the re-encode is no longer smaller.
 
+## [web-v1.29.4] - 2026-11-01
+
 ### Changed
+- **PDF import now runs on paginaverto**, the veripublica family's new
+  PDF reader. It took over reading the PDF — classifying it, extracting the
+  text layer, OCR and finding the chapters — and its first release does
+  exactly what epublift did; epublift still writes the EPUB. Measured on 18
+  local PDFs (text layer and scans, the scans with the CLI's OCR): 17 EPUBs identical entry by
+  entry apart from the modification date and the random identifier, the same
+  refusal on the 18th, the same `epublift check` results, the same wall time.
+  Language and OCR work continues in paginaverto, which epublift takes from
+  crates.io (pinned at `=0.1.3`).
 - **jxl-encoder 0.3.4** (was 0.3.1), the JPEG XL encoder of `--target 3.4`
   / `--image-format jxl`, and magetypes 0.9.30 (was held at 0.9.26). 0.3.2–0.3.4
   backport upstream's fixes to the 0.3 line: the ARM64 build against newer
@@ -60,6 +82,26 @@ are tagged with the component they belong to.
   frames). Measured on 5 books (359 images, `--image-format jxl`): every
   image decodes with libjxl's `djxl`, before and after; total size +0.01%;
   old vs new pixels differ by at most 16 of 255 (PSNR ≥ 62 dB, median ~90).
+
+### Fixed
+- **Grayscale images converted to WebP keep their tones.** They were handed to
+  zenwebp as one-channel gray, a path that writes gray straight into WebP's
+  limited-range luma, so every reader stretched the contrast and clipped
+  shadows and highlights (a 0–255 ramp came back with 16 as 0 and 235 as 253).
+  They now go in as RGB; WebP stores no gray mode, so the files are no larger.
+  Measured on the 562-book shelf at the default quality (1,617 grayscale
+  images without alpha): luma PSNR against the source median 31.3 → 38.4 dB,
+  5th percentile 24.8 → 32.3 dB, total WebP bytes −3.7%, the same 1,155
+  images converted. 312 pure black-and-white PNGs that the old path happened
+  to keep exact now come out at ≥ 38.9 dB (median 45.2).
+- **The source JPEG's quality is read correctly.** The cap that keeps a
+  re-encode from going above the source's quality compared the JPEG's
+  quantisation table, stored in zigzag order, with the standard table in row
+  order, and read most JPEGs 1–7 points low (up to 26 on unusual tables), so
+  re-encodes lost more than intended. It is now exact at every quality for
+  libjpeg-style tables. On the shelf, 4,468 JPEGs get a higher cap at the
+  default quality 80; their WebP output is 7.7% larger, and 95 of them (was
+  10) now keep their original because the re-encode is no longer smaller.
 
 ## [cli-v4.5.1] - 2026-10-29
 
