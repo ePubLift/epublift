@@ -16,28 +16,19 @@
 
 //! [EXPERIMENTAL] PDF → EPUB import (`epublift import`).
 //!
-//! Turns a PDF into a reflowable EPUB. Real-world PDFs fall into three tiers:
-//!   1. born-digital (has a text layer) → extract text directly,
-//!   2. scan WITH an embedded OCR text layer (archive.org / Google Books /
-//!      "searchable PDFs") → reuse that text layer,
-//!   3. pure scan, no text layer → OCR (the `pdf-ocr` feature, a later phase).
-//!
-//! v1 (`pdf` feature) covers tiers 1 and 2: lossless, pure-Rust, light. Tier 3
-//! needs `pdf-ocr`.
-//!
-//! Pipeline: [`extract`] (classify input; pull text with font size + position,
-//! and page images) → [`structure`] (strip running heads by position,
-//! de-hyphenate, detect headings/chapters by font size) → [`reflow`] (emit the
-//! EPUB, reusing the crate's `opf`/`nav`/`images` writers).
+//! Turns a PDF into a reflowable EPUB. Reading the PDF is paginaverto's job (the
+//! veripublica family's PDF reader): it classifies the input (born-digital, scan
+//! with an OCR text layer, pure scan), extracts or recognises the text, and
+//! structures it into chapters. We keep what makes it an EPUB: the title, the
+//! language, [`reflow`] (XHTML + packaging), and — with `pdf-ocr` — the OCR
+//! model download ([`ocr`]).
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Result, bail};
 use std::path::Path;
 
-mod extract;
 #[cfg(feature = "pdf-ocr")]
 mod ocr;
 mod reflow;
-mod structure;
 
 /// Output layout mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -53,8 +44,8 @@ pub enum Mode {
 #[derive(Debug, Clone, Default)]
 pub struct ImportOptions {
     pub mode: Mode,
-    /// Content language (BCP-47, e.g. "tr"). Drives de-hyphenation/metadata;
-    /// becomes mandatory once OCR (`pdf-ocr`) lands.
+    /// Content language (BCP-47, e.g. "tr"). Sets `dc:language`; required for
+    /// scanned PDFs (OCR).
     pub language: Option<String>,
 }
 
@@ -65,78 +56,45 @@ pub struct ImportSummary {
     pub paragraphs: usize,
 }
 
+/// Read the PDF into chapters. Without OCR first: only a scan needs the ~12 MB
+/// models, so a text-layer PDF never loads (or downloads) them. The outer
+/// error is ours (the models); the inner one is paginaverto's.
+fn read(
+    input: &Path,
+    opts: &ImportOptions,
+) -> Result<Result<paginaverto::Book, paginaverto::Error>> {
+    let mut read_opts = paginaverto::Options::default();
+    read_opts.language = opts.language.clone();
+    let result = paginaverto::read(paginaverto::Input::Path(input), &read_opts);
+    #[cfg(feature = "pdf-ocr")]
+    if matches!(result, Err(paginaverto::Error::ScanNeedsOcr)) {
+        if opts.language.as_deref().is_none_or(str::is_empty) {
+            return Ok(Err(paginaverto::Error::LanguageRequired));
+        }
+        read_opts.ocr = ocr::models()?;
+        return Ok(paginaverto::read(
+            paginaverto::Input::Path(input),
+            &read_opts,
+        ));
+    }
+    Ok(result)
+}
+
 /// Import the PDF at `input`, writing a reflow EPUB to `output`.
 pub fn import(input: &Path, output: &Path, opts: &ImportOptions) -> Result<ImportSummary> {
     if opts.mode == Mode::Fixed {
         bail!("[EXPERIMENTAL] --mode fixed (preserve page images) is not implemented yet");
     }
 
-    let doc = lopdf::Document::load(input)
-        .with_context(|| format!("failed to open PDF {}", input.display()))?;
-
-    // Pure scans (no text layer) go through OCR (`pdf-ocr` feature); inputs that
-    // carry a text layer are read directly. Both yield per-page `PageText`, then
-    // the structure/quality-gate/reflow tail is shared.
-    let kind = extract::classify(&doc);
-    let pages: Vec<extract::PageText> = if kind == extract::InputKind::Scan {
-        scan_pages(&doc, opts)?
-    } else {
-        let extract_figures = extract::born_digital_doc(&doc);
-        doc.get_pages()
-            .into_iter()
-            .map(|(num, id)| extract::page_text(&doc, id, num, extract_figures))
-            .collect()
-    };
-
-    let chapters = structure::build_book(&pages);
-    if chapters.is_empty() {
-        match kind {
-            // A scan that OCR couldn't read (image quality, or undecodable codec).
-            extract::InputKind::Scan => bail!(
-                "OCR found no readable text in this scan — the page images may be \
-                 too low-quality, or in a format we can't decode (e.g. JPEG2000)"
-            ),
-            // A text layer was detected but nothing decoded → almost certainly
-            // CID/Type0 fonts in an object stream, which v1 can't read yet.
-            extract::InputKind::TextLayer if pages.iter().all(|p| p.blocks.is_empty()) => bail!(
-                "this PDF has a text layer, but its fonts can't be decoded yet \
-                 (CID/Type0 — common in modern, non-Latin PDFs); support is coming \
-                 in a later release"
-            ),
-            extract::InputKind::TextLayer => {
-                bail!("no extractable text found in {}", input.display())
-            }
+    let book = read(input, opts)?.map_err(|e| match e {
+        paginaverto::Error::Open(cause) => {
+            anyhow::anyhow!(cause).context(format!("failed to open PDF {}", input.display()))
         }
-    }
-
-    // Quality gate: real prose is ~80% letters; if the decoded text is mostly
-    // non-letters (control/replacement bytes), the fonts didn't decode (e.g. a
-    // PDF 1.5 object stream lopdf can't resolve, or an unsupported encoding) —
-    // refuse rather than emit a garbage (and invalid-XML) EPUB.
-    let (mut nonspace, mut letters) = (0usize, 0usize);
-    for ch in chapters
-        .iter()
-        .flat_map(|c| &c.blocks)
-        .filter_map(|b| match b {
-            structure::Block::Paragraph(p) => Some(p.as_str()),
-            structure::Block::Figure(_) => None,
-        })
-        .flat_map(|p| p.chars())
-    {
-        if !ch.is_whitespace() {
-            nonspace += 1;
-            if ch.is_alphabetic() {
-                letters += 1;
-            }
+        paginaverto::Error::NoText => {
+            anyhow::anyhow!("no extractable text found in {}", input.display())
         }
-    }
-    if nonspace >= 50 && (letters as f32) < nonspace as f32 * 0.45 {
-        bail!(
-            "couldn't decode this PDF's text — it likely uses fonts or a PDF \
-             structure we can't read yet (e.g. object streams); support is \
-             coming in a later release"
-        );
-    }
+        e => e.into(),
+    })?;
 
     let title = input
         .file_stem()
@@ -144,55 +102,15 @@ pub fn import(input: &Path, output: &Path, opts: &ImportOptions) -> Result<Impor
         .unwrap_or_else(|| "Imported book".into());
     let language = opts.language.as_deref().unwrap_or("en");
 
-    reflow::write_epub(output, &title, language, &chapters)?;
+    reflow::write_epub(output, &title, language, &book.chapters)?;
 
     Ok(ImportSummary {
-        chapters: chapters.len(),
-        paragraphs: chapters
+        chapters: book.chapters.len(),
+        paragraphs: book
+            .chapters
             .iter()
             .flat_map(|c| &c.blocks)
-            .filter(|b| matches!(b, structure::Block::Paragraph(_)))
+            .filter(|b| matches!(b, paginaverto::Block::Paragraph(_)))
             .count(),
     })
-}
-
-/// OCR a scanned PDF into per-page text blocks (`pdf-ocr` feature).
-#[cfg(feature = "pdf-ocr")]
-fn scan_pages(doc: &lopdf::Document, opts: &ImportOptions) -> Result<Vec<extract::PageText>> {
-    let language = opts
-        .language
-        .as_deref()
-        .filter(|s| !s.is_empty())
-        .context("--language is required for scanned PDFs (e.g. --language tr)")?;
-    let _ = language; // currently advisory; sets dc:language downstream via opts
-    let engine = ocr::load_engine()?;
-    Ok(doc
-        .get_pages()
-        .into_values()
-        .map(|id| {
-            let text = extract::page_scan_image(doc, id)
-                .and_then(|fig| ocr::ocr_image(&engine, &fig.data).ok())
-                .unwrap_or_default();
-            let blocks = text
-                .lines()
-                .map(|l| l.split_whitespace().collect::<Vec<_>>().join(" "))
-                .filter(|l| !l.is_empty())
-                .collect();
-            extract::PageText {
-                blocks,
-                born_digital: false,
-                big_font: Vec::new(),
-                figures: Vec::new(),
-            }
-        })
-        .collect())
-}
-
-/// Without the `pdf-ocr` feature, scanned PDFs are reported, not converted.
-#[cfg(not(feature = "pdf-ocr"))]
-fn scan_pages(_doc: &lopdf::Document, _opts: &ImportOptions) -> Result<Vec<extract::PageText>> {
-    bail!(
-        "this PDF looks like a scan with no text layer — OCR is needed, \
-         which is not available yet (coming in a later release)"
-    )
 }

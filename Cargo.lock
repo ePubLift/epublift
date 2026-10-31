@@ -942,15 +942,13 @@ dependencies = [
  "image",
  "imgref",
  "kepubverto",
- "lopdf",
- "ocrs",
+ "paginaverto",
  "percent-encoding",
  "pulldown-cmark",
  "quick-xml",
  "regex",
  "rgb",
  "roxmltree",
- "rten",
  "rustls",
  "rustls-rustcrypto",
  "serde",
@@ -1936,6 +1934,27 @@ dependencies = [
  "primefield",
  "primeorder",
  "sha2",
+]
+
+[[package]]
+name = "paginaverto"
+version = "0.1.0"
+source = "git+https://github.com/veripublica/paginaverto?tag=v0.1.0#92027488e3fd243ab4435af6122ed5ee773588a1"
+dependencies = [
+ "image",
+ "lopdf",
+ "paginaverto-ocr",
+ "regex",
+]
+
+[[package]]
+name = "paginaverto-ocr"
+version = "0.1.0"
+source = "git+https://github.com/veripublica/paginaverto?tag=v0.1.0#92027488e3fd243ab4435af6122ed5ee773588a1"
+dependencies = [
+ "image",
+ "ocrs",
+ "rten",
 ]
 
 [[package]]

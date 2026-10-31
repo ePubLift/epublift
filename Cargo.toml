@@ -84,9 +84,11 @@ zenwebp = "0.4"
 quick-xml = "0.42"
 roxmltree = "0.21"
 regex = "1"
-# [EXPERIMENTAL] PDF import (`epublift import`): read text/images from a PDF.
-# Optional so the default build doesn't carry it. See src/pdf/.
-lopdf = { version = "0.45", optional = true }
+# [EXPERIMENTAL] PDF import (`epublift import`): paginaverto, the family's PDF
+# reader, turns the PDF into chapters (text layer, or OCR with its `ocr`
+# feature); we build the EPUB. A git tag until it is on crates.io. Optional so
+# the default build doesn't carry it. See src/pdf/.
+paginaverto = { git = "https://github.com/veripublica/paginaverto", tag = "v0.1.0", optional = true }
 # [EXPERIMENTAL] Markdown import (`epublift import file.md`): turn a Markdown
 # file (e.g. an AI-OCR'd PDF) into a reflowable EPUB. pulldown-cmark is the
 # CommonMark standard, pure Rust, zero C. default-features off drops its bundled
@@ -99,11 +101,6 @@ uuid = { version = "1", features = ["v4"], optional = true }
 # [EXPERIMENTAL] Smart Import: base64 for inlining the PDF into the OCR API
 # request and decoding the images it returns. Pure Rust. See src/smart_import/.
 base64 = { version = "0.23", optional = true }
-# [EXPERIMENTAL] PDF OCR (`pdf-ocr` feature): pure-Rust OCR for scanned PDFs.
-# ocrs runs on the rten tensor engine — both pure Rust, no C/ONNX-runtime. The
-# ~12 MB models download on first use. Heavy, so strictly opt-in.
-ocrs = { version = "0.13", optional = true }
-rten = { version = "0.26", optional = true }
 # epubveri, the veripublica family's pure-Rust, JVM-free alternative to W3C
 # epubcheck. Dogfooding — we consume the published crate exactly like any other
 # user would. Pure Rust, and shares our own `zip` 9 and `roxmltree` 0.21 rather
@@ -215,10 +212,18 @@ validate = []
 # (born-digital PDFs + scans that already carry a text layer); pure Rust, light.
 # `pdf-ocr` will add OCR for scans with no text layer (a later phase: ocrs +
 # rten + model download). Opt-in so the default build stays lean. See src/pdf/.
-pdf = ["dep:lopdf", "dep:uuid"]
-# OCR also needs the pure-Rust HTTPS client (src/http.rs) to download models on
-# first use — same rustls + RustCrypto stack as `metadata` (no C).
-pdf-ocr = ["pdf", "dep:ocrs", "dep:rten", "dep:rustls", "dep:rustls-rustcrypto", "dep:webpki-roots"]
+pdf = ["dep:paginaverto", "dep:uuid"]
+# OCR (paginaverto's `ocr`: ocrs + rten) also needs the pure-Rust HTTPS client
+# (src/http.rs) to download the models on first use — same rustls + RustCrypto
+# stack as `metadata` (no C) — and SHA-256 to check them.
+pdf-ocr = [
+    "pdf",
+    "paginaverto/ocr",
+    "dep:sha2",
+    "dep:rustls",
+    "dep:rustls-rustcrypto",
+    "dep:webpki-roots",
+]
 # [EXPERIMENTAL] Markdown → EPUB import (`epublift import file.md`). Turns a
 # Markdown file (+ its local images) into a reflowable EPUB — the pure-Rust,
 # offline core that AI "Smart Import" (e.g. Mistral OCR) feeds its output into.

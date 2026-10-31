@@ -111,12 +111,18 @@ deletes it immediately, like every other mode.
 
 ## Build features
 
-- **`pdf`** — the text tiers (1–2). Pure-Rust (adds only `lopdf`); light.
-- **`pdf-ocr`** — adds OCR for tier 3 (pure-Rust ocrs + rten + a rustls model
-  downloader). Heavier; opt-in. Models (~12 MB) download on first use and cache
-  (override the location with `EPUBLIFT_OCR_MODELS`).
+- **`pdf`** — the text tiers (1–2). Pure-Rust; light: adds
+  [paginaverto](https://github.com/veripublica/paginaverto) without its OCR.
+- **`pdf-ocr`** — adds OCR for tier 3 (paginaverto's `ocr`: pure-Rust ocrs +
+  rten, plus our rustls model downloader). Heavier; opt-in. Models (~12 MB)
+  download on first use and cache (override the location with
+  `EPUBLIFT_OCR_MODELS`); each load is checked against the SHA-256 paginaverto
+  publishes, and a file that doesn't match is refused.
 
 ## How it works (brief)
+
+Steps 1–3 are [paginaverto](https://github.com/veripublica/paginaverto)'s, the
+veripublica family's PDF reader; epublift writes the EPUB (step 4).
 
 1. **Classify** the input by whether pages carry a text layer (checked via the
    content stream's text-showing operators, which is robust where naive text
@@ -130,4 +136,5 @@ deletes it immediately, like every other mode.
 4. **Write** a minimal, valid EPUB 3.3.
 
 Everything is pure-Rust and offline; no upload leaves your machine on the
-self-hosted web service, and the CLI never touches the network.
+self-hosted web service, and the CLI touches the network only to download the
+OCR models once.

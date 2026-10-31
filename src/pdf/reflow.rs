@@ -7,7 +7,7 @@ use anyhow::Result;
 
 use crate::epub_writer::{ImageAsset, RenderedChapter, esc, package_epub};
 
-use super::structure::{Block, Chapter};
+use paginaverto::{Block, Chapter};
 
 /// Write `chapters` as a reflow EPUB to `out`.
 pub(crate) fn write_epub(
@@ -40,6 +40,8 @@ pub(crate) fn write_epub(
                         data: fig.data.clone(),
                     });
                 }
+                // A block kind from a newer paginaverto: nothing to render yet.
+                _ => {}
             }
         }
         rendered.push(RenderedChapter {
@@ -57,10 +59,10 @@ mod tests {
 
     #[test]
     fn writes_a_valid_epub() {
-        let chapters = vec![Chapter {
-            title: Some("Chapter <1>".to_string()),
-            blocks: vec![Block::Paragraph("Hello & welcome.".to_string())],
-        }];
+        let mut chapter = Chapter::default();
+        chapter.title = Some("Chapter <1>".to_string());
+        chapter.blocks = vec![Block::Paragraph("Hello & welcome.".to_string())];
+        let chapters = vec![chapter];
         let out =
             std::env::temp_dir().join(format!("epublift_reflow_test_{}.epub", std::process::id()));
         write_epub(&out, "My Title", "en", &chapters).unwrap();
