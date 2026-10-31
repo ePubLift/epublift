@@ -190,11 +190,15 @@ pub(crate) fn package_epub(
     Ok(())
 }
 
-/// Escape text for inclusion in XHTML, dropping control chars illegal in XML 1.0.
+/// Escape text for inclusion in XHTML, dropping chars illegal in XML 1.0.
 pub(crate) fn esc(s: &str) -> String {
     s.chars()
-        // Drop control chars that are illegal in XML 1.0 (keep tab/newline/CR).
-        .filter(|&c| c >= ' ' || c == '\t' || c == '\n' || c == '\r')
+        // XML 1.0 `Char`: no C0 controls but tab/newline/CR, and no U+FFFE or
+        // U+FFFF (fonts' ToUnicode maps give them to unmapped glyphs).
+        .filter(|&c| {
+            matches!(c, '\t' | '\n' | '\r' | ' '..='\u{D7FF}' | '\u{E000}'..='\u{FFFD}')
+                || c >= '\u{10000}'
+        })
         .map(|c| match c {
             '&' => "&amp;".into(),
             '<' => "&lt;".into(),
@@ -214,6 +218,12 @@ mod tests {
         // control char (0x07) dropped; metacharacters escaped
         let out = esc("a <b> & \"c\"\u{0007}");
         assert_eq!(out, "a &lt;b&gt; &amp; &quot;c&quot;");
+        // noncharacters U+FFFE / U+FFFF dropped; the rest of the BMP and
+        // astral chars kept
+        assert_eq!(
+            esc("x\u{FFFE}y\u{FFFF}z\u{FFFD}\u{1F600}"),
+            "xyz\u{FFFD}\u{1F600}"
+        );
     }
 
     #[test]

@@ -10,6 +10,15 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+### Fixed
+- **PDF import no longer writes text that breaks the XHTML.** Some fonts map
+  glyphs they have no character for to U+FFFE or U+FFFF, which XML does not
+  allow, so the chapter was not well-formed (RSC-016) and readers could
+  refuse it. They are now dropped, as control characters already were; the
+  same holds for Markdown import. Measured on 18 local PDFs: 2 imports
+  carried them (2–4 per chapter), one of them is now valid (the other has a
+  separate image defect, which is paginaverto's), and no other byte changed.
+
 ## [cli-v4.5.2] - 2026-11-01
 
 ### Changed
