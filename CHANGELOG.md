@@ -10,6 +10,20 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+### Changed
+- **zenwebp 0.4.6** (was 0.4.4), the WebP encoder, with roxmltree 0.21.2,
+  structured-zstd 0.2.6, uuid 1.29, crc32fast 1.5.3, webpki-roots 1.0.11,
+  unicode-normalization 0.1.26, tokio 1.54.1 and brotli 9.1.1 (the last
+  bench-only). zenwebp 0.4.6 fixes demuxer panics and hangs on crafted input
+  and a lossless-encoder fault; epublift encodes lossy, so the lossless fix
+  does not reach it. Measured on the 562-book shelf, old vs new: `check`
+  findings identical in all 562; `--webp` output graded the same in all 562,
+  WebP bytes −0.37% over 11,365 images, all decodable, quality against the
+  source unchanged (295 sampled images: median PSNR 38.78 → 38.84 dB); in 6
+  books one or a few images flip between converted and kept-original, as the
+  never-larger rule decides; `.eparc` archives the same size, and every
+  archive restores to the original's content with either version.
+
 ### Fixed
 - **PDF import no longer writes text that breaks the XHTML.** Some fonts map
   glyphs they have no character for to U+FFFE or U+FFFF, which XML does not
