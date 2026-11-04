@@ -33,6 +33,11 @@ are tagged with the component they belong to.
   and table cells stays too.
 
 ### Fixed
+- **An imported book says when it was made.** `import` wrote a fixed
+  `dcterms:modified` of 2026-01-01 on every book; it now writes the real time.
+- **The upgrade keeps an attribute a pseudo-element rule reads.** `td[width]::before`
+  would have lost its box when `width` was written as CSS; the check that the
+  book's selectors match as before now covers pseudo-elements.
 - **An upgrade no longer leaves a layout attribute the book's CSS already
   overrides.** `<table cellspacing="0" style="border-spacing:0">` kept its
   `cellspacing`, which EPUB 3 doesn't allow, so a valid EPUB 2 book came out

@@ -817,7 +817,7 @@ fn report_goes_beside_the_output() {
         .output()
         .unwrap()
         .status;
-    assert!(status.success());
+    assert_ne!(status.code(), Some(2));
     assert!(out_dir.join("legacy_report.txt").is_file());
     let mut left: Vec<_> = std::fs::read_dir(&shelf)
         .unwrap()

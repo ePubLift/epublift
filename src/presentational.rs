@@ -1225,18 +1225,25 @@ impl Element for El<'_, '_, '_> {
     }
 }
 
-/// Which declarations reach an element, in order: what must not change.
+/// Which declarations reach an element and its pseudo-elements, in order: what
+/// must not change. `style_for` alone misses a rule such as `td[width]::before`.
 fn signature(
     cascade: &Cascade<'_, '_>,
     el: &El<'_, '_, '_>,
     inline: &[BlockItem<'_>],
-) -> Vec<usize> {
-    cascade
-        .style_for(el, Some(inline))
-        .candidates
-        .iter()
-        .map(|c| c.declaration as *const _ as usize)
-        .collect()
+) -> Vec<(String, usize)> {
+    let addresses = |pseudo: &str, style: styloria::ElementStyle<'_>| -> Vec<(String, usize)> {
+        style
+            .candidates
+            .iter()
+            .map(|c| (pseudo.to_string(), c.declaration as *const _ as usize))
+            .collect()
+    };
+    let mut out = addresses("", cascade.style_for(el, Some(inline)));
+    for pseudo in cascade.pseudo_elements_for(el) {
+        out.extend(addresses(&pseudo, cascade.style_for_pseudo(el, &pseudo)));
+    }
+    out
 }
 
 // ---- the document's stylesheets ----------------------------------------------
@@ -1598,6 +1605,18 @@ mod tests {
         );
         assert_eq!((s.converted, s.left_no_exact_css), (0, 1));
         assert!(text.contains("align=\"middle\""), "{text}");
+        assert!(css.is_empty(), "{css}");
+    }
+
+    #[test]
+    fn a_pseudo_element_rule_reading_the_attribute_counts() {
+        let (_d, s, text, css) = run(
+            "td[width]::before { content: 'x' }",
+            "",
+            "<table><tr><td width=\"50%\">x</td></tr></table>",
+        );
+        assert_eq!((s.converted, s.left_selectors), (0, 1));
+        assert!(text.contains("width=\"50%\""), "{text}");
         assert!(css.is_empty(), "{css}");
     }
 

@@ -270,13 +270,6 @@ zip = { version = "9.3.0", default-features = false, features = ["deflate"] }
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 tempfile = "3"
 
-# roxmltree parses recursively. Unoptimised it spends ~20x the stack per level,
-# so on a 2 MiB `cargo test` thread it aborts at ~125 levels, below the
-# 256 that epubveri's xmlguard lets through. Optimising just this crate in dev
-# builds restores the margin (measured by epubveri; see xmlguard::MAX_XML_DEPTH).
-[profile.dev.package.roxmltree]
-opt-level = 1
-
 [profile.release]
 opt-level = 3
 # Thin, not fat: fat LTO was 74% of a cold release build (193 s vs 83 s,

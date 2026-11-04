@@ -55,7 +55,7 @@ Update the table above, check that the package still imports only from
 | Package | [`@veripublica/epubsana-wasm`](https://www.npmjs.com/package/@veripublica/epubsana-wasm) **0.38.0** |
 | npm integrity | `sha512-1Rji0AxcC2FMbT0TBejBG3mk3WQeUwsAHPpg+r30r5299yNWm0d4YFbr4OxYe+hRXOWFGab06ih3jNllL4WtvQ==` |
 | Built from | [veripublica/epubsana](https://github.com/veripublica/epubsana) tag `v0.38.0`, commit `f5476186daac690f7cecb6048282b88e346a96aa` |
-| Must match | the `epubsana` version in the root `Cargo.toml` — `epublift repair` and this browser build run the same `repair()`, so the same book with the same fixes approved comes back identical |
+| Must match | the `epubsana` version in the root `Cargo.toml` — `epublift repair` and this browser build run the same `repair()`, so one pass over the same book with the same fixes approved comes back identical. `repair` goes on by itself while a fix reveals more, up to 3 passes; the page offers "Find more fixes" instead, and after it the result is the same |
 
 It carries its own copy of epubveri (the repairer validates before and after
 every repair), so it does not share the Validate module above. The two must

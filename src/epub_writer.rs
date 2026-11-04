@@ -168,7 +168,7 @@ pub(crate) fn package_epub(
   <dc:identifier id="bookid">urn:uuid:{uuid}</dc:identifier>
   <dc:title>{title}</dc:title>
   <dc:language>{lang}</dc:language>
-  <meta property="dcterms:modified">2026-01-01T00:00:00Z</meta>
+  <meta property="dcterms:modified">{modified}</meta>
 {cover_meta} </metadata>
  <manifest>
   <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
@@ -179,6 +179,7 @@ pub(crate) fn package_epub(
             // A new book with no ISBN: a random UUID, made once (each import
             // is a book of its own, so two never share an identifier).
             uuid = uuid::Uuid::new_v4(),
+            modified = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ"),
             title = esc(title),
             lang = esc(language),
             cover_meta = cover_meta,
