@@ -113,7 +113,7 @@ epubveri = "0.37.1"
 # core `repair()` — the same function `epubsana` and its browser build run — so
 # a book repaired here and there comes back identical. Pure Rust, on the same
 # epubveri, zip 9 and roxmltree 0.21 as we are. See docs/repair.md.
-epubsana = "0.38.0"
+epubsana = "0.39.0"
 # kepubverto, the family's KEPUB converter: `--kepub` and the web's .kepub run
 # its `convert()` on the packaged book, so the Kobo markup is exactly what
 # `kepubverto` writes. Pure Rust, on the same epubveri, zip 9 and

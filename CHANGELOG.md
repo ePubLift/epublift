@@ -26,6 +26,11 @@ are tagged with the component they belong to.
   message says how many errors remain.
 
 ### Added
+- **The upgrade deletes `direction: ltr` from a style sheet,** which EPUB 3 forbids
+  and EPUB 2 allowed, through epubsana 0.39.0. epubsana declines on any sign of
+  right-to-left text in the book. The new fixer that turns `http://name%40domain`
+  into `mailto:` is not applied by the upgrade: it changes where a link goes, so
+  `repair` asks about it.
 - **The upgrade repairs a book labelled older than EPUB 2 first.** `version="1.0"`
   stops a validator at the package document, so errors behind it reached the
   upgraded book. Such a book now gets what `repair -y` does before it is upgraded.
@@ -38,6 +43,9 @@ are tagged with the component they belong to.
   and table cells stays too.
 
 ### Fixed
+- **A guide entry for an image no longer makes a landmark.** EPUB 3 does not allow
+  `nav.xhtml` to link to an image, so a book with its cover image in `<guide>` came
+  out with a new error. The rest of the guide still becomes landmarks.
 - **An imported book says when it was made.** `import` wrote a fixed
   `dcterms:modified` of 2026-01-01 on every book; it now writes the real time.
 - **The upgrade keeps an attribute a pseudo-element rule reads.** `td[width]::before`

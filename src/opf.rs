@@ -4,6 +4,7 @@
 //! `rewrite_opf` streams the original XML through quick-xml applying the
 //! EPUB 3.3 upgrades while preserving the rest of the document byte-for-byte.
 
+use crate::util;
 use anyhow::{Context, Result};
 use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event};
 use quick_xml::name::QName;
@@ -156,6 +157,9 @@ pub fn parse_opf_info(xml: &str) -> Result<OpfInfo> {
         {
             let ref_type = r.attribute("type").unwrap_or("").to_string();
             let href = r.attribute("href").unwrap_or("").to_string();
+            if guide_target_is_not_a_document(&href, &items) {
+                continue;
+            }
             let title = match r.attribute("title") {
                 Some(t) => t.to_string(),
                 None => capitalize(&ref_type),
@@ -188,6 +192,24 @@ pub fn parse_opf_info(xml: &str) -> Result<OpfInfo> {
 
 /// Detect EPUB 3.4 "outdated"/deprecated features present in the package document
 /// (a lint — we report them, we don't strip author content). Covers the reliably
+/// Whether a guide `href` names a manifest item that is no document, such as a
+/// cover image: EPUB 2 reports it, and EPUB 3 forbids it as a hyperlink, so it
+/// makes no landmark. `text/html` counts as a document, because the upgrade's
+/// final pass declares it as XHTML. A target the manifest lacks is kept: the
+/// broken link is the book's and stays reported.
+fn guide_target_is_not_a_document(href: &str, items: &[ManifestItem]) -> bool {
+    let path = util::unquote(href.split('#').next().unwrap_or(""));
+    items
+        .iter()
+        .find(|item| util::unquote(&item.href) == path)
+        .is_some_and(|item| {
+            !matches!(
+                item.media_type.as_str(),
+                "application/xhtml+xml" | "image/svg+xml" | "text/html"
+            )
+        })
+}
+
 /// OPF-detectable signals: manifest content fallbacks, the outdated `rendition:*`
 /// properties, the `collection` element, and the deprecated reserved prefixes
 /// (`xsd`/`msv`/`prism`).
@@ -925,6 +947,30 @@ fn needs_ttf_media_type(media_type: Option<&str>) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_guide_entry_for_an_image_makes_no_landmark() {
+        let info = parse_opf_info(
+            r#"<package xmlns="http://www.idpf.org/2007/opf" version="2.0"><manifest>
+              <item id="c" href="image/cover.jpeg" media-type="image/jpeg"/>
+              <item id="x" href="a%20b.xhtml" media-type="application/xhtml+xml"/>
+              <item id="h" href="c.htm" media-type="text/html"/>
+            </manifest><guide>
+              <reference type="cover" title="Cover" href="image/cover.jpeg"/>
+              <reference type="text" title="Text" href="a b.xhtml#start"/>
+              <reference type="toc" title="Contents" href="c.htm"/>
+              <reference type="notes" title="Notes" href="missing.xhtml"/>
+            </guide></package>"#,
+        )
+        .unwrap();
+        assert!(info.has_guide);
+        let kept: Vec<&str> = info
+            .guide_refs
+            .iter()
+            .map(|r| r.ref_type.as_str())
+            .collect();
+        assert_eq!(kept, ["text", "toc", "notes"]);
+    }
 
     const OPF_PAGEBREAK: &str = r##"<?xml version="1.0" encoding="utf-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="id">

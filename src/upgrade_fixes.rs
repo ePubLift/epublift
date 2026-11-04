@@ -31,7 +31,9 @@ use std::path::Path;
 /// when there are two candidates). Added 2026-10-22: an `id` that is no longer
 /// valid renamed, with every reference to it, because the XHTML 1.x DTD the
 /// DOCTYPE swap removes trimmed the spaces from an `ID` attribute and HTML
-/// does not (`id="k10 "`).
+/// does not (`id="k10 "`). Added 2026-11-04: `direction: ltr` deleted from a
+/// style sheet, which EPUB 3 forbids and EPUB 2 allowed; epubsana declines on
+/// any sign of right-to-left text in the book.
 const UPGRADE_FIXES: &[&str] = &[
     "fix.empty_title",
     "fix.content_type_meta",
@@ -39,6 +41,7 @@ const UPGRADE_FIXES: &[&str] = &[
     "fix.html_media_type",
     "fix.package_identifier",
     "fix.content_document_invalid_id",
+    "fix.css_direction_ltr",
 ];
 
 /// A pass that changed the book is followed by another, at most this many in

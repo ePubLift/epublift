@@ -52,9 +52,9 @@ Update the table above, check that the package still imports only from
 
 | | |
 | --- | --- |
-| Package | [`@veripublica/epubsana-wasm`](https://www.npmjs.com/package/@veripublica/epubsana-wasm) **0.38.0** |
-| npm integrity | `sha512-1Rji0AxcC2FMbT0TBejBG3mk3WQeUwsAHPpg+r30r5299yNWm0d4YFbr4OxYe+hRXOWFGab06ih3jNllL4WtvQ==` |
-| Built from | [veripublica/epubsana](https://github.com/veripublica/epubsana) tag `v0.38.0`, commit `f5476186daac690f7cecb6048282b88e346a96aa` |
+| Package | [`@veripublica/epubsana-wasm`](https://www.npmjs.com/package/@veripublica/epubsana-wasm) **0.39.0** |
+| npm integrity | `sha512-jWnSGA0qqIPIEv5s6uxGzs/C5gkZEYA/o82QlW9Gu8QrAjhcXNVHssc0rVKMtCkD/rQy2zNnU86xKYTaxK2h9Q==` |
+| Built from | [veripublica/epubsana](https://github.com/veripublica/epubsana) tag `v0.39.0`, commit `b1385b7b94a82f3a7ace3a3df0b5396850bf89cf` |
 | Must match | the `epubsana` version in the root `Cargo.toml` — `epublift repair` and this browser build run the same `repair()`, so one pass over the same book with the same fixes approved comes back identical. `repair` goes on by itself while a fix reveals more, up to 3 passes; the page offers "Find more fixes" instead, and after it the result is the same |
 
 It carries its own copy of epubveri (the repairer validates before and after
@@ -65,7 +65,7 @@ still be on the same epubveri minor; epubsana's `Cargo.toml` states its floor.
 
 | File | Origin | SHA-256 |
 | --- | --- | --- |
-| `epubsana_wasm_bg.wasm` | verbatim from the package | `b8b9231ad459bc064357436aa58c6af3feceb483a9135a81dab3be62f0068fac` |
+| `epubsana_wasm_bg.wasm` | verbatim from the package | `9111d216f34217d229fdb32576e6ec5dfca386756f0ec78f4843c494b6f1deb5` |
 | `epubsana_wasm_bg.js` | verbatim from the package (wasm-bindgen glue) | `e5a8b7a18987c531c7d806d061859b5a8f7cbc9ecb6d6b9616b53eb8c53fa599` |
 | `epubsana-LICENSE`, `epubsana-LICENSE-COMMERCIAL.md` | the package's `LICENSE` and `LICENSE-COMMERCIAL.md` | — |
 | `epubsana.js` | **ours** — the browser loader, the same shape as `epubveri.js` | — |
