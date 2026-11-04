@@ -14,7 +14,7 @@ This modernizes the input and saves it next to the original as
 `<input_name>_v3.3.epub`, plus a performance report in `<input_name>_report.txt`.
 
 Print the version you are running (with the exact commit when the build knew
-it, e.g. `epublift 4.6.0+…`):
+it, e.g. `epublift 4.6.1+…`):
 
 ```bash
 epublift --version        # or -V
@@ -193,8 +193,8 @@ epublift -i book.epub --webp   # images re-encoded to WebP where smaller
 EPUB 2 books are XHTML 1.1, which still allowed layout attributes that HTML,
 and so EPUB 3, does not: an image sized in percent (`<img width="40%">`), or a
 table's `cellspacing`, `cellpadding`, `border`, `width` and `height`, and
-`width`, `height` and `valign` on its cells, or a line break's `clear`
-(`<br clear="all">`). Left as they are, they make a
+`width`, `height` and `valign` on its cells, a line break's `clear`
+(`<br clear="all">`), or `align` on a table, paragraph, heading or image. Left as they are, they make a
 valid EPUB 2 book an invalid EPUB 3 one. The upgrade writes each one as the CSS
 the HTML Standard maps it to (§15 Rendering): a class rule in one stylesheet of
 its own, `epublift-presentational.css`, added to the manifest and linked first
@@ -223,6 +223,11 @@ change:
   notices the attribute going; when one would match differently, the document
   is left as it is.
 - **Every declaration written is valid CSS.**
+- **The CSS gives the same result.** `<img align="middle">` aligns the image's
+  middle with the parent's baseline, and `vertical-align: middle` doesn't, so it is
+  left as written and counted in the report. The same goes for `align` on `div`
+  and table cells, which also moves block content, and for a centred table in
+  vertical text.
 
 A class rule, not a `style` attribute, because the attribute was a
 low-precedence hint and a class rule keeps it close to one; old readers (Kobo's

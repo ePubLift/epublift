@@ -10,6 +10,31 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+## [cli-v4.6.1] - 2026-11-04
+
+### Added
+- **The upgrade writes `align` as CSS** on tables (`float`, or centred with
+  auto margins), paragraphs and headings (`text-align`) and images (`float` or
+  `vertical-align`), as the HTML Standard maps them. `<img align="middle">` stays,
+  and is counted in the report: no standard CSS gives it exactly. `align` on `div`
+  and table cells stays too.
+
+### Fixed
+- **An upgrade no longer leaves a layout attribute the book's CSS already
+  overrides.** `<table cellspacing="0" style="border-spacing:0">` kept its
+  `cellspacing`, which EPUB 3 doesn't allow, so a valid EPUB 2 book came out
+  invalid. Such an attribute has no effect, so it is now removed and no rule is
+  written. An attribute whose property the CSS sets only in part, or may set, stays.
+
+## [web-v1.30.1] - 2026-11-04
+
+### Added
+- **The upgrade writes `align` as CSS** on tables (`float`, or centred with
+  auto margins), paragraphs and headings (`text-align`) and images (`float` or
+  `vertical-align`), as the HTML Standard maps them. `<img align="middle">` stays,
+  and is counted in the report: no standard CSS gives it exactly. `align` on `div`
+  and table cells stays too.
+
 ### Fixed
 - **An upgrade no longer leaves a layout attribute the book's CSS already
   overrides.** `<table cellspacing="0" style="border-spacing:0">` kept its

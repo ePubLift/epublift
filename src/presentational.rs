@@ -73,6 +73,9 @@ pub struct Summary {
     /// Attributes left as written: the book's selectors read the attribute
     /// or the class, so the document was left as it is.
     pub left_selectors: usize,
+    /// Attributes left as written: no standard CSS gives them exactly
+    /// (`img align="middle"`).
+    pub left_no_exact_css: usize,
     /// The stylesheet written, relative to the package document's directory;
     /// `None` when no attribute needed CSS.
     pub stylesheet: Option<String>,
@@ -81,7 +84,7 @@ pub struct Summary {
 impl Summary {
     /// Attributes left as written, for any reason.
     pub fn left(&self) -> usize {
-        self.left_css_sets + self.left_css_may_set + self.left_selectors
+        self.left_css_sets + self.left_css_may_set + self.left_selectors + self.left_no_exact_css
     }
 }
 
@@ -148,11 +151,12 @@ pub fn convert_book(root: &Path, package_dir: &Path, progress: &dyn Fn(&str)) ->
     if summary.left() > 0 {
         progress(&format!(
             "  [!] Left {} presentational attribute(s) as written: the book's CSS sets part of it ({}) \
-             or may set it ({}), or its selectors read them ({}).",
+             or may set it ({}), its selectors read them ({}), or no CSS gives them exactly ({}).",
             summary.left(),
             summary.left_css_sets,
             summary.left_css_may_set,
-            summary.left_selectors
+            summary.left_selectors,
+            summary.left_no_exact_css
         ));
     }
     Ok(summary)
@@ -222,6 +226,7 @@ fn convert_document(
     rules: &mut BTreeMap<String, String>,
 ) -> Option<String> {
     let doc = util::parse_xml_with_dtd(text).ok()?;
+    summary.left_no_exact_css += no_exact_css(&doc);
     // A declaration a browser would drop is a bug in the mapping, never shipped;
     // nor is a rule epubveri would report in the stylesheet.
     let candidates: Vec<Conversion> = plan(&doc)
@@ -471,6 +476,52 @@ fn tag_name_end(text: &str, node: Node<'_, '_>) -> usize {
 }
 
 /// Every conversion the document's markup asks for, before any CSS is read.
+/// The properties that make text vertical, where `margin-inline` is not
+/// `margin-left` and `margin-right`.
+const WRITING_MODES: &[&str] = &["writing-mode", "-epub-writing-mode", "-webkit-writing-mode"];
+
+/// `img[align]` values no standard CSS gives exactly.
+const IMG_ALIGN_NO_EXACT_CSS: [&str; 2] = ["center", "middle"];
+
+/// The rule for an `img[align]` value (§15.4.3), or `None` when it gives no hint.
+fn img_align_decl(value: &str) -> Option<Decl> {
+    let vertical = |v: &str| Decl {
+        class: format!("epublift-vertical-align-{v}"),
+        css: format!("vertical-align: {v}"),
+        props: &["vertical-align"],
+    };
+    Some(match value {
+        "left" => Decl {
+            class: "epublift-img-left".to_string(),
+            css: "float: left; margin-right: 3px".to_string(),
+            props: &["float", "margin-right"],
+        },
+        "right" => Decl {
+            class: "epublift-img-right".to_string(),
+            css: "float: right; margin-left: 3px".to_string(),
+            props: &["float", "margin-left"],
+        },
+        "top" | "baseline" | "bottom" => vertical(value),
+        "texttop" => vertical("text-top"),
+        "absmiddle" | "abscenter" => vertical("middle"),
+        _ => return None,
+    })
+}
+
+/// The `img[align]` attributes left because no CSS gives them exactly.
+fn no_exact_css(doc: &roxmltree::Document<'_>) -> usize {
+    doc.descendants()
+        .filter(|n| {
+            n.is_element()
+                && n.tag_name().namespace() == Some(XHTML_NS)
+                && n.tag_name().name() == "img"
+                && n.attribute("align").is_some_and(|v| {
+                    IMG_ALIGN_NO_EXACT_CSS.contains(&v.to_ascii_lowercase().as_str())
+                })
+        })
+        .count()
+}
+
 fn plan(doc: &roxmltree::Document<'_>) -> Vec<Conversion> {
     let mut out = Vec::new();
     for node in doc.descendants().filter(|n| n.is_element()) {
@@ -620,6 +671,58 @@ fn plan_attribute(
                     props: &["vertical-align"],
                 });
             Some(own("valign", decl))
+        }
+        // §15.3.3: `table[align]` floats, or centres with `margin-inline: auto`.
+        // Written as `margin-left` and `margin-right`, which old readers know and
+        // which are the same in horizontal text, so a writing mode anywhere up
+        // the tree leaves the attribute.
+        ("table", "align") => Some(match value.to_ascii_lowercase().as_str() {
+            v @ ("left" | "right") => own(
+                "align",
+                Some(Decl {
+                    class: format!("epublift-float-{v}"),
+                    css: format!("float: {v}"),
+                    props: &["float"],
+                }),
+            ),
+            "center" => {
+                let mut c = own(
+                    "align",
+                    Some(Decl {
+                        class: "epublift-table-center".to_string(),
+                        css: "margin-left: auto; margin-right: auto".to_string(),
+                        props: &["margin-left", "margin-right"],
+                    }),
+                );
+                c.guards = node
+                    .ancestors()
+                    .filter(|n| n.is_element())
+                    .map(|n| (n.id(), WRITING_MODES))
+                    .collect();
+                c
+            }
+            _ => own("align", None),
+        }),
+        // §15.3.3: `align` → `text-align` on paragraphs and headings.
+        ("p" | "h1" | "h2" | "h3" | "h4" | "h5" | "h6", "align") => {
+            let v = value.to_ascii_lowercase();
+            let decl =
+                matches!(v.as_str(), "left" | "right" | "center" | "justify").then(|| Decl {
+                    class: format!("epublift-text-align-{v}"),
+                    css: format!("text-align: {v}"),
+                    props: &["text-align"],
+                });
+            Some(own("align", decl))
+        }
+        // §15.4.3. `center` and `middle` align the image's middle with the parent's
+        // baseline, which no standard `vertical-align` does (`middle` adds half an
+        // x-height), so they stay: see [`no_exact_css`].
+        ("img", "align") => {
+            let v = value.to_ascii_lowercase();
+            if IMG_ALIGN_NO_EXACT_CSS.contains(&v.as_str()) {
+                return None;
+            }
+            Some(own("align", img_align_decl(&v)))
         }
         // §15.3.4: `br[clear]` → `clear`; `all` and `both` clear both sides,
         // any other value gives no hint.
@@ -1429,6 +1532,72 @@ mod tests {
         );
         assert_eq!((s.overridden, s.left()), (1, 0));
         assert!(!text.contains("cellpadding"), "{text}");
+        assert!(css.is_empty(), "{css}");
+    }
+
+    #[test]
+    fn table_align_floats_or_centres() {
+        let (_d, s, text, css) = run(
+            "",
+            "",
+            "<table align=\"center\"><tr><td>x</td></tr></table>",
+        );
+        assert_eq!((s.converted, s.left()), (1, 0));
+        assert!(!text.contains("align="), "{text}");
+        assert!(
+            css.contains("margin-left: auto; margin-right: auto"),
+            "{css}"
+        );
+        let (_d, _s, text, css) = run("", "", "<table align=\"RIGHT\"><tr><td>x</td></tr></table>");
+        assert!(!text.contains("align="), "{text}");
+        assert!(css.contains("float: right"), "{css}");
+    }
+
+    #[test]
+    fn a_vertical_writing_mode_leaves_a_centred_table() {
+        let (_d, s, text, css) = run(
+            "body { writing-mode: vertical-rl }",
+            "",
+            "<table align=\"center\"><tr><td>x</td></tr></table>",
+        );
+        assert_eq!((s.converted, s.left_css_sets), (0, 1));
+        assert!(text.contains("align=\"center\""), "{text}");
+        assert!(css.is_empty(), "{css}");
+    }
+
+    #[test]
+    fn paragraph_and_heading_align_is_text_align() {
+        let (_d, s, text, css) = run(
+            "",
+            "",
+            "<h2 align=\"center\">a</h2><p align=\"justify\">b</p><p align=\"nonsense\">c</p>",
+        );
+        assert_eq!((s.converted, s.left()), (3, 0));
+        assert!(!text.contains("align="), "{text}");
+        assert!(
+            css.contains("text-align: center") && css.contains("text-align: justify"),
+            "{css}"
+        );
+    }
+
+    #[test]
+    fn img_align_has_its_rule_except_middle() {
+        let (_d, s, text, css) = run(
+            "",
+            "",
+            "<p><img src=\"x.jpg\" alt=\"\" align=\"left\"/><img src=\"y.jpg\" alt=\"\" align=\"texttop\"/></p>",
+        );
+        assert_eq!((s.converted, s.left()), (2, 0));
+        assert!(css.contains("float: left; margin-right: 3px"), "{css}");
+        assert!(css.contains("vertical-align: text-top"), "{css}");
+        assert!(!text.contains("align="), "{text}");
+        let (_d, s, text, css) = run(
+            "",
+            "",
+            "<p><img src=\"x.jpg\" alt=\"\" align=\"middle\"/></p>",
+        );
+        assert_eq!((s.converted, s.left_no_exact_css), (0, 1));
+        assert!(text.contains("align=\"middle\""), "{text}");
         assert!(css.is_empty(), "{css}");
     }
 

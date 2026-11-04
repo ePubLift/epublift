@@ -138,11 +138,12 @@ pub fn write_report(report_path: &Path, report: &Report) -> Result<()> {
     if p.left() > 0 {
         r.push(format!(
             "[ ] Left {} presentational attribute(s) as written: the book's CSS sets part of it ({}) or \
-             may set it ({}), or its selectors read them ({})",
+             may set it ({}), its selectors read them ({}), or no CSS gives them exactly ({})",
             p.left(),
             p.left_css_sets,
             p.left_css_may_set,
-            p.left_selectors
+            p.left_selectors,
+            p.left_no_exact_css
         ));
     }
     r.push(dash.clone());
