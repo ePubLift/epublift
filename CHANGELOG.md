@@ -43,6 +43,11 @@ are tagged with the component they belong to.
   and table cells stays too.
 
 ### Fixed
+- **The upgrade keeps a folder spelled two ways.** On macOS and Windows, a book
+  with both `images/` and `Images/` came out with one folder and a manifest that
+  no longer matched, so the file was lost to the reader. A book with two files
+  that differ only in case is now refused on such a system, where one used to
+  replace the other silently.
 - **A guide entry for an image no longer makes a landmark.** EPUB 3 does not allow
   `nav.xhtml` to link to an image, so a book with its cover image in `<guide>` came
   out with a new error. The rest of the guide still becomes landmarks.

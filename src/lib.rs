@@ -51,7 +51,7 @@ pub mod zstd_ocf;
 
 use anyhow::{Context, Result, bail};
 use chrono::Utc;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs::{self, File};
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
@@ -578,7 +578,7 @@ pub fn convert(input: &Path, options: &Options, progress: impl Fn(&str)) -> Resu
         upgrade_fixes::repair_legacy_version(&input_path, version.as_deref(), &progress)?;
     let source = repaired.as_ref().map_or(input_path.as_path(), |f| f.path());
     progress("[*] Extracting original EPUB file...");
-    extract_epub(source, temp_path)?;
+    let mut entry_names = extract_epub(source, temp_path)?;
 
     // Step 2: Locate the OPF package document.
     let opf_path = locate_opf(temp_path)?;
@@ -708,13 +708,14 @@ pub fn convert(input: &Path, options: &Options, progress: impl Fn(&str)) -> Resu
         add_stylesheet: presentational.stylesheet.clone(),
     };
     let new_opf = opf::rewrite_opf(&opf_xml, &params)?;
-    fs::write(&opf_path, new_opf)?;
+    fs::write(&opf_path, &new_opf)?;
+    entry_names.add_manifest(temp_path, &opf_path, &new_opf)?;
 
     // Step 5: Repackage EPUB.
     match options.packaging {
         Packaging::Deflate => {
             progress("[*] Repackaging folder into EPUB file...");
-            repackage_epub(temp_path, &output_path)?;
+            repackage_epub(temp_path, &output_path, &entry_names)?;
             // Step 5a: what EPUB 3 requires of a book EPUB 2 accepted, by epubsana.
             progress("[*] Applying EPUB 3 fixes (epubsana)...");
             upgrade_fixes::apply(&output_path, &progress)?;
@@ -732,7 +733,7 @@ pub fn convert(input: &Path, options: &Options, progress: impl Fn(&str)) -> Resu
                     "[*] Repackaging with EXPERIMENTAL Zstandard (method 93) — \
                      NOT a conformant EPUB; will not open in current readers...",
                 );
-                repackage_epub_zstd(temp_path, &output_path, mode, level)?;
+                repackage_epub_zstd(temp_path, &output_path, &entry_names, mode, level)?;
             }
             #[cfg(not(feature = "zstd-experimental"))]
             {
@@ -813,10 +814,75 @@ fn read_named<R: io::Read + io::Seek>(
     Ok(Some(data))
 }
 
+/// The names a book's entries must keep when a folder's name is spelled two ways
+/// (`images/` and `Images/`). A file system that ignores case, as on macOS and
+/// Windows, holds both in one folder, so walking the working directory would
+/// move the entries and break the manifest. Empty for any other book, whose
+/// names the working directory keeps as they are.
+#[derive(Default)]
+struct EntryNames(HashMap<String, String>);
+
+impl EntryNames {
+    /// The names to keep, given every file entry of the book.
+    fn from_files(files: &HashSet<String>) -> Self {
+        let mut spellings: HashMap<String, HashSet<&str>> = HashMap::new();
+        for file in files {
+            for (end, _) in file.match_indices('/') {
+                let folder = &file[..end];
+                spellings
+                    .entry(folder.to_lowercase())
+                    .or_default()
+                    .insert(folder);
+            }
+        }
+        if spellings.values().all(|s| s.len() == 1) {
+            return Self::default();
+        }
+        Self(
+            files
+                .iter()
+                .map(|file| (file.to_lowercase(), file.clone()))
+                .collect(),
+        )
+    }
+
+    /// Name the files the upgrade added or renamed, from the manifest it wrote.
+    fn add_manifest(&mut self, root: &Path, opf_path: &Path, opf_xml: &str) -> Result<()> {
+        if self.0.is_empty() {
+            return Ok(());
+        }
+        let opf_name = self.archive_name(&relative_name(root, opf_path)?);
+        let base = opf_name.rsplit_once('/').map_or("", |(dir, _)| dir);
+        for item in opf::parse_opf_info(opf_xml)?.items {
+            if let Some(name) = cover::resolve(base, &item.href) {
+                self.0.entry(name.to_lowercase()).or_insert(name);
+            }
+        }
+        Ok(())
+    }
+
+    /// The name in the archive of a file the working directory calls `name`.
+    fn archive_name(&self, name: &str) -> String {
+        self.0
+            .get(&name.to_lowercase())
+            .cloned()
+            .unwrap_or_else(|| name.to_string())
+    }
+}
+
+/// `path` as an archive name relative to `root`.
+fn relative_name(root: &Path, path: &Path) -> Result<String> {
+    Ok(path
+        .strip_prefix(root)?
+        .to_string_lossy()
+        .replace('\\', "/"))
+}
+
 /// Extract every entry of the EPUB zip into `dest`. Enforces an entry-count cap
 /// and a total-uncompressed-size budget (header sizes are attacker-controlled,
-/// so the budget is enforced against bytes actually written).
-fn extract_epub(input: &Path, dest: &Path) -> Result<()> {
+/// so the budget is enforced against bytes actually written). Refuses a book two
+/// of whose files this file system would hold as one.
+fn extract_epub(input: &Path, dest: &Path) -> Result<EntryNames> {
     let file = File::open(input)?;
     let mut zip = ZipArchive::new(file)?;
 
@@ -828,14 +894,16 @@ fn extract_epub(input: &Path, dest: &Path) -> Result<()> {
     }
 
     let mut budget: u64 = MAX_TOTAL_UNCOMPRESSED;
+    let mut files = HashSet::new();
     for i in 0..zip.len() {
-        let (out_path, is_dir) = {
+        let (name, is_dir) = {
             let entry = zip.by_index_raw(i)?;
             match entry.enclosed_name() {
-                Some(p) => (dest.join(p), entry.is_dir()),
+                Some(p) => (p, entry.is_dir()),
                 None => continue, // skip unsafe (zip-slip) paths
             }
         };
+        let out_path = dest.join(&name);
 
         if is_dir {
             fs::create_dir_all(&out_path)?;
@@ -843,6 +911,14 @@ fn extract_epub(input: &Path, dest: &Path) -> Result<()> {
             if let Some(parent) = out_path.parent() {
                 fs::create_dir_all(parent)?;
             }
+            let name = name.to_string_lossy().replace('\\', "/");
+            if out_path.exists() && !files.contains(&name) {
+                bail!(
+                    "'{name}' and another file in this EPUB differ only in case, and this \
+                     file system cannot hold both."
+                );
+            }
+            files.insert(name);
             let mut out = File::create(&out_path)?;
             // Copy at most `budget + 1` bytes; overshooting means a bomb.
             let written = io::copy(&mut entry_reader(&mut zip, i)?.take(budget + 1), &mut out)?;
@@ -852,7 +928,7 @@ fn extract_epub(input: &Path, dest: &Path) -> Result<()> {
             budget -= written;
         }
     }
-    Ok(())
+    Ok(EntryNames::from_files(&files))
 }
 
 /// Read `META-INF/container.xml` to find the OPF package document path.
@@ -880,7 +956,7 @@ fn locate_opf(temp_dir: &Path) -> Result<PathBuf> {
 
 /// Repackage the working directory into a valid EPUB zip. `mimetype` is written
 /// first and stored uncompressed; everything else is deflated.
-fn repackage_epub(temp_dir: &Path, output: &Path) -> Result<()> {
+fn repackage_epub(temp_dir: &Path, output: &Path, names: &EntryNames) -> Result<()> {
     let file = File::create(output)?;
     let mut zip = ZipWriter::new(file);
 
@@ -903,8 +979,7 @@ fn repackage_epub(temp_dir: &Path, output: &Path) -> Result<()> {
             continue;
         }
         let path = entry.path();
-        let rel = path.strip_prefix(temp_dir)?;
-        let arcname = rel.to_string_lossy().replace('\\', "/");
+        let arcname = names.archive_name(&relative_name(temp_dir, path)?);
         if arcname == "mimetype" {
             continue;
         }
@@ -921,7 +996,7 @@ fn repackage_epub(temp_dir: &Path, output: &Path) -> Result<()> {
 /// `mimetype` first (stored), every other file after — mirroring the entry
 /// ordering of [`repackage_epub`].
 #[cfg(feature = "zstd-experimental")]
-fn collect_ocf_entries(temp_dir: &Path) -> Result<Vec<zstd_ocf::OcfEntry>> {
+fn collect_ocf_entries(temp_dir: &Path, names: &EntryNames) -> Result<Vec<zstd_ocf::OcfEntry>> {
     let mut entries = Vec::new();
 
     let mimetype_path = temp_dir.join("mimetype");
@@ -940,8 +1015,7 @@ fn collect_ocf_entries(temp_dir: &Path) -> Result<Vec<zstd_ocf::OcfEntry>> {
             continue;
         }
         let path = entry.path();
-        let rel = path.strip_prefix(temp_dir)?;
-        let arcname = rel.to_string_lossy().replace('\\', "/");
+        let arcname = names.archive_name(&relative_name(temp_dir, path)?);
         if arcname == "mimetype" {
             continue;
         }
@@ -957,8 +1031,14 @@ fn collect_ocf_entries(temp_dir: &Path) -> Result<Vec<zstd_ocf::OcfEntry>> {
 /// (`mimetype` stored, everything else compressed with method 93). The result
 /// is intentionally non-conformant; see [`Packaging::Zstd`].
 #[cfg(feature = "zstd-experimental")]
-fn repackage_epub_zstd(temp_dir: &Path, output: &Path, mode: ZstdMode, level: i32) -> Result<()> {
-    let entries = collect_ocf_entries(temp_dir)?;
+fn repackage_epub_zstd(
+    temp_dir: &Path,
+    output: &Path,
+    names: &EntryNames,
+    mode: ZstdMode,
+    level: i32,
+) -> Result<()> {
+    let entries = collect_ocf_entries(temp_dir, names)?;
     let archive = match mode {
         ZstdMode::PerEntry => zstd_ocf::pack_zstd(&entries, level)?,
         // Size-safe: keep the dictionary only when it actually wins.

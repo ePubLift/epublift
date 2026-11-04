@@ -797,6 +797,65 @@ fn hostile_nesting_is_declined_not_a_crash() {
     assert!(format!("{err:#}").contains("nesting"), "got: {err:#}");
 }
 
+/// The file system decides how `images/` and `Images/` are held, so this passes
+/// only if the names come back whichever it is.
+#[test]
+fn a_folder_spelled_two_ways_keeps_both_spellings() {
+    let dir = tempfile::tempdir().unwrap();
+    let input = dir.path().join("two.epub");
+    let mut entries = vec![Entry {
+        path: "OEBPS/Images/other.jpg",
+        data: jpeg(8, 8),
+    }];
+    entries.extend(legacy_with_images());
+    build_epub(&input, &entries);
+
+    let output = dir.path().join("out.epub");
+    let options = Options {
+        output: Some(output.clone()),
+        ..Options::default()
+    };
+    convert(&input, &options, |_| {}).unwrap();
+
+    let names = entry_names(&output);
+    for name in [
+        "OEBPS/Images/other.jpg",
+        "OEBPS/images/cover.jpg",
+        "OEBPS/images/logo.png",
+        "OEBPS/nav.xhtml",
+    ] {
+        assert!(names.iter().any(|n| n == name), "{name} in {names:?}");
+    }
+}
+
+/// Where the file system holds both files they both come back; where it cannot,
+/// the book is refused, and neither file silently replaces the other.
+#[test]
+fn files_differing_only_in_case_are_kept_or_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let input = dir.path().join("two.epub");
+    let mut entries = legacy_with_images();
+    entries.push(Entry {
+        path: "OEBPS/images/COVER.jpg",
+        data: jpeg(8, 8),
+    });
+    build_epub(&input, &entries);
+
+    let output = dir.path().join("out.epub");
+    let options = Options {
+        output: Some(output.clone()),
+        ..Options::default()
+    };
+    match convert(&input, &options, |_| {}) {
+        Ok(_) => {
+            let names = entry_names(&output);
+            assert!(names.iter().any(|n| n == "OEBPS/images/cover.jpg"));
+            assert!(names.iter().any(|n| n == "OEBPS/images/COVER.jpg"));
+        }
+        Err(e) => assert!(e.to_string().contains("differ only in case"), "{e}"),
+    }
+}
+
 #[test]
 fn report_goes_beside_the_output() {
     // A run with `-o` must not write into the input's directory, which may be a

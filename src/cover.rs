@@ -150,7 +150,7 @@ fn dir_of(path: &str) -> &str {
 
 /// Resolve `href` (as written in a document in `base_dir`) to an entry path.
 /// `None` for an external URL, a pure fragment, or a path above the root.
-fn resolve(base_dir: &str, href: &str) -> Option<String> {
+pub(crate) fn resolve(base_dir: &str, href: &str) -> Option<String> {
     let href = href.trim();
     let href = href.split(['#', '?']).next().unwrap_or("");
     if href.is_empty() {
