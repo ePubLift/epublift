@@ -57,6 +57,59 @@ impl Confirmer for UpgradeConfirmer {
     }
 }
 
+/// Approves every fix, as `epublift repair -y` does.
+struct ApproveAll;
+
+impl Confirmer for ApproveAll {
+    fn decide(&mut self, _fix: &ProposedFix) -> Decision {
+        Decision::Approve
+    }
+}
+
+/// A book labelled older than EPUB 2 (`version="1.0"`), repaired first, or `None`
+/// for any other book. The label stops a validator at the package document, so
+/// nothing else in the book has been checked and the upgrade's final pass would
+/// be the first to meet what lies behind it. This is what `repair -y` does; the
+/// rest of the upgrade then treats the book as the EPUB 2 it is.
+pub fn repair_legacy_version(
+    input: &Path,
+    version: Option<&str>,
+    progress: &dyn Fn(&str),
+) -> Result<Option<tempfile::NamedTempFile>> {
+    let major = version.and_then(|v| v.trim().split('.').next()?.parse::<u32>().ok());
+    if !major.is_some_and(|m| m < 2) {
+        return Ok(None);
+    }
+    progress(&format!(
+        "[*] This book says it is EPUB {}; repairing it first (epubsana)...",
+        version.unwrap_or_default().trim()
+    ));
+    let bytes = fs::read(input)?;
+    let mut ws =
+        Workspace::load(&bytes).map_err(|e| anyhow!("epubsana could not open the book: {e}"))?;
+    for _ in 0..MAX_PASSES {
+        let pass = epubsana::repair(
+            &mut ws,
+            Goal::Valid,
+            Policy::AutoSafeThenAsk,
+            &mut ApproveAll,
+        )
+        .map_err(|e| anyhow!("epubsana could not repair the book: {e}"))?;
+        if pass.revealed == 0 || !pass.changed() {
+            break;
+        }
+    }
+    let out = ws
+        .serialize()
+        .map_err(|e| anyhow!("could not write the repaired book: {e}"))?;
+    let mut file = tempfile::Builder::new()
+        .prefix("epublift_legacy_")
+        .suffix(".epub")
+        .tempfile()?;
+    std::io::Write::write_all(&mut file, &out)?;
+    Ok(Some(file))
+}
+
 /// Run the pass over the packaged EPUB at `epub`, in place. Returns the number
 /// of fixes applied.
 pub fn apply(epub: &Path, progress: &dyn Fn(&str)) -> Result<usize> {

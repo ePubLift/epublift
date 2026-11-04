@@ -26,6 +26,11 @@ are tagged with the component they belong to.
   message says how many errors remain.
 
 ### Added
+- **The upgrade repairs a book labelled older than EPUB 2 first.** `version="1.0"`
+  stops a validator at the package document, so errors behind it reached the
+  upgraded book. Such a book now gets what `repair -y` does before it is upgraded.
+  The 6 such books on the 562-book shelf come out the same as with `repair -y`
+  run by hand.
 - **The upgrade writes `align` as CSS** on tables (`float`, or centred with
   auto margins), paragraphs and headings (`text-align`) and images (`float` or
   `vertical-align`), as the HTML Standard maps them. `<img align="middle">` stays,

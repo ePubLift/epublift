@@ -188,6 +188,13 @@ epublift -i book.epub --webp   # images re-encoded to WebP where smaller
 
 `--keep-images` (the old way to ask for the default) still works. `--target 3.4` re-encodes images to its new formats (AVIF/JPEG XL), because that is what asking for 3.4 is for; add `--keep-images` to upgrade to 3.4 without touching them.
 
+### A book labelled older than EPUB 2
+
+A book whose package says `version="1.0"` is really an EPUB 2 with the wrong label.
+A validator stops at that label, so the rest of the book has not been checked. The
+upgrade repairs such a book first, the same as `epublift repair -y` followed by the
+upgrade, and the result is an EPUB 3.3. For any other book, repair stays your choice.
+
 ### Presentational attributes: written as CSS
 
 EPUB 2 books are XHTML 1.1, which still allowed layout attributes that HTML,

@@ -827,6 +827,39 @@ fn report_goes_beside_the_output() {
     assert_eq!(left, ["legacy.epub"], "nothing new beside the input");
 }
 
+#[test]
+fn a_book_labelled_older_than_epub_2_is_repaired_first() {
+    let dir = tempfile::tempdir().unwrap();
+    let input = dir.path().join("old.epub");
+    let out = dir.path().join("out.epub");
+    let mut entries = legacy_text_only();
+    entries[1] = text(
+        "OEBPS/content.opf",
+        Box::leak(
+            OPF_TEXT_ONLY
+                .replacen("version=\"2.0\"", "version=\"1.0\"", 1)
+                .into_boxed_str(),
+        ),
+    );
+    build_epub(&input, &entries);
+
+    let run = std::process::Command::new(env!("CARGO_BIN_EXE_epublift"))
+        .arg("-i")
+        .arg(&input)
+        .arg("-o")
+        .arg(&out)
+        .output()
+        .unwrap();
+    assert_ne!(run.status.code(), Some(2));
+    let said = String::from_utf8_lossy(&run.stdout);
+    assert!(said.contains("repairing it first"), "{said}");
+    let mut zip = ZipArchive::new(std::fs::File::open(&out).unwrap()).unwrap();
+    let mut opf = String::new();
+    std::io::Read::read_to_string(&mut zip.by_name("OEBPS/content.opf").unwrap(), &mut opf)
+        .unwrap();
+    assert!(opf.contains("version=\"3.0\""), "{opf}");
+}
+
 /// Declare entry `name` 100 bytes long in its local and central headers; the
 /// data and the CRC stay intact.
 fn understate_size(epub: &Path, name: &str) {

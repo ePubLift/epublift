@@ -573,8 +573,12 @@ pub fn convert(input: &Path, options: &Options, progress: impl Fn(&str)) -> Resu
     let temp_path = temp_dir.path();
 
     // Step 1: Extract EPUB.
+    let version = read_metadata(&input_path).ok().and_then(|m| m.epub_version);
+    let repaired =
+        upgrade_fixes::repair_legacy_version(&input_path, version.as_deref(), &progress)?;
+    let source = repaired.as_ref().map_or(input_path.as_path(), |f| f.path());
     progress("[*] Extracting original EPUB file...");
-    extract_epub(&input_path, temp_path)?;
+    extract_epub(source, temp_path)?;
 
     // Step 2: Locate the OPF package document.
     let opf_path = locate_opf(temp_path)?;
