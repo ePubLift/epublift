@@ -10,6 +10,12 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+### Changed
+- **`import` warns that OCR knows only unaccented Latin letters.** A scan in any
+  language but English now says so: the engine's alphabet is A-Z, so Turkish
+  `ş ğ ı İ ç ö ü` and the like are wrong or missing in the text. The exit code does
+  not change. `docs/pdf-import.md` says so too.
+
 ## [cli-v5.0.0] - 2026-11-04
 
 ### Changed (breaking)

@@ -54,30 +54,41 @@ pub struct ImportOptions {
 pub struct ImportSummary {
     pub chapters: usize,
     pub paragraphs: usize,
+    /// The text came from OCR, not from a text layer.
+    pub used_ocr: bool,
+}
+
+/// Whether OCR loses letters of a book in `language`. The engine's alphabet is
+/// ASCII, so it can only guess at ş, ğ, ı, é or ü, and at other scripts. English
+/// is the one language that needs nothing more.
+pub fn ocr_loses_letters(language: &str) -> bool {
+    let primary = language.split(['-', '_']).next().unwrap_or_default();
+    !primary.eq_ignore_ascii_case("en")
 }
 
 /// Read the PDF into chapters. Without OCR first: only a scan needs the ~12 MB
 /// models, so a text-layer PDF never loads (or downloads) them. The outer
-/// error is ours (the models); the inner one is paginaverto's.
+/// error is ours (the models); the inner one is paginaverto's. The flag says
+/// whether OCR ran.
 fn read(
     input: &Path,
     opts: &ImportOptions,
-) -> Result<Result<paginaverto::Book, paginaverto::Error>> {
+) -> Result<(Result<paginaverto::Book, paginaverto::Error>, bool)> {
     let mut read_opts = paginaverto::Options::default();
     read_opts.language = opts.language.clone();
     let result = paginaverto::read(paginaverto::Input::Path(input), &read_opts);
     #[cfg(feature = "pdf-ocr")]
     if matches!(result, Err(paginaverto::Error::ScanNeedsOcr)) {
         if opts.language.as_deref().is_none_or(str::is_empty) {
-            return Ok(Err(paginaverto::Error::LanguageRequired));
+            return Ok((Err(paginaverto::Error::LanguageRequired), false));
         }
         read_opts.ocr = ocr::models()?;
-        return Ok(paginaverto::read(
-            paginaverto::Input::Path(input),
-            &read_opts,
+        return Ok((
+            paginaverto::read(paginaverto::Input::Path(input), &read_opts),
+            true,
         ));
     }
-    Ok(result)
+    Ok((result, false))
 }
 
 /// Import the PDF at `input`, writing a reflow EPUB to `output`.
@@ -86,7 +97,8 @@ pub fn import(input: &Path, output: &Path, opts: &ImportOptions) -> Result<Impor
         bail!("[EXPERIMENTAL] --mode fixed (preserve page images) is not implemented yet");
     }
 
-    let book = read(input, opts)?.map_err(|e| match e {
+    let (book, used_ocr) = read(input, opts)?;
+    let book = book.map_err(|e| match e {
         paginaverto::Error::Open(cause) => {
             anyhow::anyhow!(cause).context(format!("failed to open PDF {}", input.display()))
         }
@@ -112,5 +124,21 @@ pub fn import(input: &Path, output: &Path, opts: &ImportOptions) -> Result<Impor
             .flat_map(|c| &c.blocks)
             .filter(|b| matches!(b, paginaverto::Block::Paragraph(_)))
             .count(),
+        used_ocr,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ocr_loses_letters;
+
+    #[test]
+    fn only_english_keeps_every_letter_through_ocr() {
+        for language in ["en", "EN", "en-GB", "en_US"] {
+            assert!(!ocr_loses_letters(language), "{language}");
+        }
+        for language in ["tr", "tr-TR", "de", "fr", "ru", "eng", ""] {
+            assert!(ocr_loses_letters(language), "{language}");
+        }
+    }
 }

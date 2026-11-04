@@ -58,9 +58,14 @@ cli-v4.5.2 holds the same models as `.rten` files and keeps working).
 
 - **Born-digital / searchable scans (tiers 1–2):** essentially lossless — on a
   born-digital test book the text matched the publisher's own EPUB at ~99.8%.
-- **OCR (tier 3):** best-effort. On a clean, flat prose scan, word accuracy is
-  around **~92%** (expect the odd `i`↔`1`, case slips, or a dropped line);
+- **OCR (tier 3):** best-effort. On a clean, flat English prose scan, word accuracy
+  is around **~92%** (expect the odd `i`↔`1`, case slips, or a dropped line);
   quality drops further on phone-photo, skewed, low-contrast, or artistic pages.
+- **OCR reads only unaccented Latin letters (A-Z).** In any other language, every
+  other letter comes out wrong or missing, and `import` warns when it happens:
+  Turkish `ş ğ ı İ ç ö ü` never appear in the text. Other scripts fare worse. Use
+  OCR for such a book only to get a rough draft. [Smart Import](smart-import.md)
+  kept the Turkish letters when tested, but it sends the book to Mistral.
   OCR is for getting readable, reflowable text out of an otherwise-unreadable
   image PDF — not a faithful reproduction.
 
@@ -91,7 +96,8 @@ deletes it immediately, like every other mode.
   pure-Rust path).
 - **OCR** (`pdf-ocr` feature) for scanned PDFs with no text layer — pure-Rust
   ocrs + rten, with flat-field illumination correction for phone-photo scans.
-  Best-effort (~92% on clean prose); see [Accuracy](#accuracy).
+  Best-effort (~92% on clean English prose; no letters beyond A-Z); see
+  [Accuracy](#accuracy).
 
 **Doesn't yet (known limits, honest):**
 

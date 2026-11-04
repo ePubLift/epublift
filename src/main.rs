@@ -820,6 +820,15 @@ fn run_import(args: &ImportArgs) -> Result<()> {
             summary.chapters,
             summary.paragraphs,
         );
+        if let Some(language) = args.language.as_deref()
+            && summary.used_ocr
+            && pdf::ocr_loses_letters(language)
+        {
+            eprintln!(
+                "warning: this scan was read by OCR, which knows only unaccented Latin letters \
+                 (A-Z): in a \"{language}\" book, any other letter is wrong or missing"
+            );
+        }
         if problems_remain(&output) {
             std::process::exit(EXIT_PROBLEMS_REMAIN);
         }
