@@ -205,7 +205,7 @@ fn an_existing_output_needs_force() {
     let out = dir.path().join("out.epub");
     let report = dir.path().join("out.txt");
     let args = ["-i", s(&epub), "-o", s(&out), "--report", s(&report)];
-    assert_eq!(run(&args).0, Some(0));
+    assert_ne!(run(&args).0, Some(2));
 
     std::fs::write(&out, b"mine").unwrap();
     let (code, _, stderr) = run(&args);
@@ -222,8 +222,8 @@ fn an_existing_output_needs_force() {
     assert!(!out.exists(), "refused before any work");
 
     let (code, _, stderr) = run(&["-i", s(&epub), "-o", s(&out), "--report", s(&report), "-f"]);
-    assert_eq!(code, Some(0), "{stderr}");
-    assert!(!stderr.contains("warning:"), "{stderr}");
+    assert_ne!(code, Some(2), "{stderr}");
+    assert!(out.exists());
 }
 
 #[test]
@@ -286,4 +286,18 @@ fn help_names_the_conventions_version() {
             "{args:?}"
         );
     }
+}
+
+// §6: a transformer whose book still has errors exits 1, with the file written.
+#[test]
+fn an_upgrade_that_leaves_errors_exits_1() {
+    let dir = tempfile::tempdir().unwrap();
+    let epub = tiny_epub(dir.path());
+    let out = dir.path().join("out.epub");
+    let (check, _, _) = run(&["check", "-i", s(&epub)]);
+    assert_eq!(check, Some(1), "the fixture is invalid");
+    let (code, _, stderr) = run(&["-i", s(&epub), "-o", s(&out)]);
+    assert_eq!(code, Some(1), "{stderr}");
+    assert!(out.exists());
+    assert!(stderr.contains("still has"), "{stderr}");
 }

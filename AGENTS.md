@@ -70,11 +70,11 @@ file replaced without `-f`.
 
 Exit codes:
 
-| Code | Upgrade, `import`, `meta`, `archive`, `restore` | `check` | `repair` |
-| --- | --- | --- | --- |
-| 0 | done | every input valid | goal met |
-| 1 | | at least one invalid | defects remain |
-| 2 | usage error, refusal or failure | an input unreadable | unreadable, or output = input |
+| Code | Upgrade, `import`, re-targeting `restore` | `meta`, `archive`, plain `restore` | `check` | `repair` |
+| --- | --- | --- | --- | --- |
+| 0 | written, and the book is valid | done | every input valid | goal met |
+| 1 | written, but errors remain | | at least one invalid | defects remain |
+| 2 | usage error, refusal or failure | the same | an input unreadable | unreadable, or output = input |
 
 `check --format json` and `repair --format json` emit the veripublica envelope.
 `meta show --format metadata` prints one JSON object. Changing exit codes, JSON

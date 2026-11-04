@@ -21,6 +21,9 @@ are tagged with the component they belong to.
   replaced it with a warning.
 - **A run that fails exits 2, not 1,** on every command. `check` and `repair` still
   use 1 for a book with problems.
+- **The upgrade, `import` and a re-targeting `restore` exit 1 when the book they
+  wrote still has errors,** where 4.x exited 0. The file is written and the
+  message says how many errors remain.
 
 ### Added
 - **The upgrade writes `align` as CSS** on tables (`float`, or centred with

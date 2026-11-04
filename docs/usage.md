@@ -117,10 +117,10 @@ v0.7, as its sibling tools do. What 4.x accepted with a warning is now an error:
 | `meta enrich --lang tr` / `--cover` | `--assume-language tr` / `--include-cover` |
 | An existing output or report file is replaced | refused (exit 2) unless `-f` is given |
 
-Exit codes changed too. A run that fails, such as a missing or unreadable file,
-now exits 2 where it used to exit 1. `check` and `repair` keep their meaning: 1
-says the book has problems, 2 says the run could not be done. So a script should
-test `check` for 1 and any command for 2.
+Exit codes changed too. 2 now means the run could not be done, such as a missing
+or unreadable file, where it used to be 1. 1 means a book has problems: `check` and
+`repair` always said so, and now the upgrade, `import` and a re-targeting `restore`
+do too. They write the file, say how many errors remain, and exit 1 instead of 0.
 
 ### Read & edit metadata (`meta`)
 

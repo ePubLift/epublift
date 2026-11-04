@@ -49,7 +49,7 @@ impl From<ZstdModeArg> for epublift::ZstdMode {
     // `-V` / `--version`: `epublift <semver>[+<hash>[.dirty]]` (see build.rs).
     version = concat!(env!("CARGO_PKG_VERSION"), env!("EPUBLIFT_BUILD")),
     about = "Optimize EPUBs to 3.3 (default), or archive/restore them as .eparc.",
-    after_help = "Examples:\n  epublift -i book.epub                # upgrade to book_v3.3.epub\n  epublift -i book.epub --kepub        # a Kobo book_v3.3.kepub.epub\n  epublift check -i book.epub          # validate\n  epublift archive -i ~/Books          # shrink a library to .eparc\n\nExit codes:\n  0  the book was upgraded\n  2  it could not be upgraded: a usage error, a refusal, or a failure the message explains",
+    after_help = "Examples:\n  epublift -i book.epub                # upgrade to book_v3.3.epub\n  epublift -i book.epub --kepub        # a Kobo book_v3.3.kepub.epub\n  epublift check -i book.epub          # validate\n  epublift archive -i ~/Books          # shrink a library to .eparc\n\nExit codes:\n  0  the book was upgraded and is valid\n  1  the book was upgraded, but errors remain (the message says how many)\n  2  it could not be upgraded: a usage error, a refusal, or a failure the message explains",
     args_conflicts_with_subcommands = true
 )]
 struct Args {
@@ -321,7 +321,7 @@ struct CheckArgs {
 #[cfg(any(feature = "pdf", feature = "markdown"))]
 #[derive(clap::Args, Debug)]
 #[command(
-    after_help = "Examples:\n  epublift import -i book.pdf          # writes book.epub\n  epublift import -i notes/            # a folder of Markdown, one book\n\nExit codes:\n  0  the EPUB was written\n  2  it could not be imported: a usage error, a refusal, or a failure the message explains"
+    after_help = "Examples:\n  epublift import -i book.pdf          # writes book.epub\n  epublift import -i notes/            # a folder of Markdown, one book\n\nExit codes:\n  0  the EPUB was written and is valid\n  1  the EPUB was written, but errors remain (the message says how many)\n  2  it could not be imported: a usage error, a refusal, or a failure the message explains"
 )]
 struct ImportArgs {
     /// Path to the input file (PDF or Markdown, by extension).
@@ -528,7 +528,7 @@ struct ArchiveArgs {
 #[cfg(feature = "archival")]
 #[derive(clap::Args, Debug)]
 #[command(
-    after_help = "Examples:\n  epublift restore -i book.eparc       # back to a content-exact book.epub\n  epublift restore -i ~/Books --kepub  # every .eparc, as Kobo books\n\nExit codes:\n  0  every archive was restored\n  2  an archive could not be restored (the run stops there), or a usage error"
+    after_help = "Examples:\n  epublift restore -i book.eparc       # back to a content-exact book.epub\n  epublift restore -i ~/Books --kepub  # every .eparc, as Kobo books\n\nExit codes:\n  0  every archive was restored (and, when re-targeted, is valid)\n  1  every archive was re-targeted, but errors remain in at least one book\n  2  an archive could not be restored (the run stops there), or a usage error"
 )]
 struct RestoreArgs {
     /// An `.eparc` archive, or a directory of them.
@@ -694,6 +694,33 @@ fn refuse_input_as_output(input: &Path, output: &Path) -> Result<()> {
     Ok(())
 }
 
+/// The exit code when books were written with errors left in them: the file is
+/// there, but the goal of a valid book was not met (CLI.md §6).
+const EXIT_PROBLEMS_REMAIN: i32 = 1;
+
+/// Whether the book just written still has fatal errors or errors, saying so on
+/// stderr. A book that can't be read back counts as one that has.
+fn problems_remain(book: &Path) -> bool {
+    let errors = match std::fs::read(book) {
+        Ok(bytes) => {
+            let report = epubveri::validate_bytes(bytes);
+            report.fatals() + report.errors()
+        }
+        Err(e) => {
+            eprintln!("warning: could not read back {}: {e}", book.display());
+            return true;
+        }
+    };
+    if errors > 0 {
+        eprintln!(
+            "warning: {} still has {errors} error(s); `epublift check -i {}` lists them",
+            book.display(),
+            book.display()
+        );
+    }
+    errors > 0
+}
+
 /// Refuse to replace an existing file without `-f` (CLI.md §4).
 fn refuse_overwrite(path: &Path, force: bool) -> Result<()> {
     if !force && path.exists() {
@@ -767,6 +794,9 @@ fn run_import(args: &ImportArgs) -> Result<()> {
             summary.chapters,
             summary.images,
         );
+        if problems_remain(&output) {
+            std::process::exit(EXIT_PROBLEMS_REMAIN);
+        }
         return Ok(());
     }
 
@@ -790,6 +820,9 @@ fn run_import(args: &ImportArgs) -> Result<()> {
             summary.chapters,
             summary.paragraphs,
         );
+        if problems_remain(&output) {
+            std::process::exit(EXIT_PROBLEMS_REMAIN);
+        }
         return Ok(());
     }
 
@@ -1688,6 +1721,14 @@ fn run_convert(args: Args) -> Result<()> {
         );
     }
 
+    // The experimental Zstandard packaging is not a conformant EPUB on purpose.
+    #[cfg(feature = "zstd-experimental")]
+    let conformant = !args.zstd;
+    #[cfg(not(feature = "zstd-experimental"))]
+    let conformant = true;
+    if conformant && problems_remain(&report.output_path) {
+        std::process::exit(EXIT_PROBLEMS_REMAIN);
+    }
     Ok(())
 }
 
@@ -1738,6 +1779,7 @@ fn run_archive(args: &ArchiveArgs) -> Result<()> {
 #[cfg(feature = "archival")]
 fn run_restore(args: &RestoreArgs) -> Result<()> {
     let archives = collect_with_ext(&args.input, "eparc");
+    let mut any_problems = false;
     if archives.is_empty() {
         bail!("no .eparc files found in {}", args.input.display());
     }
@@ -1848,6 +1890,10 @@ fn run_restore(args: &RestoreArgs) -> Result<()> {
             file_name(&report.output_path),
             retarget_label(args, target_version),
         );
+        any_problems |= problems_remain(&report.output_path);
+    }
+    if any_problems {
+        std::process::exit(EXIT_PROBLEMS_REMAIN);
     }
     Ok(())
 }
@@ -1856,7 +1902,6 @@ fn run_restore(args: &RestoreArgs) -> Result<()> {
 /// the versions we deliberately don't support yet.
 #[cfg(feature = "archival")]
 fn parse_target(s: &str) -> Result<EpubVersion> {
-    use anyhow::bail;
     match s.trim() {
         "3.3" => Ok(EpubVersion::V3_3),
         #[cfg(feature = "epub34")]
