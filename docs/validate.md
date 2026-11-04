@@ -53,7 +53,7 @@ find . -name '*.epub' -print0 | xargs -0 -n1 epublift check -i
 
 | Flag | Meaning |
 | --- | --- |
-| `-i`, `--input <EPUB>` | The book to validate; repeat it for more. A path without `-i` still works, with a warning, until 5.0.0. |
+| `-i`, `--input <EPUB>` | The book to validate; repeat it for more. |
 | `--profile <name>` | Validate against an EPUB extension profile: `dict` (dictionaries), `edupub`, `idx` (indexes) or `preview`. Default: base EPUB 3. |
 | `--format <human\|json>` | `human` (default): the report for people. `json`: the machine-readable [envelope](#json). Any other value, or `--format` given twice, exits `2`. |
 | `--json` | Same as `--format json` — the older spelling, kept so existing scripts keep working. Can't be combined with `--format`. |
@@ -125,7 +125,7 @@ command-line order.
 ```json
 {
   "tool": "epublift",
-  "tool_version": "4.6.1",
+  "tool_version": "4.6.0",
   "convention": "0.7",
   "status": "problems",
   "inputs": [
@@ -172,9 +172,7 @@ Worth knowing when consuming it:
   envelope never carries a `suppressed` marker.
 - **`convention`** is epublift's own claim about this output: the envelope meets
   [FORMATS.md](https://github.com/veripublica/conventions/blob/main/FORMATS.md)
-  of veripublica conventions 0.7. It is a claim about the JSON, not yet about the
-  whole command line: `check` takes `-i` and `--format` as conventions' CLI.md
-  asks, but positional paths are still accepted (with a warning) until 5.0.0.
+  of veripublica conventions 0.7.
 - Fields that don't apply are **omitted**, and unknown fields **must be ignored**:
   the shape gains optional fields over time without breaking consumers.
 

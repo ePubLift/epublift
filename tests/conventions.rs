@@ -1,6 +1,5 @@
 //! veripublica conventions (CLI.md v0.7) on the command line: help, repeated
-//! flags, `--format`, and the output-equals-input refusal, plus the warnings
-//! for the spellings that go in the next major release.
+//! flags, `--format`, no bare paths, the file-safety refusals and exit codes.
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -148,21 +147,143 @@ fn output_equal_to_input_is_refused() {
     );
 }
 
-// Until the next major: the old spellings work, with a warning.
+// §1, §2: a bare path is a usage error, on every command.
 #[test]
-fn deprecated_spellings_warn() {
+fn a_path_without_i_is_a_usage_error() {
     let dir = tempfile::tempdir().unwrap();
     let epub = tiny_epub(dir.path());
-    let (code, _, stderr) = run(&["meta", "show", s(&epub)]);
-    assert_eq!(code, Some(0), "{stderr}");
-    assert!(stderr.contains("warning: a path without -i"), "{stderr}");
+    for args in [
+        &[s(&epub)][..],
+        &["check", s(&epub)],
+        &["repair", s(&epub)],
+        &["meta", "show", s(&epub)],
+        &["meta", "set", "--title", "x", s(&epub)],
+        &["archive", s(&epub)],
+        &["restore", s(&epub)],
+    ] {
+        let (code, _, stderr) = run(args);
+        assert_eq!(code, Some(2), "{args:?}: {stderr}");
+        assert!(stderr.contains("--help"), "{args:?}: {stderr}");
+    }
+}
 
+// §2: a transformer takes one input; a verifier may repeat `-i`.
+#[test]
+fn a_second_input_is_a_usage_error_except_for_check() {
+    let dir = tempfile::tempdir().unwrap();
+    let epub = tiny_epub(dir.path());
+    let p = s(&epub);
+    for args in [
+        &["-i", p, "-i", p][..],
+        &["repair", "-i", p, "-i", p],
+        &["archive", "-i", p, "-i", p],
+        &["meta", "show", "-i", p, "-i", p],
+    ] {
+        assert_eq!(run(args).0, Some(2), "{args:?}");
+    }
+    assert_ne!(run(&["check", "-i", p, "-i", p]).0, Some(2));
+}
+
+// §3.2: the short-flag set is closed.
+#[test]
+fn the_old_short_spellings_are_gone() {
+    let dir = tempfile::tempdir().unwrap();
+    let epub = tiny_epub(dir.path());
     let out = dir.path().join("out.epub");
-    let args = ["-i", s(&epub), "-o", s(&out), "-q", "70", "--webp"];
-    let (_, _, stderr) = run(&args);
-    assert!(stderr.contains("warning: -q is deprecated"), "{stderr}");
-    let (_, _, stderr) = run(&args);
-    assert!(stderr.contains("without -f/--force"), "{stderr}");
-    let (_, _, stderr) = run(&["-i", s(&epub), "-o", s(&out), "--quality", "70", "-f"]);
+    for old in [["-q", "70"], ["-r", "r.txt"]] {
+        let (code, _, _) = run(&["-i", s(&epub), "-o", s(&out), old[0], old[1]]);
+        assert_eq!(code, Some(2), "{old:?}");
+    }
+    assert!(!out.exists());
+}
+
+// §4: an existing file, output or report, is refused without `-f`.
+#[test]
+fn an_existing_output_needs_force() {
+    let dir = tempfile::tempdir().unwrap();
+    let epub = tiny_epub(dir.path());
+    let out = dir.path().join("out.epub");
+    let report = dir.path().join("out.txt");
+    let args = ["-i", s(&epub), "-o", s(&out), "--report", s(&report)];
+    assert_eq!(run(&args).0, Some(0));
+
+    std::fs::write(&out, b"mine").unwrap();
+    let (code, _, stderr) = run(&args);
+    assert_eq!(code, Some(2), "{stderr}");
+    assert!(stderr.contains("exists; use -f"), "{stderr}");
+    assert!(stderr.contains("out.epub"), "{stderr}");
+    assert_eq!(std::fs::read(&out).unwrap(), b"mine", "left alone");
+
+    // The report alone counts too.
+    std::fs::remove_file(&out).unwrap();
+    let (code, _, stderr) = run(&args);
+    assert_eq!(code, Some(2), "{stderr}");
+    assert!(stderr.contains("out.txt"), "{stderr}");
+    assert!(!out.exists(), "refused before any work");
+
+    let (code, _, stderr) = run(&["-i", s(&epub), "-o", s(&out), "--report", s(&report), "-f"]);
+    assert_eq!(code, Some(0), "{stderr}");
     assert!(!stderr.contains("warning:"), "{stderr}");
+}
+
+#[test]
+fn each_command_refuses_an_existing_output() {
+    let dir = tempfile::tempdir().unwrap();
+    let epub = tiny_epub(dir.path());
+    let meta = dir.path().join("meta.epub");
+    std::fs::write(&meta, b"mine").unwrap();
+    let (code, _, stderr) = run(&[
+        "meta",
+        "set",
+        "--title",
+        "x",
+        "-i",
+        s(&epub),
+        "-o",
+        s(&meta),
+    ]);
+    assert_eq!(code, Some(2), "{stderr}");
+    assert!(stderr.contains("use -f"), "{stderr}");
+    assert_eq!(run(&["archive", "-i", s(&epub)]).0, Some(0));
+    assert_eq!(run(&["archive", "-i", s(&epub)]).0, Some(2));
+    assert_eq!(run(&["archive", "-i", s(&epub), "-f"]).0, Some(0));
+}
+
+// §6: a run that could not do its job is 2, never 1.
+#[test]
+fn a_failed_run_exits_2() {
+    let dir = tempfile::tempdir().unwrap();
+    let missing = dir.path().join("missing.epub");
+    let not_epub = dir.path().join("not.epub");
+    std::fs::write(&not_epub, b"not a zip").unwrap();
+    for args in [
+        &[][..],
+        &["-i", s(&missing)],
+        &["-i", s(&not_epub)],
+        &["meta", "show", "-i", s(&missing)],
+        &["meta", "set", "--title", "x", "-i", s(&not_epub)],
+        &["archive", "-i", s(&not_epub)],
+        &["restore", "-i", s(&missing)],
+        &["check", "-i", s(&missing)],
+        &["repair", "-i", s(&missing)],
+    ] {
+        let (code, _, stderr) = run(args);
+        assert_eq!(code, Some(2), "{args:?}: {stderr}");
+    }
+}
+
+// §7.
+#[test]
+fn help_names_the_conventions_version() {
+    for args in [
+        &["--help"][..],
+        &["check", "-h"],
+        &["meta", "set", "--help"],
+    ] {
+        let (_, stdout, _) = run(args);
+        assert!(
+            stdout.contains("Conforms to veripublica conventions v0.7."),
+            "{args:?}"
+        );
+    }
 }

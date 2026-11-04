@@ -51,8 +51,8 @@ epublift restore -i book.eparc --kepub         # → book_v3.3.kepub.epub for Ko
 | `--webp` | Re-target, and re-encode JPEG/PNG to WebP where smaller |
 | `--keep-images` | Re-target, keeping original images (the default; kept for existing scripts) |
 | `--kepub` | Produce a Kobo `.kepub.epub` |
-| `--quality` | WebP quality (1-100) when re-targeting (`-q` still works, with a warning, until 5.0.0) |
-| `-f`, `--force` | Permit replacing existing `.epub` files (until 5.0.0 they are still replaced without it, with a warning) |
+| `--quality` | WebP quality (1-100) when re-targeting |
+| `-f`, `--force` | Permit replacing existing `.epub` files; without it they are refused (exit 2) |
 
 > EPUB **3.4** (AVIF/JXL) isn't published yet, so `--target` accepts **3.3**
 > today; it'll gain 3.4 when that spec ships.

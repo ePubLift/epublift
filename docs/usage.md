@@ -14,7 +14,7 @@ This modernizes the input and saves it next to the original as
 `<input_name>_v3.3.epub`, plus a performance report in `<input_name>_report.txt`.
 
 Print the version you are running (with the exact commit when the build knew
-it, e.g. `epublift 4.6.1+…`):
+it, e.g. `epublift 4.6.0+…`):
 
 ```bash
 epublift --version        # or -V
@@ -87,9 +87,9 @@ epublift -i book.epub -o optimized_book.epub --quality 85 --report stats_report.
 | :--- | :--- | :--- | :--- |
 | `-i` | `--input` | **[Required]** Path to the original EPUB file | *None* |
 | `-o` | `--output` | Path to save the modernized EPUB | `<input>_v3.3.epub` |
-| | `--quality`| Image quality (1-100) when images are re-encoded (`--webp`, `--target 3.4`). `-q` still works, with a warning, until 5.0.0 | `80` |
-| | `--report` | Path to write the conversion audit report. `-r` still works, with a warning, until 5.0.0 | `<input>_report.txt`, beside the output |
-| `-f` | `--force` | Permit replacing existing output files (never the input). Until 5.0.0 an existing file is still replaced without it, with a warning | *off* |
+| | `--quality`| Image quality (1-100) when images are re-encoded (`--webp`, `--target 3.4`) | `80` |
+| | `--report` | Path to write the conversion audit report | `<input>_report.txt`, beside the output |
+| `-f` | `--force` | Permit replacing existing output files (never the input); without it an existing file is refused (exit 2) | *off* |
 | | `--format` | Report format: `human`, the only one this command has | `human` |
 | | `--ascii` | Transliterate the auto-generated output/report names to ASCII | *off* |
 | | `--webp` | Re-encode JPEG/PNG images to WebP (size-safe: only when smaller) | *off* |
@@ -103,24 +103,24 @@ for the experimental `import` subcommand — PDF → reflowable EPUB — see the
 [PDF import guide](pdf-import.md), and Markdown → reflowable EPUB in the
 [Markdown import guide](markdown-import.md).)
 
-### Moving to 5.0.0
+### Moving from 4.x to 5.0
 
-epublift is moving to the [veripublica CLI conventions](https://github.com/veripublica/conventions/blob/main/CLI.md),
-the command line its sibling tools (epubveri, epubsana, kepubverto) already
-share. Since 4.5.0 every command takes `-i` and `--format`, `-f/--force`
-exists, `-h` and `--help` print the same help, and a flag given twice is
-the same as once. Until 5.0.0, these old spellings still work, each with a
-`warning:` on stderr:
+The command line follows the [veripublica CLI conventions](https://github.com/veripublica/conventions/blob/main/CLI.md)
+v0.7, as its sibling tools do. What 4.x accepted with a warning is now an error:
 
-| Today (warns) | From 5.0.0 |
+| 4.x (warned) | 5.0 |
 | :--- | :--- |
 | A path without `-i` (`epublift check book.epub`) | `epublift check -i book.epub` (repeat `-i` for more books in `check`) |
 | `archive` / `restore` with several paths | one `-i` per run: a file or a folder |
-| `-q 85` / `-r report.txt` (default command, `restore`) | `--quality 85` / `--report report.txt` (`-q` is the family's `--quiet`) |
-| An existing output file is replaced | refused (exit 2) unless `-f` is given |
+| `-q 85` / `-r report.txt` (default command, `restore`) | `--quality 85` / `--report report.txt` |
+| `meta show --json` | `meta show --format metadata` |
+| `meta enrich --lang tr` / `--cover` | `--assume-language tr` / `--include-cover` |
+| An existing output or report file is replaced | refused (exit 2) unless `-f` is given |
 
-An `-o` that names the input has been refused (exit 2) since 4.5.0, with or
-without `-f`.
+Exit codes changed too. A run that fails, such as a missing or unreadable file,
+now exits 2 where it used to exit 1. `check` and `repair` keep their meaning: 1
+says the book has problems, 2 says the run could not be done. So a script should
+test `check` for 1 and any command for 2.
 
 ### Read & edit metadata (`meta`)
 

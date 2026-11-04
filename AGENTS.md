@@ -64,13 +64,17 @@ and digests.
 | `archive`, `restore` | Lossless `.eparc`, and back | `docs/archiving.md` |
 | `import` | PDF, or a Markdown file, folder or zip, into a reflowable EPUB (experimental) | `docs/pdf-import.md`, `docs/markdown-import.md` |
 
+The command line conforms to [veripublica conventions](https://github.com/veripublica/conventions/blob/main/CLI.md)
+v0.7: input only through `-i`, one per run except for `check`, and no existing
+file replaced without `-f`.
+
 Exit codes:
 
-| Code | Upgrade, `import`, `meta set`, `meta enrich` | `check` | `repair` | `archive`, `restore`, `meta show` |
-| --- | --- | --- | --- | --- |
-| 0 | written | every input valid | goal met | done |
-| 1 | could not be done | at least one invalid | defects remain | could not be done |
-| 2 | usage error or refusal | an input unreadable | unreadable, or output = input | |
+| Code | Upgrade, `import`, `meta`, `archive`, `restore` | `check` | `repair` |
+| --- | --- | --- | --- |
+| 0 | done | every input valid | goal met |
+| 1 | | at least one invalid | defects remain |
+| 2 | usage error, refusal or failure | an input unreadable | unreadable, or output = input |
 
 `check --format json` and `repair --format json` emit the veripublica envelope.
 `meta show --format metadata` prints one JSON object. Changing exit codes, JSON

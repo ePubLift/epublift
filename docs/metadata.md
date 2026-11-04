@@ -167,21 +167,11 @@ epublift meta enrich --isbn 9780… [--assume-language tr] \  # auto-fill missin
   in (they are listed either way).
 - `enrich` shows the catalogue's cover next to the book's own (sizes, and a
   note when it is smaller); `--include-cover` makes it the book's cover.
-- **Renamed in cli-v4.3.0** (one long name, one meaning across the veripublica
-  tools): `enrich --lang` → `--assume-language`, `enrich --cover` →
-  `--include-cover` (`--cover` takes a path in `set`), and `show --json` →
-  `show --format metadata` (`--json` is the shared envelope elsewhere). The old
-  spellings still work in 4.x with a warning on stderr; the next major removes
-  them.
-- `set --unique-identifier <VALUE>` makes one of the book's `dc:identifier`s the
-  package's unique identifier. `set --new-unique-identifier` makes a new one. See
-  [The unique identifier](#the-unique-identifier).
 - `--series` takes `Name` or `Name:position`; the position starts with a digit
   (`Dune:2`, `Dune:1-6`), so a colon inside a name stays in the name.
 - Output naming follows the project convention; the input is never mutated,
-  and an `-o` that names the input is refused (exit 2). `-f` permits replacing
-  an existing output (until 5.0.0 it is still replaced without it, with a
-  warning). A path without `-i` still works, with a warning, until 5.0.0.
+  and an `-o` that names the input is refused (exit 2). An existing output is
+  refused too (exit 2), unless `-f` is given.
 
 ## The unique identifier
 
@@ -209,7 +199,7 @@ epublift meta set --new-unique-identifier -i book.epub           # a new UUID
   stay.
 - **Refusals:** a value the book doesn't hold exits 2 and lists the book's
   identifiers. Both options together exit 2. A book whose
-  `META-INF/encryption.xml` obfuscates fonts is refused with exit 1, because the
+  `META-INF/encryption.xml` obfuscates fonts is refused with exit 2, because the
   key comes from this identifier and its fonts would stop working. A change that
   would leave the book with more errors is refused too. Nothing is written in
   any of these cases.

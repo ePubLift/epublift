@@ -47,7 +47,7 @@ fn show(args: &[&str], epub: &std::path::Path) -> (Option<i32>, String, String) 
 }
 
 #[test]
-fn format_metadata_is_the_json_object_and_json_is_its_deprecated_alias() {
+fn format_metadata_is_the_json_object() {
     let dir = tempfile::tempdir().unwrap();
     let epub = tiny_epub(dir.path());
 
@@ -60,36 +60,22 @@ fn format_metadata_is_the_json_object_and_json_is_its_deprecated_alias() {
     assert_eq!(code, Some(0));
     let v: serde_json::Value = serde_json::from_str(&md).expect("one JSON object");
     assert!(md.contains("Tiny Book"), "got: {v}");
-    let (code, out, err) = show(&["--json"], &epub);
-    assert_eq!(code, Some(0));
-    assert_eq!(out, md, "--json must print what --format metadata prints");
-    // Deprecated (conventions CLI.md §3.2.2: `--json` is the envelope family-wide),
-    // and the warning goes to stderr so the JSON on stdout stays clean.
-    assert!(
-        err.contains("deprecated") && err.contains("--format metadata"),
-        "got: {err}"
-    );
 }
 
 #[test]
 #[cfg(feature = "metadata")]
-fn enrich_old_and_new_spellings_conflict() {
-    // `--lang` / `--cover` are the deprecated spellings of `--assume-language` /
-    // `--include-cover`; giving both is a usage error (exit 2) before any lookup.
+fn the_old_enrich_spellings_are_gone() {
     let dir = tempfile::tempdir().unwrap();
     let epub = tiny_epub(dir.path());
-    for pair in [
-        ["--lang", "en", "--assume-language", "en"].as_slice(),
-        ["--cover", "--include-cover"].as_slice(),
-    ] {
+    for old in [["--lang", "en"].as_slice(), ["--cover"].as_slice()] {
         let out = Command::new(bin())
             .args(["meta", "enrich", "--isbn", "9780000000002"])
-            .args(pair)
+            .args(old)
             .arg("-i")
             .arg(&epub)
             .output()
             .expect("run epublift meta enrich");
-        assert_eq!(out.status.code(), Some(2), "{pair:?}");
+        assert_eq!(out.status.code(), Some(2), "{old:?}");
     }
 }
 
@@ -104,7 +90,8 @@ fn json_is_not_a_meta_show_format() {
         err.contains("human") && err.contains("metadata"),
         "got: {err}"
     );
-    let (code, _, _) = show(&["--json", "--format", "metadata"], &epub);
+    // `--json` is the envelope family-wide, and this output isn't one.
+    let (code, _, _) = show(&["--json"], &epub);
     assert_eq!(code, Some(2));
 }
 
@@ -232,7 +219,7 @@ fn obfuscated_fonts_refuse_a_change_and_name_the_file() {
     let book = calibre_shape(dir.path(), true);
     let out = dir.path().join("out.epub");
     let (code, err) = set(&["--new-unique-identifier"], &book, &out);
-    assert_eq!(code, Some(1));
+    assert_eq!(code, Some(2));
     assert!(err.contains("META-INF/encryption.xml"), "{err}");
     assert!(!out.exists());
 }

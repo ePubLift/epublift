@@ -10,23 +10,17 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
-## [cli-v4.6.1] - 2026-11-04
-
-### Added
-- **The upgrade writes `align` as CSS** on tables (`float`, or centred with
-  auto margins), paragraphs and headings (`text-align`) and images (`float` or
-  `vertical-align`), as the HTML Standard maps them. `<img align="middle">` stays,
-  and is counted in the report: no standard CSS gives it exactly. `align` on `div`
-  and table cells stays too.
-
-### Fixed
-- **An upgrade no longer leaves a layout attribute the book's CSS already
-  overrides.** `<table cellspacing="0" style="border-spacing:0">` kept its
-  `cellspacing`, which EPUB 3 doesn't allow, so a valid EPUB 2 book came out
-  invalid. Such an attribute has no effect, so it is now removed and no rule is
-  written. An attribute whose property the CSS sets only in part, or may set, stays.
-
-## [web-v1.30.1] - 2026-11-04
+### Changed (breaking)
+- **The command line follows veripublica conventions v0.7.** What 4.x accepted
+  with a warning is now an error, and `docs/usage.md` has the table:
+  - a path without `-i`, and several paths to `archive` or `restore`;
+  - `-q` and `-r` on the default command and `restore`: use `--quality` and
+    `--report`;
+  - `meta show --json`, and `meta enrich --lang` and `--cover`.
+- **An existing output or report file is refused (exit 2) without `-f`.** 4.x
+  replaced it with a warning.
+- **A run that fails exits 2, not 1,** on every command. `check` and `repair` still
+  use 1 for a book with problems.
 
 ### Added
 - **The upgrade writes `align` as CSS** on tables (`float`, or centred with
