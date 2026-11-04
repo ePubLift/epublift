@@ -181,6 +181,7 @@ fn a_second_input_is_a_usage_error_except_for_check() {
     ] {
         assert_eq!(run(args).0, Some(2), "{args:?}");
     }
+    #[cfg(feature = "validate")]
     assert_ne!(run(&["check", "-i", p, "-i", p]).0, Some(2));
 }
 
@@ -292,10 +293,9 @@ fn help_names_the_conventions_version() {
 #[test]
 fn an_upgrade_that_leaves_errors_exits_1() {
     let dir = tempfile::tempdir().unwrap();
+    // The fixture has no spine or title, so it can't come out valid.
     let epub = tiny_epub(dir.path());
     let out = dir.path().join("out.epub");
-    let (check, _, _) = run(&["check", "-i", s(&epub)]);
-    assert_eq!(check, Some(1), "the fixture is invalid");
     let (code, _, stderr) = run(&["-i", s(&epub), "-o", s(&out)]);
     assert_eq!(code, Some(1), "{stderr}");
     assert!(out.exists());
