@@ -10,6 +10,8 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+## [cli-v5.0.0] - 2026-11-04
+
 ### Changed (breaking)
 - **The command line follows veripublica conventions v0.7.** What 4.x accepted
   with a warning is now an error, and `docs/usage.md` has the table:
@@ -61,6 +63,24 @@ are tagged with the component they belong to.
   `cellspacing`, which EPUB 3 doesn't allow, so a valid EPUB 2 book came out
   invalid. Such an attribute has no effect, so it is now removed and no rule is
   written. An attribute whose property the CSS sets only in part, or may set, stays.
+
+### Measured
+On the 562-book shelf, cli-v4.6.0 vs this release, `repair -y` then upgrade then
+`check` with one grader: no book gains errors and 14 lose some (16,276 → 16,243);
+valid books go from 429 to 435. Body text and image counts are the same in every
+book. The upgrade's exit code is 1 exactly for the 127 books with errors left.
+
+## [web-v1.31.0] - 2026-11-04
+
+### Changed
+- **epubsana 0.39.0** in the web's in-browser Repair (the vendored WASM moved with
+  the crate; `VENDOR.md` has the digests). Repair now offers to delete
+  `direction: ltr` from a style sheet and to turn `http://name%40domain` into
+  `mailto:`. Both ask first.
+- **Optimize uses the new engine (see cli-v5.0.0):** it writes `align` as CSS,
+  deletes `direction: ltr`, repairs a book labelled older than EPUB 2 first,
+  removes a layout attribute the book's CSS already overrides, and no longer makes
+  a landmark from a guide entry for an image.
 
 ## [cli-v4.6.0] - 2026-11-04
 

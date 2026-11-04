@@ -86,7 +86,9 @@ output or flags is a CLI major.
 
 `convert()` in `src/lib.rs`, in order:
 
-1. Extract into a system temporary directory, under the limits below.
+1. Extract into a system temporary directory, under the limits below. Entry names
+   come back as the book had them, and a book with two files differing only in
+   case is refused where the file system cannot hold both.
 2. Find and parse the OPF.
 3. With `--webp` or `--target 3.4`, re-encode images and rewrite references in
    XHTML, CSS, SVG and the manifest.
