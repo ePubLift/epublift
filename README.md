@@ -1,251 +1,27 @@
-# 🚀 ePubLift — EPUB Upgrader & Optimizer
+# ePubLift
 
-[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
-[![Rust](https://img.shields.io/badge/rust-1.97+-orange.svg)](https://www.rust-lang.org/)
-[![Release](https://img.shields.io/github/v/release/ePubLift/epublift)](https://github.com/ePubLift/epublift/releases)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](http://makeapullrequest.com)
+ePubLift turns an old EPUB into a current one. It is for people who keep a library of e-books, and for people who publish them. It checks a book against the specification, repairs what can be safely repaired, fixes the metadata and upgrades the book to EPUB 3.3. It can also make a KEPUB for a Kobo, shrink a library into lossless archives, and import a PDF or Markdown into a reflowable EPUB. PDF and Markdown import are still experimental.
 
-A fast, standard-compliant tool written in **Rust** to modernize, optimize, and significantly shrink EPUB files. Today it upgrades legacy **EPUB 2.0** structures to the **EPUB 3.3** specification keeping your images as they are, or re-encoding heavy JPEG/PNG into compact **WebP** with `--webp` — with support for newer EPUB versions and next-generation image formats (AVIF / JPEG XL) planned on the [roadmap](ROADMAP.md). It can also produce **Kobo `.kepub`** files for richer reading features on Kobo devices. It can even **import a PDF into a reflowable EPUB** *(experimental)* — adjustable font, search, and bookmarks instead of a fixed-page document.
+The easiest way to use it is [the web page](https://epublift.itpax.net). Validate and Repair run in your browser, so your book is never uploaded. The other modes do upload it. It is processed in a temporary folder and deleted, and you can [run the service yourself](docs/web-service.md) with Docker if you prefer:
 
-Use it as a **command-line tool**, as a **library**, or as a self-hostable **web service** — try the hosted instance at **<https://epublift.itpax.net>** or [run your own with Docker](#-hosted-web-service-epublift-web).
-
-ePubLift began as a Rust port of an earlier Python implementation but has since grown into an independent, more capable tool — a fully pure-Rust build with no C dependencies and features beyond the original. Released under the AGPL-3.0 license.
-
----
-
-## ✨ Key Features
-
-*   **🔒 Workspace Safety**: Extracts and processes files inside a system-managed secure temporary directory. The original file remains completely untouched unless the entire operations pipeline completes successfully.
-*   **📸 Images: kept by default, WebP on request**:
-    *   Keeps JPEG and PNG images exactly as they are by default, so the book shows the same on every reader, Kobo e-ink included.
-    *   `--webp` converts heavy JPEG and PNG images to WebP for a smaller file.
-    *   Preserves PNG alpha channel transparency.
-    *   Allows customizable quality level settings (1–100).
-    *   Automatically scans and updates all image references in CSS, XHTML/HTML files, SVG graphics, and the OPF manifest.
-    *   Readers that don't render WebP (notably **Kobo e-ink**) show WebP images blank, which is why WebP is opt-in. `--keep-images`, the old way to ask for the default, still works.
-*   **📖 Kobo `.kepub` output (`--kepub`)**: Injects Kobo's `koboSpan` markup with [kepubverto](https://github.com/veripublica/kepubverto) (span ids as [`kepubify`](https://github.com/pgaskin/kepubify)'s) to unlock faster page turns, reading statistics, and dictionary lookup on Kobo devices, naming the file `<name>.kepub.epub`. Still a valid EPUB 3, and keeps original images (Kobo can't render WebP).
-*   **🛡️ Size-Safe by Design** — re-encoding never makes a book bigger:
-    *   **Keeps the smaller file.** If the WebP isn't actually smaller than the source, the original image is kept untouched, so the output can never grow.
-    *   **Never upscales quality.** For a JPEG source the WebP quality is capped at the source's own (estimated) quality — a low-quality chart isn't re-encoded at a higher quality, which would only add bytes, not detail.
-    *   **Keeps grayscale grayscale.** Grayscale images are encoded as single-channel WebP instead of being expanded to RGB.
-*   **⚡ EPUB 3.3 Compliance Upgrade**:
-    *   Upgrades package declarations in the OPF metadata to version `3.0`.
-    *   Injects required `dcterms:modified` UTC metadata timestamps.
-    *   Parses legacy `toc.ncx` maps and generates a standard **EPUB 3 Navigation Document (`nav.xhtml`)** with clean nested elements.
-    *   Converts outdated `<guide>` landmark reference lists into HTML5 `<nav epub:type="landmarks">` maps.
-    *   Standardizes legacy XHTML DOCTYPEs (like XHTML 1.1) to modern HTML5 `<!DOCTYPE html>` structure.
-    *   Translates EPUB 2 metadata (`opf:role`, `opf:file-as`, `opf:scheme`, several `dc:date`s) into EPUB 3 `<meta refines>` form.
-    *   Writes layout attributes EPUB 3 no longer allows (`<img width="40%">`, a table's `cellspacing`, …) and the obsolete `font`, `big`, `center` and `strike` elements as the HTML and CSS the HTML Standard maps them to, where the book's own CSS doesn't already set the property. See [Presentational attributes](docs/usage.md#presentational-attributes-written-as-css).
-    *   Finishes with [**epubsana**](https://github.com/veripublica/epubsana)'s EPUB 3 fixes (named entities such as `&nbsp;`, the manifest's `svg` property, empty `<title>`s, XHTML files labelled `text/html`, a `unique-identifier` that names an empty identifier when the book holds exactly one real one), so a book that was valid in EPUB 2 stays valid in EPUB 3.
-*   **📦 Archive your library (`.eparc`)**: `epublift archive` shrinks EPUB(s) into compact, **lossless** `.eparc` archives to save disk space; `epublift restore` brings any book back — content-exact by default, or re-targeted for a specific reader (`--target 3.3`, `--webp`, `--kepub`). Pure-Rust solid Zstandard on text + fonts, media stored verbatim, so it never grows a book. See [Archive your library](#-archive-your-library-eparc).
-*   **🏷️ Fix book metadata (`meta`)**: Read, hand-edit, or **auto-fill** a book's metadata by ISBN from **Open Library** or **Google Books** — `epublift meta show` / `set` / `enrich`. **Language-aware**: fields are filled only in the book's own language. The lookup uses a **100% pure-Rust** HTTPS client (rustls + RustCrypto — no C), behind the opt-in `metadata` build feature. See the [Metadata guide](docs/metadata.md).
-*   **📄 Import a PDF (`import`, experimental)**: Turn a PDF into a **reflowable** EPUB — `epublift import -i book.pdf`. Works for PDFs that carry a text layer (born-digital books and already-searchable scans), including modern **Type0/CID** fonts, with accurate word spacing from the font's real glyph widths (matched a publisher's own EPUB at ~99.8% word overlap in testing). Carries figures over too. Scanned-only PDFs (no text layer) are handled by **OCR** (pure-Rust ocrs + rten, models download on first use) behind the heavier opt-in `pdf-ocr` feature — best-effort (~92% on clean prose scans). 100% pure-Rust. See the [PDF import guide](docs/pdf-import.md).
-*   **✅ Validate an EPUB (`check`)**: Check any EPUB against the spec — `epublift check -i book.epub` — with epubcheck-compatible message IDs (`RSC-005`, `OPF-053`, …). Powered by [**epubveri**](https://github.com/veripublica/epubveri), our own **pure-Rust, JVM-free** alternative to W3C's `epubcheck` (no Java, no external process), behind the opt-in `validate` build feature. Grep-style exit code for CI; `--format json` for tooling. Pre-1.0 (99.7% message-ID recall on epubcheck's own test suite — not yet full parity). See the [Validation guide](docs/validate.md).
-*   **🔧 Fix EPUB issues (`repair`)**: `epublift repair -i book.epub` fixes what `check` finds wherever a fix is certain to be right — undeclared entities, invalid ids, broken spine and manifest entries, empty metadata and more — with the veripublica family's repairer, [epubsana](https://github.com/veripublica/epubsana). Safe fixes are applied; a fix that needs a decision is asked about first. Writes a new file; the input is never touched. Ships in the default build. See the [Repair guide](docs/repair.md).
-*   **📊 Detailed Audit Reports**: Generates a detailed size comparison table and conversion metrics report in an easy-to-read text file.
-*   **🌐 Browser & Docker Ready**: A hardened [web service](#-hosted-web-service-epublift-web) does it all in the browser — **optimize** an EPUB, **archive** a book to a compact `.eparc`, **restore** one back, or fix its **metadata** — with uploads processed in memory and deleted immediately. Ships as a multi-arch Docker image for one-command self-hosting.
-
----
-
-## 🛠️ Technical Design & Pipeline
-
-```mermaid
-graph TD
-    A[Input EPUB Archive] -->|Secure Extract| B[System Temp Directory]
-    B --> C[Locate & Parse content.opf]
-    C --> D[Identify Manifest Images]
-    D -->|Convert JPEG/PNG to WebP| E[Compress & Optimize Images]
-    E -->|Href Remapping| F[Update Links in XHTML, CSS, SVGs & Manifest]
-    F -->|Structure Modernization| G[Upgrade OPF version to 3.0]
-    G --> H[Translate EPUB 2 metadata, inject UTC modified time]
-    H --> I[Parse toc.ncx and generate nav.xhtml]
-    I --> J[Clean & Standardize DOCTYPEs to HTML5]
-    J --> J2[Write presentational attributes as CSS]
-    J2 -->|Repackage ZIP| K[Store mimetype Uncompressed & Deflate others]
-    K --> K2[EPUB 3 fixes with epubsana]
-    K2 --> L[Generate Clean EPUB 3.3 Output]
-    L --> M[Write Performance & Compliance Audit Report]
-```
-
-### 📱 E-Reader Compatibility
-To ensure broad compatibility, ePubLift retains legacy `toc.ncx` maps and OPF pointers alongside the newly-generated EPUB 3.3 `nav.xhtml` navigation document. This creates a fully **backward-compatible** hybrid document that runs smoothly on vintage EPUB 2 devices while delivering high-speed modern features and layout compliance on new EPUB 3.3 devices.
-
----
-
-## 📥 Installation
-
-### Download a pre-built binary (recommended)
-
-Grab the archive for your platform from the [**latest release**](https://github.com/ePubLift/epublift/releases/latest):
-
-| Platform | Archive |
-| :--- | :--- |
-| Linux (x86_64, static musl) | `epublift-<version>-x86_64-unknown-linux-musl.tar.gz` |
-| Linux (ARM64 / **Raspberry Pi**, static musl) | `epublift-<version>-aarch64-unknown-linux-musl.tar.gz` |
-| Windows (x86_64) | `epublift-<version>-x86_64-pc-windows-msvc.zip` |
-| macOS (Apple Silicon) | `epublift-<version>-aarch64-apple-darwin.tar.gz` |
-| macOS (Intel) | `epublift-<version>-x86_64-apple-darwin.tar.gz` |
-
-Each archive bundles the `epublift` binary plus the README, license, and changelog, and ships with a `.sha256` checksum file. Unpack it and put `epublift` somewhere on your `PATH`:
-
-```bash
-tar -xzf epublift-*-aarch64-apple-darwin.tar.gz
-sudo install epublift-*/epublift /usr/local/bin/
-```
-
-> The Linux builds are statically linked against musl, so they run on any x86_64 or ARM64 distribution (including 64-bit Raspberry Pi OS) with no glibc or system-library requirements.
-
-#### Linux packages (`.deb` / `.rpm`)
-
-Prefer your package manager? Each release also ships native packages for **amd64/arm64** (so they install cleanly on a Raspberry Pi too):
-
-```bash
-# Debian / Ubuntu / Raspberry Pi OS
-sudo apt install ./epublift_<version>-1_arm64.deb     # or _amd64
-
-# Fedora / RHEL / openSUSE
-sudo dnf install ./epublift-<version>-1.aarch64.rpm   # or .x86_64
-```
-
-#### First run on macOS and Windows
-
-The pre-built macOS and Windows binaries are **not yet code-signed**, so the OS shows a one-time warning the first time you run a freshly downloaded copy. This is expected; the Linux binary is unaffected.
-
-- **macOS** — Gatekeeper reports the developer "cannot be verified." Clear the download quarantine flag once:
-  ```bash
-  xattr -d com.apple.quarantine ./epublift
-  ```
-  (or open **System Settings → Privacy & Security** and click *Allow Anyway*).
-- **Windows** — Microsoft Defender SmartScreen shows *"Windows protected your PC."* Click **More info → Run anyway**.
-
-Each release archive ships with a `.sha256` file so you can verify the download integrity before running it.
-
-### Build from source
-
-This utility is **pure Rust** — it only requires the **Rust toolchain** (1.97+). No C compiler or system libraries needed; WebP encoding is handled by the pure-Rust [`zenwebp`](https://crates.io/crates/zenwebp) crate.
-
-```bash
-# Clone the repository
-git clone https://github.com/ePubLift/epublift.git
-cd epublift
-
-# Build an optimized release binary
-cargo build --release
-
-# The binary is produced at:
-#   target/release/epublift
-```
-
-You can optionally install it onto your `PATH`:
-
-```bash
-cargo install --path .
-```
-
-**Optional features** (all pure-Rust; bundled in the pre-built binaries, opt-in when building yourself):
-
-```bash
-cargo build --release --features metadata,epub34,pdf
-```
-
-- `metadata` — `meta enrich` ISBN lookup (Open Library / Google Books)
-- `epub34` — experimental EPUB 3.4 image codecs (AVIF / JPEG XL)
-- `pdf` — experimental `import` (PDF → reflowable EPUB)
-
----
-
-## 🚀 Usage
-
-```bash
-epublift -i book.epub            # modernize + shrink images → book_v3.3.epub
-```
-
-| Your situation | Command |
-| :--- | :--- |
-| Modernized EPUB, images untouched | `epublift -i book.epub` |
-| Modernized and smaller (readers that show WebP) | `epublift -i book.epub --webp` |
-| Reading on a Kobo | `epublift -i book.epub --kepub` |
-| Images blank after `--webp` | convert again without `--webp` |
-| ASCII-only output filename | `epublift -i book.epub --ascii` |
-| Shrink a whole library to `.eparc` | `epublift archive -i ~/Books` |
-| Restore an archived book | `epublift restore -i book.eparc` |
-| See a book's metadata | `epublift meta show -i book.epub` |
-| Fill missing metadata by ISBN | `epublift meta enrich -i book.epub --isbn 9780…` |
-| Turn a PDF into a reflowable EPUB (experimental) | `epublift import -i book.pdf` |
-| Validate an EPUB against the spec | `epublift check -i book.epub` |
-
-Every flag, per-situation recipes, and sandbox testing are in the **[Usage guide](docs/usage.md)**. epublift is also a Rust **library** — build `Options`, call `convert()`, inspect the `Report`.
-
----
-
-## 📦 Archive your library (`.eparc`)
-
-Shrink a personal EPUB collection to save disk, and get any book back on demand — **losslessly**. `epublift archive` packs each book into a compact `.eparc` (pure-Rust solid [Zstandard](https://facebook.github.io/zstd/) on text + fonts, already-compressed media stored verbatim, so it **never grows a book**); `epublift restore` brings it back content-exact, or re-targeted for your reader.
-
-```bash
-epublift archive -i ~/Books         # one .eparc per book; recurses the folder
-epublift restore -i book.eparc      # → content-exact .epub (or --target 3.3 / --webp / --kepub)
-```
-
-Lossless, runs anywhere from a Raspberry Pi to a NAS. Full guide: **[Archiving guide](docs/archiving.md)** · design notes: [format](docs/design/eparc-format.md), [codec choice](docs/design/eparc-codec-choice.md).
-
----
-
-## 🌐 Hosted Web Service (`epublift-web`)
-
-Drag-and-drop a book in your browser and pick a mode: **Optimize** (modernize to EPUB 3.3, images kept or re-encoded to WebP, with an in-page audit report), **Archive** a book to a compact `.eparc`, **Restore** an `.eparc` back to a working `.epub` (content-exact by default, or modernized on the way out), fix a book's **Metadata** (hand-edit or ISBN auto-fill), or **Import PDF** — turn a PDF into a reflowable EPUB *(experimental)*. The same pure-Rust core, with uploads processed **in memory and deleted immediately** (nothing stored or logged). Available in **13 languages**.
-
-> 💡 Hosted instance: **<https://epublift.itpax.net>**. Or self-host in one command:
-
-```bash
+```sh
 docker run -d -p 127.0.0.1:8080:8080 ghcr.io/epublift/epublift-web:latest
 ```
 
-The full hardening profile, reverse-proxy/TLS setup, and the privacy/security model are in the **[Web service guide](docs/web-service.md)**.
+For the command line, download a binary or a `.deb` or `.rpm` from the [latest release](https://github.com/ePubLift/epublift/releases/latest). The macOS and Windows binaries aren't signed yet, so your system warns you the first time you run one. Then:
 
----
+```sh
+epublift check -i book.epub
+epublift repair -i book.epub
+epublift -i book_repaired.epub
+```
 
-## 📚 Documentation
+The last command writes `book_repaired_v3.3.epub`. Your original is never touched.
 
-- **[Usage guide](docs/usage.md)** — every flag, per-situation recipes, sandbox testing.
-- **[PDF import guide](docs/pdf-import.md)** — `import`: turn a PDF into a reflowable EPUB (experimental).
-- **[Markdown import guide](docs/markdown-import.md)** — `import`: turn a `.md` file, folder, or `.zip` (multi-chapter + cover) into a reflowable EPUB (experimental).
-- **[Metadata guide](docs/metadata.md)** — `meta` show / set / enrich (ISBN auto-fill, language-aware).
-- **[Validation guide](docs/validate.md)** — `check`: validate an EPUB against the spec (pure-Rust epubcheck alternative).
-- **[Repair guide](docs/repair.md)** — `repair`: fix what `check` finds, with epubsana.
-- **[Archiving guide](docs/archiving.md)** — `archive` / `restore` and the `.eparc` format.
-- **[Web service guide](docs/web-service.md)** — self-hosting `epublift-web`.
-- **[Reader compatibility](docs/device-compatibility.md)** — which readers render which image formats (why images are kept by default), verified on real hardware.
-- **[Experimental Zstandard packaging](docs/zstandard-research.md)** — research track (non-conformant, measurement only).
-- Design notes: [`.eparc` format](docs/design/eparc-format.md) · [`.eparc` codec choice](docs/design/eparc-codec-choice.md) · [Zstd-OCF experiment](docs/design/zstd-ocf-experimental.md).
-- [Roadmap](ROADMAP.md) · [Changelog](CHANGELOG.md).
+Images stay as they are unless you ask otherwise, because a Kobo shows WebP images blank. With `--webp` they are re-encoded, and an image that wouldn't get smaller keeps its original form.
 
----
+ePubLift doesn't remove DRM. For that, look at DeDRM or calibre.
 
-## 🏷️ Versioning & releases
+The checks and repairs come from my other tools, [epubveri](https://github.com/veripublica/epubveri) and [epubsana](https://github.com/veripublica/epubsana). The Kobo conversion comes from [kepubverto](https://github.com/veripublica/kepubverto) and PDF reading from [paginaverto](https://github.com/veripublica/paginaverto). The guides are in [docs](docs/), and the options, exit codes, limits and build steps are in [AGENTS.md](https://github.com/ePubLift/epublift/blob/main/AGENTS.md).
 
-ePubLift is one repository with two independently-released products that share a
-common Rust core:
-
-| Product | Released via tag | Where to get it |
-| :--- | :--- | :--- |
-| **CLI** (`epublift` binaries) | `cli-vX.Y.Z` | [GitHub Releases](https://github.com/ePubLift/epublift/releases) |
-| **Web service** (`epublift-web` Docker image) | `web-vX.Y.Z` | `ghcr.io/epublift/epublift-web:X.Y.Z` (+ `:latest`) |
-
-They version on their own lines, so the web service can ship fixes (e.g. a
-dependency security update) without forcing a new CLI build, and vice versa.
-Their numbers may differ — that's expected; pick the line for the product you
-use. A change to the shared core is released on **both** lines together.
-
----
-
-## 📄 License & Sharing
-
-This project is licensed under the **GNU Affero General Public License, Version 3 (AGPL-3.0)**.
-
-### Why AGPL-3.0?
-We believe in open source. By sharing this software under the AGPL license, we ensure that:
-1. Anyone is free to use, modify, and distribute this tool.
-2. If you modify this tool and run it as part of an online service (e.g. an e-book conversion website), you **must** make your modified source code available to users of that service.
-
-For full terms and conditions, please consult the [LICENSE](LICENSE) file in the root of this repository.
+The code is under the [AGPL-3.0](LICENSE) or later. If you run a modified version as a service, you have to share your changes with its users.
