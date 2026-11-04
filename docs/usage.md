@@ -214,9 +214,11 @@ change:
 
 - **The book's CSS doesn't set the property.** A reader already ignores the
   attribute where a rule of the book's own CSS (or a `style` attribute) sets the
-  same property. There, and where a rule *may* set it (under `@media`, say), the
-  attribute is left as written and counted in the report. The question is
-  answered by [styloria](https://github.com/veripublica/styloria)'s cascade.
+  same property, so there the attribute is removed and no rule is written. Where a
+  rule *may* set it (under `@media`, say), or sets only part of it (`padding-top`
+  against `cellpadding`), the attribute is left as written and counted in the
+  report. The question is answered by
+  [styloria](https://github.com/veripublica/styloria)'s cascade.
 - **The book's selectors match as before.** A selector such as `img[width]`
   notices the attribute going; when one would match differently, the document
   is left as it is.

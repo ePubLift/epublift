@@ -128,10 +128,17 @@ pub fn write_report(report_path: &Path, report: &Report) -> Result<()> {
             p.converted, p.elements, p.documents
         ));
     }
+    if p.overridden > 0 {
+        r.push(format!(
+            "[x] Of those, removed {} attribute(s) with no rule where the book's CSS already sets \
+             the property",
+            p.overridden
+        ));
+    }
     if p.left() > 0 {
         r.push(format!(
-            "[ ] Left {} presentational attribute(s) as written: the book's CSS sets ({}) or may set ({}) \
-             the property, or its selectors read them ({})",
+            "[ ] Left {} presentational attribute(s) as written: the book's CSS sets part of it ({}) or \
+             may set it ({}), or its selectors read them ({})",
             p.left(),
             p.left_css_sets,
             p.left_css_may_set,

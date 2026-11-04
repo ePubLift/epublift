@@ -10,6 +10,13 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+### Fixed
+- **An upgrade no longer leaves a layout attribute the book's CSS already
+  overrides.** `<table cellspacing="0" style="border-spacing:0">` kept its
+  `cellspacing`, which EPUB 3 doesn't allow, so a valid EPUB 2 book came out
+  invalid. Such an attribute has no effect, so it is now removed and no rule is
+  written. An attribute whose property the CSS sets only in part, or may set, stays.
+
 ## [cli-v4.6.0] - 2026-11-04
 
 ### Added

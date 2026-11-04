@@ -13,9 +13,11 @@
 //! An attribute is converted only when nothing can change because of it:
 //!
 //! - styloria's cascade says **No**, no author declaration sets the property,
-//!   for every element the hint applies to. `Yes` (the book's CSS already
-//!   decides) and `Unknown` (it may) leave the attribute as written, counted
-//!   in the [`Summary`];
+//!   for each element the hint applies to. `Unknown` (it may) leaves the
+//!   attribute as written. `Yes` means the hint already has no effect there, so
+//!   that element gets no rule, and an attribute with nothing else to do is
+//!   simply removed. An element with some of the properties set and some not
+//!   leaves the attribute, counted in the [`Summary`];
 //! - the book's own selectors match exactly as before: every element of the
 //!   document has the same cascade with the attributes removed and the classes
 //!   added (`img[width]`, `td[class="c"]` would notice). Otherwise the
@@ -58,7 +60,12 @@ pub struct Summary {
     pub elements: usize,
     /// Content documents changed.
     pub documents: usize,
-    /// Attributes left as written: the book's CSS sets the property.
+    /// Attributes removed, for some or all of their elements, because the book's
+    /// CSS already sets the property there, so the hint had no effect. Counted
+    /// in `converted` too.
+    pub overridden: usize,
+    /// Attributes left as written: the book's CSS sets part of what the hint
+    /// would set, or it renames an element.
     pub left_css_sets: usize,
     /// Attributes left as written: the book's CSS may set the property
     /// (a rule under `@media`, a selector styloria can't settle, …).
@@ -140,8 +147,8 @@ pub fn convert_book(root: &Path, package_dir: &Path, progress: &dyn Fn(&str)) ->
     }
     if summary.left() > 0 {
         progress(&format!(
-            "  [!] Left {} presentational attribute(s) as written: the book's CSS sets ({}) or may \
-             set ({}) the property, or its selectors read them ({}).",
+            "  [!] Left {} presentational attribute(s) as written: the book's CSS sets part of it ({}) \
+             or may set it ({}), or its selectors read them ({}).",
             summary.left(),
             summary.left_css_sets,
             summary.left_css_may_set,
@@ -258,23 +265,13 @@ fn convert_document(
         Some(&parsed[j])
     });
 
-    // Every target must be unset by the book's CSS, for every property.
+    // What the book's CSS says about each target. A hint loses to any author
+    // declaration, so an attribute whose every target is set has no effect and
+    // goes without CSS; a rule written for it could win over the book's own.
     let mut accepted = Vec::new();
-    for c in candidates {
-        let mut status = styloria::Match::No;
-        for (id, decl) in &c.targets {
-            let node = doc.get_node(*id)?;
-            let el = El {
-                node,
-                overlay: None,
-            };
-            let inline_text = node.attribute("style").unwrap_or("");
-            let inline = parse_block_contents(inline_text).0;
-            let style = cascade.style_for(&el, Some(inline.as_slice()));
-            for p in decl.props {
-                status = status.or(style.property(p).status);
-            }
-        }
+    let mut overridden = 0;
+    for mut c in candidates {
+        let mut guards = styloria::Match::No;
         for (id, props) in &c.guards {
             let node = doc.get_node(*id)?;
             let inline = parse_block_contents(node.attribute("style").unwrap_or("")).0;
@@ -286,13 +283,49 @@ fn convert_document(
                 Some(inline.as_slice()),
             );
             for p in *props {
-                status = status.or(style.property(p).status);
+                guards = guards.or(style.property(p).status);
             }
         }
-        match status {
-            styloria::Match::No => accepted.push(c),
-            styloria::Match::Yes => summary.left_css_sets += 1,
-            styloria::Match::Unknown => summary.left_css_may_set += 1,
+        let mut set = Vec::new();
+        let mut unknown = guards == styloria::Match::Unknown;
+        let mut mixed = false;
+        for (i, (id, decl)) in c.targets.iter().enumerate() {
+            let node = doc.get_node(*id)?;
+            let el = El {
+                node,
+                overlay: None,
+            };
+            let inline = parse_block_contents(node.attribute("style").unwrap_or("")).0;
+            let style = cascade.style_for(&el, Some(inline.as_slice()));
+            // Longhand by longhand: asked about a shorthand, the cascade answers Yes
+            // when any one of them is set, and the others would lose the hint.
+            let statuses: Vec<_> = decl
+                .props
+                .iter()
+                .flat_map(|p| longhands(p))
+                .map(|p| style.property(p).status)
+                .collect();
+            unknown |= statuses.contains(&styloria::Match::Unknown);
+            let yes = statuses.contains(&styloria::Match::Yes);
+            let no = statuses.contains(&styloria::Match::No);
+            mixed |= yes && no;
+            if yes && !no {
+                set.push(i);
+            }
+        }
+        if unknown {
+            summary.left_css_may_set += 1;
+        } else if guards == styloria::Match::Yes
+            || mixed
+            || (!set.is_empty() && c.action != Action::Remove)
+        {
+            summary.left_css_sets += 1;
+        } else {
+            for i in set.iter().rev() {
+                c.targets.remove(*i);
+            }
+            overridden += usize::from(!set.is_empty());
+            accepted.push(c);
         }
     }
     if accepted.is_empty() {
@@ -424,6 +457,7 @@ fn convert_document(
     let elements = accepted.iter().filter(|c| c.is_element()).count();
     summary.elements += elements;
     summary.converted += accepted.len() - elements;
+    summary.overridden += overridden;
     Some(out)
 }
 
@@ -853,6 +887,32 @@ fn is_html(node: &Node<'_, '_>, name: &str) -> bool {
     node.is_element()
         && node.tag_name().namespace() == Some(XHTML_NS)
         && node.tag_name().name() == name
+}
+
+/// The longhands of a property a hint sets; every one must be set for the hint
+/// to have no effect.
+fn longhands(prop: &str) -> Vec<&str> {
+    match prop {
+        "padding" => vec![
+            "padding-top",
+            "padding-right",
+            "padding-bottom",
+            "padding-left",
+        ],
+        "border-width" => vec![
+            "border-top-width",
+            "border-right-width",
+            "border-bottom-width",
+            "border-left-width",
+        ],
+        "border-style" => vec![
+            "border-top-style",
+            "border-right-style",
+            "border-bottom-style",
+            "border-left-style",
+        ],
+        other => vec![other],
+    }
 }
 
 fn px_decl(prop: &'static str, n: u32) -> Decl {
@@ -1291,15 +1351,96 @@ mod tests {
     }
 
     #[test]
-    fn css_that_sets_the_property_leaves_the_attribute() {
+    fn css_that_sets_the_property_removes_the_attribute_without_a_rule() {
         let (_d, s, text, css) = run(
             "img { width: 100% }",
             "",
             "<p><img src=\"x.jpg\" alt=\"\" width=\"40%\"/></p>",
         );
-        assert_eq!((s.converted, s.left_css_sets), (0, 1));
-        assert!(text.contains("width=\"40%\""), "{text}");
+        assert_eq!((s.converted, s.overridden, s.left()), (1, 1, 0));
+        assert!(!text.contains("width="), "{text}");
+        assert!(!text.contains("epublift-"), "{text}");
         assert!(css.is_empty());
+    }
+
+    #[test]
+    fn an_inline_style_that_sets_the_property_removes_the_attribute() {
+        // The shape that made a valid book invalid: `cellspacing` with the same
+        // `border-spacing` in its `style`.
+        let (_d, s, text, css) = run(
+            "",
+            "",
+            "<table cellspacing=\"0\" style=\"border-spacing:0\"><tr><td>x</td></tr></table>",
+        );
+        assert_eq!((s.converted, s.overridden, s.left()), (1, 1, 0));
+        assert!(!text.contains("cellspacing"), "{text}");
+        assert!(text.contains("border-spacing:0"), "{text}");
+        assert!(css.is_empty());
+    }
+
+    #[test]
+    fn a_value_the_browser_drops_does_not_count_as_set() {
+        let (_d, _s, text, css) = run(
+            "img { width: banana }",
+            "",
+            "<p><img src=\"x.jpg\" alt=\"\" width=\"40%\"/></p>",
+        );
+        // Either written as CSS or left, but never lost: the hint is what applies.
+        assert!(
+            text.contains("width=\"40%\"") || css.contains("width: 40%"),
+            "{text} / {css}"
+        );
+    }
+
+    #[test]
+    fn only_the_cells_css_leaves_alone_get_the_rule() {
+        let (_d, s, text, css) = run(
+            "td.a { padding: 9px }",
+            "",
+            "<table cellpadding=\"3\"><tr><td class=\"a\">x</td><td>y</td></tr></table>",
+        );
+        assert_eq!((s.converted, s.overridden, s.left()), (1, 1, 0));
+        assert!(!text.contains("cellpadding"), "{text}");
+        assert!(
+            text.contains("<td class=\"a\">"),
+            "the set cell gets no rule: {text}"
+        );
+        assert!(text.contains("<td class=\"epublift-"), "{text}");
+        assert!(css.contains("padding: 3px"), "{css}");
+    }
+
+    #[test]
+    fn a_part_set_cell_leaves_the_attribute() {
+        let (_d, s, text, _) = run(
+            "td { padding-top: 9px }",
+            "",
+            "<table cellpadding=\"3\"><tr><td>x</td></tr></table>",
+        );
+        assert_eq!((s.converted, s.left_css_sets), (0, 1));
+        assert!(text.contains("cellpadding"), "{text}");
+    }
+
+    #[test]
+    fn every_side_set_removes_a_hint_on_a_shorthand() {
+        let (_d, s, text, css) = run(
+            "td { padding: 9px }",
+            "",
+            "<table cellpadding=\"3\"><tr><td>x</td></tr></table>",
+        );
+        assert_eq!((s.overridden, s.left()), (1, 0));
+        assert!(!text.contains("cellpadding"), "{text}");
+        assert!(css.is_empty(), "{css}");
+    }
+
+    #[test]
+    fn a_selector_reading_the_attribute_still_wins() {
+        let (_d, s, text, _) = run(
+            "table[cellspacing] { border-spacing: 2px }",
+            "",
+            "<table cellspacing=\"0\"><tr><td>x</td></tr></table>",
+        );
+        assert_eq!((s.converted, s.left_selectors), (0, 1));
+        assert!(text.contains("cellspacing"), "{text}");
     }
 
     #[test]
@@ -1319,13 +1460,13 @@ mod tests {
             "",
             "<p><img style=\"width: 3em\" src=\"x.jpg\" alt=\"\" width=\"40%\"/></p>",
         );
-        assert_eq!(s.left_css_sets, 1);
+        assert_eq!((s.overridden, s.left()), (1, 0));
         let (_d, s, _, _) = run(
             "",
             "<style type=\"text/css\">img { height: auto }</style>",
             "<p><img src=\"x.jpg\" alt=\"\" height=\"40%\"/></p>",
         );
-        assert_eq!(s.left_css_sets, 1);
+        assert_eq!((s.overridden, s.left()), (1, 0));
     }
 
     #[test]
@@ -1341,7 +1482,7 @@ mod tests {
         )
         .unwrap();
         let s = convert_book(dir.path(), &pkg, &|_| {}).unwrap();
-        assert_eq!((s.converted, s.left_css_sets), (0, 1));
+        assert_eq!((s.overridden, s.left()), (1, 0));
     }
 
     #[test]
@@ -1456,13 +1597,19 @@ mod tests {
         assert!(text.contains("<table border=\"1\">"), "{text}");
         let (_d, s, _, _) = run("", "", "<table border=\"1\"><tr><td>a</td></tr></table>");
         assert_eq!(s, Summary::default());
-        // A border on the cells set by the book's CSS keeps the attribute.
-        let (_d, s, _, _) = run(
+        // A border on the cells set by the book's CSS: the rule is for the table
+        // alone.
+        let (_d, s, text, css) = run(
             "td { border: 1px solid }",
             "",
             "<table border=\"2\"><tr><td>a</td></tr></table>",
         );
-        assert_eq!(s.left_css_sets, 1);
+        assert_eq!((s.overridden, s.left()), (1, 0));
+        assert!(text.contains("<td>a</td>"), "{text}");
+        assert!(
+            css.contains("border-width: 2px") && !css.contains("inset"),
+            "{css}"
+        );
     }
 
     #[test]
