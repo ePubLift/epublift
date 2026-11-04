@@ -39,6 +39,7 @@ mod opf;
 #[cfg(feature = "pdf")]
 pub mod pdf;
 mod presentational;
+pub mod unique_id;
 mod upgrade_fixes;
 // AI "Smart Import": cloud OCR (PDF → Markdown) feeding the offline Markdown core.
 mod report;
@@ -404,15 +405,19 @@ pub fn write_metadata_and_cover(
         let modified_ts = Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
         meta::apply_update(&opf_xml, update, &modified_ts)?
     };
+    let new_opf = match &update.unique_identifier {
+        Some(choice) => set_unique_identifier(&mut entries, &opf_name, &new_opf, choice, update)?,
+        None => new_opf,
+    };
     let metadata = meta::parse_metadata(&new_opf)?;
     if let Some(e) = entries.iter_mut().find(|(n, _)| *n == opf_name) {
         e.1 = new_opf.into_bytes();
     }
 
     let bytes = zip_entries(&entries)?;
-    if cover_change.is_some() {
-        // Never make a book worse: the cover goes in only if the book has no
-        // more fatal errors and errors than before.
+    if cover_change.is_some() || update.unique_identifier.is_some() {
+        // Never make a book worse: a new cover or identifier goes in only if the
+        // book has no more fatal errors and errors than before.
         let count = |b: Vec<u8>| {
             let r = epubveri::validate_bytes(b);
             r.fatals() + r.errors()
@@ -420,7 +425,7 @@ pub fn write_metadata_and_cover(
         let (before, after) = (count(original), count(bytes.clone()));
         if after > before {
             bail!(
-                "changing the cover would leave the book with {after} error(s) where it had \
+                "this change would leave the book with {after} error(s) where it had \
                  {before}, so nothing was written"
             );
         }
@@ -429,6 +434,58 @@ pub fn write_metadata_and_cover(
     Ok(MetadataWrite {
         metadata,
         cover: cover_change,
+    })
+}
+
+/// The OPF with `choice` as its unique identifier; the NCX's `dtb:uid` follows.
+/// Refused when the identifier would change on a book whose font obfuscation is
+/// keyed on it: its fonts would stop working.
+fn set_unique_identifier(
+    entries: &mut cover::Entries,
+    opf_name: &str,
+    opf: &str,
+    choice: &unique_id::UniqueIdentifier,
+    update: &meta::MetadataUpdate,
+) -> Result<String> {
+    let md = meta::parse_metadata(opf)?;
+    let value = unique_id::resolve(choice, &md, update.isbn.as_deref())?;
+    let current = md.identifiers.iter().find(|i| i.unique);
+    if current.is_none_or(|i| i.value.trim() != value) && entries_obfuscate_fonts(entries) {
+        bail!(
+            "META-INF/encryption.xml obfuscates this book's fonts with a key derived from its \
+             unique identifier, so changing the identifier would break them; nothing was written"
+        );
+    }
+    let new_opf = unique_id::apply_to_opf(opf, &value)?;
+    if let Some(name) = unique_id::ncx_entry_name(&new_opf, opf_name)
+        && let Some(entry) = entries.iter_mut().find(|(n, _)| *n == name)
+        && let Some(ncx) = unique_id::sync_ncx(&String::from_utf8_lossy(&entry.1), &value)
+    {
+        entry.1 = ncx.into_bytes();
+    }
+    Ok(new_opf)
+}
+
+fn entries_obfuscate_fonts(entries: &cover::Entries) -> bool {
+    entries
+        .iter()
+        .find(|(n, _)| n == "META-INF/encryption.xml")
+        .is_some_and(|(_, b)| unique_id::obfuscates(&String::from_utf8_lossy(b)))
+}
+
+/// Whether the book's font obfuscation is keyed on its unique identifier, so the
+/// identifier must stay.
+pub fn fonts_obfuscated(epub: &Path) -> Result<bool> {
+    let file =
+        fs::File::open(epub).with_context(|| format!("EPUB not found: {}", epub.display()))?;
+    let mut zip = ZipArchive::new(file).context("Input is not a valid EPUB (zip) archive")?;
+    Ok(match zip.by_name("META-INF/encryption.xml") {
+        Ok(entry) => {
+            let mut text = Vec::new();
+            entry.take(16 * 1024 * 1024).read_to_end(&mut text)?;
+            unique_id::obfuscates(&String::from_utf8_lossy(&text))
+        }
+        Err(_) => false,
     })
 }
 

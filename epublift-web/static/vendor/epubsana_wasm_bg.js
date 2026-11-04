@@ -20,7 +20,7 @@ export class Session {
     }
     /**
      * Load an EPUB from its raw bytes, detect its defects, and plan the fixes.
-     * @param {Uint8Array} bytes
+     * @param {Uint8Array | number[]} bytes
      * @returns {Session}
      */
     static load(bytes) {
@@ -58,15 +58,22 @@ export class Session {
      * Starts from the book as loaded every time, so calling it again with a
      * different selection replaces the previous run. An index out of range is
      * an error and changes nothing.
-     * @param {Uint32Array} approved
+     * @param {Uint32Array | number[]} approved
      * @param {string | null} [goal]
      * @returns {Report}
      */
     repair(approved, goal) {
-        const ptr0 = passArray32ToWasm0(approved, wasm.__wbindgen_malloc);
-        const len0 = WASM_VECTOR_LEN;
-        var ptr1 = isLikeNone(goal) ? 0 : passStringToWasm0(goal, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-        var len1 = WASM_VECTOR_LEN;
+        let ptr0, len0, ptr1, len1;
+        try {
+            ptr0 = passArray32ToWasm0(approved, wasm.__wbindgen_malloc);
+            len0 = WASM_VECTOR_LEN;
+            ptr1 = isLikeNone(goal) ? 0 : passStringToWasm0(goal, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            len1 = WASM_VECTOR_LEN;
+        } catch (e) {
+            if (ptr1) { wasm.__wbindgen_free(ptr1, len1 * 1, 1); }
+            if (ptr0) { wasm.__wbindgen_free(ptr0, len0 * 4, 4); }
+            throw e;
+        }
         const ret = wasm.session_repair(this.__wbg_ptr, ptr0, len0, ptr1, len1);
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
@@ -140,7 +147,7 @@ export function version() {
         wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
     }
 }
-export function __wbg_Error_30c8987f7c2ed4e2(arg0, arg1) {
+export function __wbg_Error_208446807d0d1e30(arg0, arg1) {
     const ret = Error(getStringFromWasm0(arg0, arg1));
     return ret;
 }
@@ -148,25 +155,25 @@ export function __wbg_String_8564e559799eccda(arg0, arg1) {
     const ret = String(arg1);
     const ptr1 = passStringToWasm0(ret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
     const len1 = WASM_VECTOR_LEN;
-    getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
-    getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
+    getDataViewMemory0().setInt32((arg0 >>> 0) + 4 * 1, len1, true);
+    getDataViewMemory0().setInt32((arg0 >>> 0) + 4 * 0, ptr1, true);
 }
-export function __wbg___wbindgen_throw_41e9ee4f547fc59a(arg0, arg1) {
+export function __wbg___wbindgen_throw_4c88d8bf264fd984(arg0, arg1) {
     throw new Error(getStringFromWasm0(arg0, arg1));
 }
-export function __wbg_new_617a8cdb8bb1130e() {
-    const ret = new Object();
-    return ret;
-}
-export function __wbg_new_ee2291f50781bf1d() {
+export function __wbg_new_37eb45aaf5eeb820() {
     const ret = new Array();
     return ret;
 }
-export function __wbg_set_6be42768c690e380(arg0, arg1, arg2) {
-    arg0[arg1] = arg2;
+export function __wbg_new_cd4348290afae586() {
+    const ret = new Object();
+    return ret;
 }
-export function __wbg_set_bea140a88be9b277(arg0, arg1, arg2) {
+export function __wbg_set_d2d33b52458e984a(arg0, arg1, arg2) {
     arg0[arg1 >>> 0] = arg2;
+}
+export function __wbg_set_e4b9a833d288759a(arg0, arg1, arg2) {
+    arg0[arg1] = arg2;
 }
 export function __wbindgen_generic_0000000000000001(arg0) {
     // Cast intrinsic for `F64 -> Externref`.
@@ -185,12 +192,11 @@ export function __wbindgen_generic_0000000000000003(arg0) {
 }
 export function __wbindgen_init_externref_table() {
     const table = wasm.__wbindgen_externrefs;
-    const offset = table.grow(4);
     table.set(0, undefined);
-    table.set(offset + 0, undefined);
-    table.set(offset + 1, null);
-    table.set(offset + 2, true);
-    table.set(offset + 3, false);
+    table.set(1024, undefined);
+    table.set(1025, null);
+    table.set(1026, true);
+    table.set(1027, false);
 }
 const SessionFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
@@ -210,7 +216,8 @@ function getDataViewMemory0() {
 }
 
 function getStringFromWasm0(ptr, len) {
-    return decodeText(ptr >>> 0, len);
+    ptr = ptr >>> 0;
+    return decodeText(getUint8ArrayMemory0().subarray(ptr, ptr + len));
 }
 
 let cachedUint32ArrayMemory0 = null;
@@ -290,18 +297,18 @@ function takeFromExternrefTable0(idx) {
     return value;
 }
 
-let cachedTextDecoder = new TextDecoder('utf-8', { ignoreBOM: true, fatal: true });
+let cachedTextDecoder = new TextDecoder('utf-8', { ignoreBOM: true });
 cachedTextDecoder.decode();
 const MAX_SAFARI_DECODE_BYTES = 2146435072;
 let numBytesDecoded = 0;
-function decodeText(ptr, len) {
-    numBytesDecoded += len;
+function decodeText(bytes) {
+    numBytesDecoded += bytes.length;
     if (numBytesDecoded >= MAX_SAFARI_DECODE_BYTES) {
-        cachedTextDecoder = new TextDecoder('utf-8', { ignoreBOM: true, fatal: true });
+        cachedTextDecoder = new TextDecoder('utf-8', { ignoreBOM: true });
         cachedTextDecoder.decode();
-        numBytesDecoded = len;
+        numBytesDecoded = bytes.length;
     }
-    return cachedTextDecoder.decode(getUint8ArrayMemory0().subarray(ptr, ptr + len));
+    return cachedTextDecoder.decode(bytes);
 }
 
 const cachedTextEncoder = new TextEncoder();

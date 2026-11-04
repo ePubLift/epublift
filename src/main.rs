@@ -473,6 +473,13 @@ struct MetaSetArgs {
     /// left as it is).
     #[arg(long)]
     isbn: Option<String>,
+    /// Make this existing identifier the package's unique identifier.
+    #[arg(long, value_name = "VALUE", conflicts_with = "new_unique_identifier")]
+    unique_identifier: Option<String>,
+    /// Make a new identifier (UUID v5 from the ISBN, else v4) and make it the
+    /// package's unique identifier.
+    #[arg(long)]
+    new_unique_identifier: bool,
     /// Make this JPEG or PNG the cover (put in as given, at most 10 MB).
     #[arg(long, value_name = "IMAGE")]
     cover: Option<PathBuf>,
@@ -1181,6 +1188,8 @@ fn default_meta_output(input: &Path) -> PathBuf {
 
 /// `epublift meta set …` — apply manual metadata edits.
 fn run_meta_set(s: &MetaSetArgs) -> Result<()> {
+    use epublift::unique_id::UniqueIdentifier;
+
     let path = one_input(&s.input, &s.positional);
     let input = path
         .canonicalize()
@@ -1197,11 +1206,40 @@ fn run_meta_set(s: &MetaSetArgs) -> Result<()> {
         subjects: (!s.subjects.is_empty()).then(|| s.subjects.clone()),
         series: s.series.as_deref().map(epublift::meta::Series::parse),
         isbn: s.isbn.clone(),
+        unique_identifier: match (&s.unique_identifier, s.new_unique_identifier) {
+            (Some(value), _) => Some(UniqueIdentifier::Existing(value.clone())),
+            (None, true) => Some(UniqueIdentifier::New),
+            (None, false) => None,
+        },
     };
     if update.is_empty() && s.cover.is_none() {
         anyhow::bail!(
             "nothing to set — pass at least one field (e.g. --title). See `epublift meta set --help`."
         );
+    }
+    if let Some(value) = &s.unique_identifier {
+        // `--isbn` in the same edit adds an identifier the book doesn't hold yet.
+        let md = epublift::read_metadata(&input)?;
+        let known = md
+            .identifiers
+            .iter()
+            .any(|i| i.value.trim() == value.trim());
+        let is_new_isbn = s.isbn.as_deref().is_some_and(|isbn| {
+            value.trim() == isbn.trim() || value.trim() == format!("urn:isbn:{}", isbn.trim())
+        });
+        if !known && !is_new_isbn {
+            return Err(Refusal(format!(
+                "'{value}' is not one of this book's identifiers: {}",
+                epublift::unique_id::identifier_list(&md)
+            ))
+            .into());
+        }
+    }
+    if s.new_unique_identifier
+        && let Some(isbn) = &s.isbn
+        && epublift::unique_id::isbn13(isbn).is_none()
+    {
+        return Err(Refusal(format!("'{isbn}' is not a valid ISBN")).into());
     }
     let cover = s.cover.as_deref().map(load_cover).transpose()?;
 

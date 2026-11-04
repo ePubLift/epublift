@@ -65,15 +65,15 @@ docker run -d --name epublift-web \
 ```
 
 Then open <http://127.0.0.1:8080>. Pin a specific version with a tag instead of
-`latest`, e.g. `ghcr.io/epublift/epublift-web:1.29.4`. The image is a static musl
+`latest`, e.g. `ghcr.io/epublift/epublift-web:1.30.0`. The image is a static musl
 binary on Alpine, runs as a non-root user, and is about 23 MB.
 
 To see what a running instance is, ask it — the page footer shows the same
-(`web 1.29.4 · cli 4.5.2 · @…`):
+(`web 1.30.0 · cli 4.6.0 · @…`):
 
 ```bash
 curl -s http://127.0.0.1:8080/version
-# {"version":"1.29.4","engine":"4.5.2","epubveri":"0.35.0","commit":"…"}
+# {"version":"1.30.0","engine":"4.6.0","epubveri":"0.37.1","commit":"…"}
 ```
 
 `version` is the web release; `engine` is the epublift library it runs — the
@@ -104,7 +104,7 @@ docker compose up -d
 | :--- | :--- |
 | `GOOGLE_BOOKS_API_KEY` | A [Google Books API key](https://console.cloud.google.com/) for the **Metadata** editor's ISBN enrichment when you pick the *Google Books* provider. Anonymous requests share a small daily quota (HTTP 429 when exhausted); a key raises it. **Optional** — leave it blank to use Open Library only (the default provider needs no key). |
 | `MISTRAL_API_KEY` | A [Mistral API key](https://console.mistral.ai/) that enables the **[EXPERIMENTAL] Smart Import** mode (AI OCR: PDF → EPUB, including scans/photos). **Optional** — leave it blank and Smart Import stays switched off (the UI shows an "add an API key" notice). The key stays on the server and is never sent to browsers; with it set, uploaded PDFs are sent to Mistral for OCR and **this key pays for the calls**. See [Smart Import](smart-import.md). |
-| `EPUBLIFT_LOG_DIR` | Directory for the rolling **WARN+** log file (default `logs/`). The service always logs to stdout too (`docker logs`). In Docker the container's working dir isn't writable, so to keep file logs point this at a mounted directory (e.g. `EPUBLIFT_LOG_DIR=/logs` with a `./logs:/logs` volume). If the directory can't be created, it falls back to stdout only. |
+| `EPUBLIFT_LOG_DIR` | Directory for the rolling **WARN+** log file (default `logs/`). The service always logs to stdout too (`docker logs`). In Docker the container's working dir isn't writable, so to keep file logs point this at a mounted directory (e.g. `EPUBLIFT_LOG_DIR=/logs` with a `./logs:/logs` volume) that uid 10001, the image's user, can write. If the directory can't be created or written, it falls back to stdout only, with a warning when you set this variable. |
 | `RUST_LOG` | Log verbosity, e.g. `RUST_LOG=epublift_web=debug,tower_http=debug` (default `epublift_web=info,tower_http=warn`). |
 
 Your real `.env` is git-ignored, so your key stays private.

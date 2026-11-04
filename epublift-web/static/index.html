@@ -662,6 +662,8 @@
           <div id="m_subj_found" class="m-subjects hide"><div id="m_subj_h" class="m-status"></div><div id="m_subj_list" class="m-subj-list"></div></div>
           <label class="m-field"><span data-i18n="meta_f_description">Description</span><textarea id="m_description" class="m-input" rows="3"></textarea></label>
 
+          <label class="m-field"><span data-i18n="meta_f_uid">Unique identifier</span><select id="m_uid" class="m-input"><option value="keep" data-i18n="meta_uid_keep">Keep as it is</option><option value="new" data-i18n="meta_uid_new">Make a new one</option></select><small id="m_uid_cur" style="overflow-wrap:anywhere"></small><small data-i18n="meta_uid_note">Readers use this to tell one book from another. A new one comes from the ISBN when the book has one, so the same ISBN always gives the same identifier. Otherwise it is random.</small><small id="m_uid_fonts" class="hide" data-i18n="meta_uid_fonts">This book's fonts are obfuscated with a key made from this identifier, so it can't change.</small></label>
+
           <p class="opt-h" style="margin:6px 0 0" data-i18n="meta_cover_h">Cover</p>
           <div class="m-covers">
             <figure><img id="mc_cur_img" class="hide" alt="" /><div id="mc_cur_none" class="m-nocover" data-i18n="meta_cover_none">No cover</div><figcaption id="mc_cur_cap"></figcaption></figure>

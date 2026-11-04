@@ -504,7 +504,7 @@ fn jarr(items: &[String]) -> String {
 ///
 /// Multi-valued fields (`authors`, `subjects`) replace the whole set when
 /// `Some`. Everything not modelled here (cover meta, rendition properties,
-/// accessibility metadata, unknown vocab, the package `unique-identifier`, …) is
+/// accessibility metadata, unknown vocab, …) is
 /// preserved verbatim.
 #[derive(Debug, Default, Clone)]
 pub struct MetadataUpdate {
@@ -521,6 +521,9 @@ pub struct MetadataUpdate {
     /// form Calibre / Apple Books recognize as the book's ISBN. An additional
     /// identifier, not the package `unique-identifier`.
     pub isbn: Option<String>,
+    /// Which `dc:identifier` the package's `unique-identifier` names. Applied by
+    /// [`crate::write_metadata_and_cover`], which also holds the NCX.
+    pub unique_identifier: Option<crate::unique_id::UniqueIdentifier>,
 }
 
 impl MetadataUpdate {
@@ -536,6 +539,7 @@ impl MetadataUpdate {
             && self.subjects.is_none()
             && self.series.is_none()
             && self.isbn.is_none()
+            && self.unique_identifier.is_none()
     }
 }
 
@@ -1007,6 +1011,7 @@ fn without_unchanged(update: &MetadataUpdate, md: &Metadata) -> MetadataUpdate {
             })
         }),
         isbn: keep(&update.isbn, has_isbn),
+        unique_identifier: None,
     }
 }
 

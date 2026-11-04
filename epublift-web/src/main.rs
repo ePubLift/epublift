@@ -155,6 +155,18 @@ fn available_smart_providers() -> Vec<epublift::smart_import::Provider> {
         .collect()
 }
 
+/// The rolling WARN+ log file in `dir`. Returns an error where
+/// `tracing_appender::rolling::daily` would panic, so a dir that exists but can't
+/// be written doesn't stop the service from starting.
+fn open_log_appender(
+    dir: &str,
+) -> Result<tracing_appender::rolling::RollingFileAppender, tracing_appender::rolling::InitError> {
+    tracing_appender::rolling::RollingFileAppender::builder()
+        .rotation(tracing_appender::rolling::Rotation::DAILY)
+        .filename_prefix("epublift-web.log")
+        .build(dir)
+}
+
 #[tokio::main]
 async fn main() {
     use tracing_subscriber::filter::LevelFilter;
@@ -165,15 +177,14 @@ async fn main() {
         .unwrap_or_else(|_| "epublift_web=info,tower_http=warn".into());
     // Always log to stdout (so `docker logs` works); additionally write WARN+ to a
     // rolling daily file in EPUBLIFT_LOG_DIR (default `logs/`) for local debugging.
-    // If that dir can't be created/written (e.g. the container's read-only cwd),
-    // fall back to stdout only rather than failing to start.
-    let log_dir = std::env::var("EPUBLIFT_LOG_DIR").unwrap_or_else(|_| "logs".into());
-    let _file_guard = match std::fs::create_dir_all(&log_dir) {
-        Ok(()) => {
-            let (writer, guard) = tracing_appender::non_blocking(tracing_appender::rolling::daily(
-                &log_dir,
-                "epublift-web.log",
-            ));
+    // If that dir can't be created or written, fall back to stdout only rather
+    // than failing to start. Only a dir someone asked for is worth a warning: the
+    // default is never writable in the container, whose root is read-only.
+    let configured_log_dir = std::env::var("EPUBLIFT_LOG_DIR").ok();
+    let log_dir = configured_log_dir.as_deref().unwrap_or("logs");
+    let _file_guard = match open_log_appender(log_dir) {
+        Ok(appender) => {
+            let (writer, guard) = tracing_appender::non_blocking(appender);
             tracing_subscriber::registry()
                 .with(fmt::layer().with_filter(env_filter))
                 .with(
@@ -190,7 +201,11 @@ async fn main() {
             tracing_subscriber::registry()
                 .with(fmt::layer().with_filter(env_filter))
                 .init();
-            tracing::warn!("could not open log dir '{log_dir}' ({e}); logging to stdout only");
+            if configured_log_dir.is_some() {
+                tracing::warn!("could not open log dir '{log_dir}' ({e}); logging to stdout only");
+            } else {
+                tracing::info!("no writable '{log_dir}' dir; logging to stdout only");
+            }
             None
         }
     };
@@ -517,6 +532,8 @@ fn classify_error(msg: &str, status: StatusCode) -> &'static str {
         "not_found"
     } else if m.contains("enter an isbn") {
         "no_isbn"
+    } else if m.contains("encryption.xml") {
+        "fonts_obfuscated"
     } else {
         "failed"
     }
@@ -1333,17 +1350,20 @@ fn metadata_json(md: &epublift::meta::Metadata) -> serde_json::Value {
         "subjects": md.subjects,
         "series": md.series.as_ref().map(|s| serde_json::json!({"name": s.name, "position": s.position})),
         "isbn": isbn,
+        "identifiers": md.identifiers.iter().map(|i| serde_json::json!({"value": i.value, "unique": i.unique})).collect::<Vec<_>>(),
     })
 }
 
 /// Write an uploaded EPUB's bytes to a temp file and read its current metadata.
-/// The metadata and the declared cover of an uploaded EPUB.
+/// The metadata and the declared cover of an uploaded EPUB, and whether its
+/// fonts are obfuscated with a key from the unique identifier.
 fn read_book_from_bytes(
     name: &str,
     bytes: &[u8],
 ) -> anyhow::Result<(
     epublift::meta::Metadata,
     Option<epublift::cover::CurrentCover>,
+    bool,
 )> {
     let tmp = tempfile::Builder::new().prefix("epublift_web_").tempdir()?;
     let path = tmp.path().join(if name.trim().is_empty() {
@@ -1355,6 +1375,7 @@ fn read_book_from_bytes(
     Ok((
         epublift::read_metadata(&path)?,
         epublift::read_cover(&path)?,
+        epublift::fonts_obfuscated(&path)?,
     ))
 }
 
@@ -1404,12 +1425,14 @@ async fn meta_read(
         return Err(too_many_requests());
     }
     let (file_bytes, name, _fields) = read_upload(&mut multipart).await?;
-    let (md, cover) = tokio::task::spawn_blocking(move || read_book_from_bytes(&name, &file_bytes))
-        .await
-        .map_err(|_| ApiError(StatusCode::INTERNAL_SERVER_ERROR, "crashed".into()))?
-        .map_err(|e| bad_request(format!("could not read this EPUB: {e}")))?;
+    let (md, cover, fonts_obfuscated) =
+        tokio::task::spawn_blocking(move || read_book_from_bytes(&name, &file_bytes))
+            .await
+            .map_err(|_| ApiError(StatusCode::INTERNAL_SERVER_ERROR, "crashed".into()))?
+            .map_err(|e| bad_request(format!("could not read this EPUB: {e}")))?;
     let mut json = metadata_json(&md);
     json["cover"] = current_cover_json(cover.as_ref());
+    json["fonts_obfuscated"] = fonts_obfuscated.into();
     Ok(Json(json))
 }
 
@@ -1552,6 +1575,8 @@ async fn meta_write(
     if !state.limiter.allow(client_ip(&headers, peer)) {
         return Err(too_many_requests());
     }
+    use epublift::unique_id::UniqueIdentifier;
+
     let (file_bytes, raw_name, fields, cover) = read_upload_with_cover(&mut multipart).await?;
     let file_name = if raw_name.trim().is_empty() {
         "book.epub".to_string()
@@ -1574,6 +1599,19 @@ async fn meta_write(
         subjects: parse_lines(&fields, "subjects"),
         series: nonempty(&fields, "series").map(|s| epublift::meta::Series::parse(&s)),
         isbn: nonempty(&fields, "isbn"),
+        unique_identifier: match (
+            nonempty(&fields, "unique_identifier"),
+            field_on(&fields, "new_unique_identifier"),
+        ) {
+            (Some(_), true) => {
+                return Err(bad_request(
+                    "choose either an existing identifier or a new one",
+                ));
+            }
+            (Some(value), false) => Some(UniqueIdentifier::Existing(value)),
+            (None, true) => Some(UniqueIdentifier::New),
+            (None, false) => None,
+        },
     };
     if update.is_empty() && cover.is_none() {
         return Err(bad_request("nothing to save — fill in at least one field"));
@@ -1746,5 +1784,26 @@ mod tests {
             client_ip(&HeaderMap::new(), peer("::ffff:198.51.100.7")),
             ip("198.51.100.7")
         );
+    }
+
+    #[test]
+    fn log_dir_that_cannot_be_used_is_an_error_not_a_panic() {
+        // A regular file in the way fails for any user, root included.
+        let file = tempfile::NamedTempFile::new().unwrap();
+        assert!(open_log_appender(file.path().to_str().unwrap()).is_err());
+    }
+
+    #[test]
+    fn log_dir_is_created_and_keeps_the_file_name() {
+        let root = tempfile::tempdir().unwrap();
+        let dir = root.path().join("logs");
+        open_log_appender(dir.to_str().unwrap()).unwrap();
+        let name = std::fs::read_dir(&dir)
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap()
+            .file_name();
+        assert!(name.to_str().unwrap().starts_with("epublift-web.log."));
     }
 }

@@ -173,12 +173,48 @@ epublift meta enrich --isbn 9780… [--assume-language tr] \  # auto-fill missin
   `show --format metadata` (`--json` is the shared envelope elsewhere). The old
   spellings still work in 4.x with a warning on stderr; the next major removes
   them.
+- `set --unique-identifier <VALUE>` makes one of the book's `dc:identifier`s the
+  package's unique identifier. `set --new-unique-identifier` makes a new one. See
+  [The unique identifier](#the-unique-identifier).
 - `--series` takes `Name` or `Name:position`; the position starts with a digit
   (`Dune:2`, `Dune:1-6`), so a colon inside a name stays in the name.
 - Output naming follows the project convention; the input is never mutated,
   and an `-o` that names the input is refused (exit 2). `-f` permits replacing
   an existing output (until 5.0.0 it is still replaced without it, with a
   warning). A path without `-i` still works, with a warning, until 5.0.0.
+
+## The unique identifier
+
+Readers use the package's unique identifier to tell one book from another. A
+book can name an empty one, or none, and a book that passed through calibre often
+holds several real candidates with nothing to say which is right. epublift doesn't
+guess, so you choose:
+
+```
+epublift meta show -i book.epub                                  # [unique] marks the current one
+epublift meta set --unique-identifier urn:isbn:978… -i book.epub  # one the book already has
+epublift meta set --new-unique-identifier -i book.epub           # a new UUID
+```
+
+- **A new identifier** is a `urn:uuid:` value. With an ISBN it is a name-based
+  UUID (v5), so the same ISBN always gives the same UUID and processing a book
+  again doesn't make a duplicate in a reader's library. Without one it is random
+  (v4). The name is the ISBN as 13 digits (an ISBN-10 is converted, hyphens are
+  dropped). The namespace is the v5 UUID of `https://github.com/ePubLift/epublift`
+  in the URL namespace.
+- **Which ISBN:** `--isbn` in the same command, else the book's own. A book with
+  several different ISBNs is refused until you name one with `--isbn`.
+- **What else changes:** the NCX's `dtb:uid` is set to the same value. Empty
+  `dc:identifier`s are removed, with anything that refines them. Other identifiers
+  stay.
+- **Refusals:** a value the book doesn't hold exits 2 and lists the book's
+  identifiers. Both options together exit 2. A book whose
+  `META-INF/encryption.xml` obfuscates fonts is refused with exit 1, because the
+  key comes from this identifier and its fonts would stop working. A change that
+  would leave the book with more errors is refused too. Nothing is written in
+  any of these cases.
+- **On the web,** the Metadata form has the same choice: keep it, take another of
+  the book's identifiers, or make a new one.
 
 ## Cover
 

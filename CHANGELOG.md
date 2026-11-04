@@ -10,9 +10,34 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+## [cli-v4.6.0] - 2026-11-04
+
+### Added
+- **Choose a book's unique identifier.** `meta set --unique-identifier <VALUE>`
+  makes one of the book's identifiers the package's unique one, and
+  `--new-unique-identifier` makes a new UUID: v5 from the ISBN, else v4. The NCX's
+  `dtb:uid` follows and empty identifiers go. A book with obfuscated fonts is
+  refused, naming `META-INF/encryption.xml`. The web's Metadata form offers the
+  same choice, in all 13 languages. See `docs/metadata.md`.
+
 ### Changed
+- **zip 9.3.0** (was 9.1.3), both crates, floor raised. It carries reader
+  fixes merged upstream that no advisory lists yet, so their severity is
+  unknown. On the 562-book shelf no book that opened before is refused now.
+- **epubveri 0.37.1, epubsana 0.38.0, kepubverto 0.4.0, styloria 0.19**, in the
+  CLI and in the web's in-browser Validate and Repair (vendored WASM moved with
+  the crates; `VENDOR.md` has the digests, and epubveri's third-party licence
+  file now sits beside it). Measured on the 562-book shelf, old vs new, repair
+  first: exit codes the same; `check` gives the same findings, except the
+  reworded text of CSS-007 (info) in 28 books; `repair -y` books byte-identical
+  in all 257 it changes; upgraded books and `--kepub` (50 measured) differ only
+  in `dcterms:modified`. The browser build's `validate` equals the CLI's `check`
+  in all 562.
+- **pulldown-cmark 0.13.6** for RUSTSEC-2026-0433 (wikilinks are never enabled
+  here), crc32fast 1.5.4, and 20 indirect dependencies to their newest
+  compatible versions.
 - **zenwebp 0.4.6** (was 0.4.4), the WebP encoder, with roxmltree 0.21.2,
-  structured-zstd 0.2.6, uuid 1.29, crc32fast 1.5.3, webpki-roots 1.0.11,
+  structured-zstd 0.2.6, uuid 1.29, webpki-roots 1.0.11,
   unicode-normalization 0.1.26, tokio 1.54.1 and brotli 9.1.1 (the last
   bench-only). zenwebp 0.4.6 fixes demuxer panics and hangs on crafted input
   and a lossless-encoder fault; epublift encodes lossy, so the lossless fix
@@ -25,13 +50,72 @@ are tagged with the component they belong to.
   archive restores to the original's content with either version.
 
 ### Fixed
+- **PDF import keeps figures stored behind another filter.** paginaverto
+  0.1.4 undoes a filter in front of `DCTDecode`, so such a figure is a real JPEG
+  and not still-deflated bytes under a JPEG label. Measured on 18 PDFs: the 22
+  errors (OPF-029 and PKG-021, 11 figures in 2 books) are gone, those 11 entries
+  are the only ones that changed, and the other 16 PDFs import as before.
 - **PDF import no longer writes text that breaks the XHTML.** Some fonts map
   glyphs they have no character for to U+FFFE or U+FFFF, which XML does not
   allow, so the chapter was not well-formed (RSC-016) and readers could
   refuse it. They are now dropped, as control characters already were; the
   same holds for Markdown import. Measured on 18 local PDFs: 2 imports
-  carried them (2–4 per chapter), one of them is now valid (the other has a
-  separate image defect, which is paginaverto's), and no other byte changed.
+  carried them (2–4 per chapter), both are now valid, and no other byte changed.
+
+## [web-v1.30.0] - 2026-11-04
+
+### Added
+- **Choose a book's unique identifier in the Metadata form:** keep it, take
+  another of the book's identifiers, or make a new one (see cli-v4.6.0). A book
+  with obfuscated fonts keeps its identifier, and the form says why. In all 13
+  languages.
+
+### Changed
+- **zip 9.3.0** (was 9.1.3), both crates, floor raised. It carries reader
+  fixes merged upstream that no advisory lists yet, so their severity is
+  unknown. On the 562-book shelf no book that opened before is refused now.
+- **epubveri 0.37.1, epubsana 0.38.0, kepubverto 0.4.0, styloria 0.19**, in the
+  CLI and in the web's in-browser Validate and Repair (vendored WASM moved with
+  the crates; `VENDOR.md` has the digests, and epubveri's third-party licence
+  file now sits beside it). Measured on the 562-book shelf, old vs new, repair
+  first: exit codes the same; `check` gives the same findings, except the
+  reworded text of CSS-007 (info) in 28 books; `repair -y` books byte-identical
+  in all 257 it changes; upgraded books and `--kepub` (50 measured) differ only
+  in `dcterms:modified`. The browser build's `validate` equals the CLI's `check`
+  in all 562.
+- **pulldown-cmark 0.13.6** for RUSTSEC-2026-0433 (wikilinks are never enabled
+  here), crc32fast 1.5.4, and 20 indirect dependencies to their newest
+  compatible versions.
+- **zenwebp 0.4.6** (was 0.4.4), the WebP encoder, with roxmltree 0.21.2,
+  structured-zstd 0.2.6, uuid 1.29, webpki-roots 1.0.11,
+  unicode-normalization 0.1.26, tokio 1.54.1 and brotli 9.1.1 (the last
+  bench-only). zenwebp 0.4.6 fixes demuxer panics and hangs on crafted input
+  and a lossless-encoder fault; epublift encodes lossy, so the lossless fix
+  does not reach it. Measured on the 562-book shelf, old vs new: `check`
+  findings identical in all 562; `--webp` output graded the same in all 562,
+  WebP bytes −0.37% over 11,365 images, all decodable, quality against the
+  source unchanged (295 sampled images: median PSNR 38.78 → 38.84 dB); in 6
+  books one or a few images flip between converted and kept-original, as the
+  never-larger rule decides; `.eparc` archives the same size, and every
+  archive restores to the original's content with either version.
+
+### Fixed
+- **The web service starts when its log directory can't be written.** An
+  `EPUBLIFT_LOG_DIR` that exists but can't be written, such as a mounted volume
+  owned by root, made it exit at startup. It now logs to stdout and warns. With
+  the variable unset, the default image no longer warns on every start: that
+  message is now INFO.
+- **PDF import keeps figures stored behind another filter.** paginaverto
+  0.1.4 undoes a filter in front of `DCTDecode`, so such a figure is a real JPEG
+  and not still-deflated bytes under a JPEG label. Measured on 18 PDFs: the 22
+  errors (OPF-029 and PKG-021, 11 figures in 2 books) are gone, those 11 entries
+  are the only ones that changed, and the other 16 PDFs import as before.
+- **PDF import no longer writes text that breaks the XHTML.** Some fonts map
+  glyphs they have no character for to U+FFFE or U+FFFF, which XML does not
+  allow, so the chapter was not well-formed (RSC-016) and readers could
+  refuse it. They are now dropped, as control characters already were; the
+  same holds for Markdown import. Measured on 18 local PDFs: 2 imports
+  carried them (2–4 per chapter), both are now valid, and no other byte changed.
 
 ## [cli-v4.5.2] - 2026-11-01
 
