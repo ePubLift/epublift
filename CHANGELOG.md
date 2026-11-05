@@ -11,10 +11,26 @@ are tagged with the component they belong to.
 ## [Unreleased]
 
 ### Changed
-- **`import` warns that OCR knows only unaccented Latin letters.** A scan in any
-  language but English now says so: the engine's alphabet is A-Z, so Turkish
-  `ş ğ ı İ ç ö ü` and the like are wrong or missing in the text. The exit code does
-  not change. `docs/pdf-import.md` says so too.
+- **`import` reads PDFs through paginaverto 0.3.** What a reader notices:
+  - **OCR reads Turkish and the other Latin-script alphabets.** Recognition now
+    uses PaddlePaddle's PP-OCRv5 Latin model, so `ş ğ ı İ ç ö ü` come through.
+    On a 292-page Turkish scan, 88.4% of the words came out exactly right, in
+    order, against the publisher's EPUB; the old model got 47.1% on the same
+    pages. With `--language tr`, `İ` and `ı` are told from `I` and `i` (983
+    of 1,059 capital `İ` right). The first scan downloads 8.0 MB more.
+  - **Scans in JBIG2 and JPEG 2000 are read** instead of refused (that Turkish
+    scan was one), and figures in those formats and CCITT reach the book.
+    Covers, plates and end papers of a scan with a text layer are kept.
+  - **Chapters follow the PDF's own outline** when it is a table of contents,
+    else a printed contents page. Headings inside a chapter become `h2` to
+    `h6`, and italic text stays italic.
+  - **Pages that could not be read are named** in a warning, and the rest of
+    the book is written.
+  - **The OCR warning is only for languages the model cannot read:** a scan
+    in a non-Latin script (Cyrillic, Greek, Arabic, CJK and others), or in
+    Azerbaijani, Vietnamese or Uzbek, whose letters it lacks, says the text is
+    wrong or missing.
+  `docs/pdf-import.md` has the numbers.
 
 ## [cli-v5.0.0] - 2026-11-04
 

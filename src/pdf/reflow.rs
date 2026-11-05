@@ -1,5 +1,5 @@
-//! Render structured PDF chapters (`Block`s) to XHTML, then hand off to the
-//! shared `epub_writer` for OCF/OPF/nav packaging.
+//! Render paginaverto's chapters to XHTML, then hand off to the shared
+//! `epub_writer` for OCF/OPF/nav packaging.
 
 use std::path::Path;
 
@@ -7,14 +7,14 @@ use anyhow::Result;
 
 use crate::epub_writer::{ImageAsset, RenderedChapter, esc, package_epub};
 
-use paginaverto::{Block, Chapter};
+use paginaverto::{Block, BlockKind, Chapter, Run};
 
 /// Write `chapters` as a reflow EPUB to `out`.
 pub(crate) fn write_epub(
     out: &Path,
     title: &str,
     language: &str,
-    chapters: &[Chapter],
+    chapters: &[Chapter<'_>],
 ) -> Result<()> {
     let mut images: Vec<ImageAsset> = Vec::new();
     let mut rendered: Vec<RenderedChapter> = Vec::new();
@@ -26,23 +26,8 @@ pub(crate) fn write_epub(
             .unwrap_or_else(|| format!("Section {}", i + 1));
 
         let mut body = format!("<h1>{}</h1>\n", esc(&heading));
-        for block in &ch.blocks {
-            match block {
-                Block::Paragraph(p) => body.push_str(&format!("<p>{}</p>\n", esc(p))),
-                Block::Figure(fig) => {
-                    let name = format!("fig{:03}.{}", images.len() + 1, fig.ext);
-                    body.push_str(&format!(
-                        "<div class=\"figure\"><img src=\"images/{name}\" alt=\"\"/></div>\n"
-                    ));
-                    images.push(ImageAsset {
-                        name,
-                        media_type: fig.media_type.to_string(),
-                        data: fig.data.clone(),
-                    });
-                }
-                // A block kind from a newer paginaverto: nothing to render yet.
-                _ => {}
-            }
+        for block in ch.blocks {
+            render_block(block, &mut body, &mut images);
         }
         rendered.push(RenderedChapter {
             title: heading,
@@ -53,28 +38,85 @@ pub(crate) fn write_epub(
     package_epub(out, title, language, &rendered, &images, None)
 }
 
+fn render_block(block: &Block, body: &mut String, images: &mut Vec<ImageAsset>) {
+    match &block.kind {
+        BlockKind::Heading { level, runs } => {
+            // The chapter's own title is the h1; headings inside it sit below.
+            let tag = heading_tag(*level);
+            body.push_str(&format!("<{tag}>{}</{tag}>\n", render_runs(runs)));
+        }
+        BlockKind::Paragraph { runs } => {
+            body.push_str(&format!("<p>{}</p>\n", render_runs(runs)));
+        }
+        BlockKind::Figure(fig) => {
+            let name = format!("fig{:03}.{}", images.len() + 1, fig.ext);
+            body.push_str(&format!(
+                "<div class=\"figure\"><img src=\"images/{name}\" alt=\"\"/></div>\n"
+            ));
+            images.push(ImageAsset {
+                name,
+                media_type: fig.media_type.to_string(),
+                data: fig.data.clone(),
+            });
+        }
+        // A kind from a newer paginaverto: its text as a paragraph, as
+        // paginaverto asks, so nothing is lost.
+        _ => {
+            if !block.runs().is_empty() {
+                body.push_str(&format!("<p>{}</p>\n", render_runs(block.runs())));
+            }
+        }
+    }
+}
+
+/// The element for a heading of `level` inside a chapter: h2 for level 2, down
+/// to h6.
+fn heading_tag(level: u32) -> String {
+    format!("h{}", level.clamp(2, 6))
+}
+
+/// A block's text, italic runs in `<em>`.
+fn render_runs(runs: &[Run]) -> String {
+    let mut out = String::new();
+    for run in runs {
+        if run.italic && !run.text.trim().is_empty() {
+            out.push_str(&format!("<em>{}</em>", esc(&run.text)));
+        } else {
+            out.push_str(&esc(&run.text));
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{heading_tag, write_epub};
+    use paginaverto::{Block, Document, Run};
 
     #[test]
     fn writes_a_valid_epub() {
-        let mut chapter = Chapter::default();
-        chapter.title = Some("Chapter <1>".to_string());
-        chapter.blocks = vec![Block::Paragraph("Hello & welcome.".to_string())];
-        let chapters = vec![chapter];
-        let out =
-            std::env::temp_dir().join(format!("epublift_reflow_test_{}.epub", std::process::id()));
-        write_epub(&out, "My Title", "en", &chapters).unwrap();
-        let bytes = std::fs::read(&out).unwrap();
-        let _ = std::fs::remove_file(&out);
+        let mut doc = Document::default();
+        doc.blocks = vec![
+            Block::heading("h1", 1, vec![Run::new("Chapter <1>", false)]),
+            Block::paragraph(
+                "p1",
+                vec![Run::new("Hello & ", false), Run::new("welcome", true)],
+            ),
+            Block::heading("h2", 2, vec![Run::new("A part", false)]),
+            Block::paragraph("p2", vec![Run::new("More.", false)]),
+        ];
+        let dir = tempfile::tempdir().unwrap();
+        let out = dir.path().join("book.epub");
+        write_epub(&out, "My Title", "en", &doc.chapters()).unwrap();
+        let report = epubveri::validate_bytes(std::fs::read(&out).unwrap());
+        assert_eq!(report.fatals() + report.errors(), 0);
+    }
 
-        assert_eq!(&bytes[..2], b"PK", "not a zip");
-        // OCF requires the first entry to be an uncompressed `mimetype` whose
-        // bytes therefore appear verbatim near the start of the archive.
-        assert!(
-            bytes.windows(20).any(|w| w == b"application/epub+zip"),
-            "mimetype entry missing"
-        );
+    #[test]
+    fn headings_inside_a_chapter_sit_below_its_title() {
+        assert_eq!(heading_tag(1), "h2");
+        assert_eq!(heading_tag(2), "h2");
+        assert_eq!(heading_tag(3), "h3");
+        assert_eq!(heading_tag(9), "h6");
     }
 }

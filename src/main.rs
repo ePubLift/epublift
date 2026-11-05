@@ -622,6 +622,17 @@ fn cli() -> clap::Command {
     )
 }
 
+/// Page numbers for a warning: the first 20, then how many more.
+#[cfg(feature = "pdf")]
+fn page_list(pages: &[u32]) -> String {
+    let shown: Vec<String> = pages.iter().take(20).map(u32::to_string).collect();
+    let mut out = shown.join(", ");
+    if pages.len() > 20 {
+        out.push_str(&format!(" and {} more", pages.len() - 20));
+    }
+    out
+}
+
 /// `-h` and `--help` print the same (long) help, and a boolean flag given
 /// twice means the same as once; then the same for each subcommand.
 fn conform(cmd: clap::Command) -> clap::Command {
@@ -814,19 +825,37 @@ fn run_import(args: &ImportArgs) -> Result<()> {
         };
         let summary = pdf::import(&args.input, &output, &opts)?;
         eprintln!(
-            "[EXPERIMENTAL] imported {} → {} ({} chapters, {} paragraphs)",
+            "[EXPERIMENTAL] imported {} → {} ({} chapters, {} paragraphs{})",
             args.input.display(),
             output.display(),
             summary.chapters,
             summary.paragraphs,
+            if summary.used_ocr {
+                ", read by OCR"
+            } else {
+                ""
+            },
         );
+        for (problem, pages) in &summary.unread_pages {
+            let what = match *problem {
+                "ocr_failed" => "not read, OCR failed",
+                "undecodable_images" => "not read, the image could not be decoded",
+                "image_not_read" => {
+                    "only an image, whose text is not read in a PDF with a text layer"
+                }
+                other => other,
+            };
+            let label = if pages.len() == 1 { "page" } else { "pages" };
+            eprintln!("warning: {label} {}: {what}", page_list(pages));
+        }
         if let Some(language) = args.language.as_deref()
             && summary.used_ocr
-            && pdf::ocr_loses_letters(language)
+            && !paginaverto::recognises(language)
         {
             eprintln!(
-                "warning: this scan was read by OCR, which knows only unaccented Latin letters \
-                 (A-Z): in a \"{language}\" book, any other letter is wrong or missing"
+                "warning: this scan was read by OCR, whose model lacks the letters of \
+                 \"{language}\" (it reads Latin-script languages only): the text is wrong \
+                 or missing"
             );
         }
         if problems_remain(&output) {

@@ -1,18 +1,22 @@
 //! [`pdf-ocr` feature] The OCR models for scanned pages with no text layer.
 //!
-//! Recognition itself is paginaverto's (ocrs on the rten tensor engine, pure
-//! Rust); it takes the model bytes and never touches the network. Fetching
-//! them is ours: `text-detection.onnx` + `text-recognition.onnx` (~12 MB)
-//! download on first use into a per-user cache dir (override with
-//! `EPUBLIFT_OCR_MODELS`), over the same pure-Rust rustls client used for
-//! metadata enrichment, and every load is checked against the SHA-256
-//! paginaverto publishes. A cache from before 2026-11 holds the same models in
-//! `.rten` form, which ocrs no longer serves (403); it keeps being used.
+//! Recognition itself is paginaverto's (ocrs finds the lines, on the rten
+//! tensor engine, pure Rust); it takes the model bytes and never touches the
+//! network. Fetching them is ours: ocrs's `text-detection.onnx` (2.5 MB) and
+//! PaddlePaddle's PP-OCRv5 Latin recognition model (8.0 MB, Apache-2.0), which
+//! reads the Latin-script alphabets, Turkish among them. They download on first
+//! use into a per-user cache dir (override with `EPUBLIFT_OCR_MODELS`), over
+//! the same pure-Rust rustls client used for metadata enrichment, and every
+//! load is checked against the SHA-256 paginaverto publishes. A cache from
+//! before 2026-11 holds the detection model in `.rten` form, which ocrs no
+//! longer serves (403); it keeps being used.
 
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
-use paginaverto::{MODEL_BASE_URL, MODELS, ModelFile, ONNX_MODELS, Ocr};
+use paginaverto::{
+    LATIN_RECOGNITION, LATIN_RECOGNITION_URL, MODEL_BASE_URL, MODELS, ModelFile, ONNX_MODELS, Ocr,
+};
 
 /// Where the OCR models are cached.
 fn models_dir() -> PathBuf {
@@ -31,24 +35,27 @@ fn models_dir() -> PathBuf {
     base.join("epublift").join("ocr-models")
 }
 
-/// The detection + recognition models, downloading them on first use (cached
+/// The detection and recognition models, downloading them on first use (cached
 /// in [`models_dir`]). A file whose SHA-256 is not the published one is
 /// refused, whether downloaded now or found in the cache.
 pub(crate) fn models() -> Result<Ocr> {
     let dir = models_dir();
-    // An older cache's `.rten` pair carries the same weights; use it as is.
-    let files = if MODELS.iter().all(|m| dir.join(m.name).exists()) {
-        MODELS
+    // An older cache's `.rten` detection model carries the same weights.
+    let detection = if dir.join(MODELS[0].name).exists() {
+        MODELS[0]
     } else {
-        ONNX_MODELS
+        ONNX_MODELS[0]
     };
-    if files.iter().any(|m| !dir.join(m.name).exists()) {
+    let files = [
+        (detection, format!("{MODEL_BASE_URL}/{}", detection.name)),
+        (LATIN_RECOGNITION, LATIN_RECOGNITION_URL.to_string()),
+    ];
+    if files.iter().any(|(m, _)| !dir.join(m.name).exists()) {
         download_models(&dir, &files).context("could not download the OCR models")?;
     }
-    let [detection, recognition] = files.map(|m| load_checked(&dir, &m));
     Ok(Ocr::Models {
-        detection: detection?,
-        recognition: recognition?,
+        detection: load_checked(&dir, &files[0].0)?,
+        recognition: load_checked(&dir, &files[1].0)?,
     })
 }
 
@@ -75,20 +82,20 @@ fn sha256_hex(data: &[u8]) -> String {
         .collect()
 }
 
-/// Fetch the OCR models (~12 MB) into `dir` over the pure-Rust HTTPS client.
-fn download_models(dir: &Path, files: &[ModelFile]) -> Result<()> {
+/// Fetch the OCR models (10.5 MB together) into `dir` over the pure-Rust HTTPS
+/// client.
+fn download_models(dir: &Path, files: &[(ModelFile, String)]) -> Result<()> {
     std::fs::create_dir_all(dir)
         .with_context(|| format!("creating model cache {}", dir.display()))?;
     let http = crate::http::RustlsHttp::new()?;
-    for &ModelFile { name, .. } in files {
+    for (ModelFile { name, .. }, url) in files {
         let path = dir.join(name);
         if path.exists() {
             continue;
         }
-        eprintln!("Downloading OCR model {name} (one-time, ~12 MB total)…");
-        let url = format!("{MODEL_BASE_URL}/{name}");
+        eprintln!("Downloading OCR model {name} (one-time, 10.5 MB for both)…");
         let bytes = http
-            .get_bytes(&url)
+            .get_bytes(url)
             .with_context(|| format!("downloading {name}"))?;
         // Write to a temp name then rename, so an interrupted download can't
         // leave a half-written model that looks valid.

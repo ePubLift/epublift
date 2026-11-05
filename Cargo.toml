@@ -85,10 +85,11 @@ quick-xml = "0.42"
 roxmltree = "0.21"
 regex = "1"
 # [EXPERIMENTAL] PDF import (`epublift import`): paginaverto, the family's PDF
-# reader, turns the PDF into chapters (text layer, or OCR with its `ocr`
-# feature); we build the EPUB. Pinned exactly, as paginaverto pins its own
-# engines. Optional so the default build doesn't carry it. See src/pdf/.
-paginaverto = { version = "=0.1.4", optional = true }
+# reader, turns the PDF into a document of headings, paragraphs and figures
+# (text layer, or OCR with its `ocr` feature); we build the EPUB. Pinned
+# exactly, as paginaverto pins its own engines; never its `cli` feature.
+# Optional so the default build doesn't carry it. See src/pdf/.
+paginaverto = { version = "=0.3.0", optional = true }
 # [EXPERIMENTAL] Markdown import (`epublift import file.md`): turn a Markdown
 # file (e.g. an AI-OCR'd PDF) into a reflowable EPUB. pulldown-cmark is the
 # CommonMark standard, pure Rust, zero C. default-features off drops its bundled

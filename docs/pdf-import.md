@@ -7,8 +7,8 @@ file extension) — see the [Markdown import guide](markdown-import.md).
 
 Status: **experimental** — text extraction (behind the `pdf` build feature)
 works well for PDFs that carry a text layer; scanned-only PDFs (no text layer)
-are handled by **OCR** behind the heavier opt-in `pdf-ocr` feature (pure-Rust
-ocrs + rten; models download on first use). OCR is best-effort — see
+are handled by **OCR** behind the heavier opt-in `pdf-ocr` feature (pure Rust;
+the models download on first use). OCR is best-effort — see
 [Accuracy](#accuracy). We're shipping early to gather real-world feedback —
 please report PDFs that convert badly.
 
@@ -23,9 +23,10 @@ into three tiers, and `import` detects which one it's looking at:
 2. **Scan with an embedded OCR text layer** (archive.org, Google Books, most
    "searchable PDFs") → reuse that text layer. No re-OCR; quality is whatever
    the original OCR produced.
-3. **Pure scan, no text layer** → **OCR** (pure-Rust ocrs + rten). Behind the
-   `pdf-ocr` build feature; the ~12 MB models download on first use. Best-effort
-   quality — see [Accuracy](#accuracy).
+3. **Pure scan, no text layer** → **OCR**: ocrs finds the lines and
+   PaddlePaddle's PP-OCRv5 Latin model reads them, pure Rust on rten. Behind the
+   `pdf-ocr` build feature; the 10.5 MB of models download on first use. See
+   [Accuracy](#accuracy).
 
 Tiers 1 and 2 need only the light `pdf` feature; tier 3 (OCR) needs `pdf-ocr`.
 
@@ -49,25 +50,41 @@ Flags:
 The `import` subcommand exists when the binary is built `--features pdf` (the
 pre-built release binaries include it). **OCR of scanned PDFs additionally needs
 `--features pdf-ocr`** (also in the pre-built binaries); on a scanned PDF the
-first run downloads the OCR models (~12 MB) to a cache dir — set
+first run downloads the OCR models (10.5 MB) to a cache dir — set
 `EPUBLIFT_OCR_MODELS` to use a directory you've pre-populated instead, with
-ocrs's `text-detection.onnx` and `text-recognition.onnx` (a cache from before
-cli-v4.5.2 holds the same models as `.rten` files and keeps working).
+ocrs's `text-detection.onnx` and PaddlePaddle's Latin recognition model saved as
+`latin_PP-OCRv5_mobile_rec.onnx` (paginaverto's `LATIN_RECOGNITION_URL` gives the
+pinned address). A cache from before cli-v4.5.2 holds the detection model as
+`text-detection.rten`, which keeps working.
+
+`import` warns about pages it could not read (OCR failed, an image that could not
+be decoded, or a page that is only an image in a PDF read from its text layer)
+and names them; the rest of the book is written.
 
 ## Accuracy
 
-- **Born-digital / searchable scans (tiers 1–2):** essentially lossless — on a
-  born-digital test book the text matched the publisher's own EPUB at ~99.8%.
-- **OCR (tier 3):** best-effort. On a clean, flat English prose scan, word accuracy
-  is around **~92%** (expect the odd `i`↔`1`, case slips, or a dropped line);
-  quality drops further on phone-photo, skewed, low-contrast, or artistic pages.
-- **OCR reads only unaccented Latin letters (A-Z).** In any other language, every
-  other letter comes out wrong or missing, and `import` warns when it happens:
-  Turkish `ş ğ ı İ ç ö ü` never appear in the text. Other scripts fare worse. Use
-  OCR for such a book only to get a rough draft. [Smart Import](smart-import.md)
-  kept the Turkish letters when tested, but it sends the book to Mistral.
-  OCR is for getting readable, reflowable text out of an otherwise-unreadable
-  image PDF — not a faithful reproduction.
+Measured with paginaverto 0.3 on two Turkish books, against a reference:
+
+- **Text layer (tiers 1–2):** on a 166-page novel, 98.85% of the words line up in
+  order with Mistral OCR's reading of the same PDF, with 2,297 paragraphs
+  against its 2,458 (some are merged). On a born-digital test book the text
+  matched the publisher's own EPUB at ~99.8%.
+- **OCR (tier 3):** on a 292-page scan, 88.4% of the words come out exactly
+  right, in order, against the publisher's EPUB, with 2,220 paragraphs against
+  its 2,061. Turkish letters come through, the capital `İ` too (983 of 1,059),
+  when `--language tr` is given: OCR uses the language to choose between `İ`
+  and `I`, `ı` and `i`. It took 234 s on an Apple M2 Pro. Quality drops on
+  phone-photo, skewed, low-contrast or artistic pages, and lines that slant are
+  cropped straight.
+- **OCR reads Latin-script alphabets only.** A scan in Cyrillic, Greek, Arabic,
+  Hebrew, an Indic script or CJK comes out wrong or missing, and so do the few
+  Latin-script languages whose letters the model lacks (Azerbaijani `ə`,
+  Vietnamese, Uzbek). `import` warns when its `--language` is one of them
+  (paginaverto's `recognises` decides). [Smart Import](smart-import.md) handles
+  more, but it sends the book to Mistral.
+
+OCR is for getting readable, reflowable text out of an otherwise-unreadable image
+PDF, not a faithful reproduction.
 
 ## Web usage
 
@@ -88,30 +105,33 @@ deletes it immediately, like every other mode.
   the publisher's own EPUB at **~99.8% word overlap**.
 - Structure: running headers/footers and page numbers stripped, line-break
   hyphens re-joined ("in-\ncreased" → "increased"), paragraphs reassembled, and
-  chapter headings detected (font-size on born-digital pages, ALL-CAPS
-  otherwise) to build the spine + table of contents.
+  headings detected (font size on born-digital pages, ALL-CAPS otherwise).
+  Chapters follow the PDF's own outline when it is a real table of contents,
+  else a printed contents page, else the headings; a heading inside a chapter
+  becomes `h2` to `h6`. Italic text stays italic (text layers only).
 - **Figures** from born-digital books are carried into the EPUB — JPEG images
   verbatim, raw images re-encoded to PNG — placed per page (after that page's
-  text). JPEG2000 / CCITT / JBIG2 / CMYK figures are skipped (no EPUB-core or
-  pure-Rust path).
-- **OCR** (`pdf-ocr` feature) for scanned PDFs with no text layer — pure-Rust
-  ocrs + rten, with flat-field illumination correction for phone-photo scans.
-  Best-effort (~92% on clean English prose; no letters beyond A-Z); see
+  text). JBIG2, JPEG 2000 and CCITT figures are decoded too; indexed-colour and
+  CMYK raw figures are skipped, and images under 4,096 pixels stay out, as do
+  rules, specks and near-empty boxes. In a scan with a text layer, a page that
+  is only an image (a cover, a plate, an end paper) is kept as a figure unless
+  it is blank or holds only a stamp.
+- **OCR** (`pdf-ocr` feature) for scanned PDFs with no text layer, including
+  JBIG2 and JPEG 2000 page images; Latin-script alphabets only. See
   [Accuracy](#accuracy).
 
 **Doesn't yet (known limits, honest):**
 
 - **Scanned PDFs in the `pdf`-only build** (no `pdf-ocr`) → reported, not
-  converted: you get a clear "OCR is needed" message, not a broken file. OCR is
-  also skipped when a scan's page images are JPEG2000 (no pure-Rust decoder).
+  converted: you get a clear "OCR is needed" message, not a broken file.
 - **A PDF whose text still decodes to garbage** (a font encoding neither
   extractor can read) → detected by a quality gate and refused with a clear
   message rather than emitting a broken EPUB. Object-stream PDFs that used to
   land here now import (since cli-v2.0.0 / web-v1.17.0).
 - **Paragraphs can come out coarse** on some born-digital PDFs: the text is
   complete and correctly spaced, but several source paragraphs may share one.
-- **Tables and equations** are not yet preserved (text only; keeping them as
-  images is planned). Figure **placement** is per-page (approximate), not at the
+- **Footnotes, lists, captions, tables and equations** are not yet told apart:
+  they come through as paragraphs. Figure **placement** is per-page (approximate), not at the
   exact original position, and the cover image appears as the first figure rather
   than as EPUB cover metadata.
 - **Front-matter heading noise**: scholarly scans with long bibliographies can
@@ -122,7 +142,7 @@ deletes it immediately, like every other mode.
 - **`pdf`** — the text tiers (1–2). Pure-Rust; light: adds
   [paginaverto](https://github.com/veripublica/paginaverto) without its OCR.
 - **`pdf-ocr`** — adds OCR for tier 3 (paginaverto's `ocr`: pure-Rust ocrs +
-  rten, plus our rustls model downloader). Heavier; opt-in. Models (~12 MB)
+  rten, plus our rustls model downloader). Heavier; opt-in. Models (10.5 MB)
   download on first use and cache (override the location with
   `EPUBLIFT_OCR_MODELS`); each load is checked against the SHA-256 paginaverto
   publishes, and a file that doesn't match is refused.
@@ -140,7 +160,8 @@ veripublica family's PDF reader; epublift writes the EPUB (step 4).
    `/ToUnicode` CMap and track each run's exact end position from glyph widths,
    so inter-word spaces land correctly.
 3. **Structure**: strip recurring running heads/feet, de-hyphenate, reassemble
-   paragraphs, detect headings → chapters.
+   paragraphs, detect headings and their levels, split chapters at the PDF's
+   outline or contents page.
 4. **Write** a minimal, valid EPUB 3.3.
 
 Everything is pure-Rust and offline; no upload leaves your machine on the
