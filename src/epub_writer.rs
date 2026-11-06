@@ -31,9 +31,11 @@ use zip::{CompressionMethod, ZipWriter};
 
 /// One chapter: a plain-text `title` (used for the nav entry and `<title>`) and
 /// its inner-`<body>` XHTML — already well-formed and escaped by the caller
-/// (including its own heading markup).
+/// (including its own heading markup). A chapter without a title (the front
+/// matter before the first heading) is left out of the nav, and its `<title>`
+/// is the book's: nothing is invented for it.
 pub(crate) struct RenderedChapter {
-    pub title: String,
+    pub title: Option<String>,
     pub body: String,
 }
 
@@ -48,10 +50,12 @@ pub(crate) struct ImageAsset {
 /// Write `chapters` (+ their `images`) as a reflow EPUB 3.3 to `out`. When
 /// `cover` is set, it's embedded as the EPUB cover image: a `cover-image`
 /// manifest entry, an EPUB2-fallback `<meta name="cover">`, and a `cover.xhtml`
-/// page placed first in the spine.
+/// page placed first in the spine. `author`, when known, is the `dc:creator`.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn package_epub(
     out: &Path,
     title: &str,
+    author: Option<&str>,
     language: &str,
     chapters: &[RenderedChapter],
     images: &[ImageAsset],
@@ -78,6 +82,10 @@ pub(crate) fn package_epub(
     let mut manifest = String::new();
     let mut spine = String::new();
     let mut nav_items = String::new();
+
+    zip.start_file("OEBPS/style.css", deflated)?;
+    zip.write_all(STYLESHEET.as_bytes())?;
+    manifest.push_str("  <item id=\"css\" href=\"style.css\" media-type=\"text/css\"/>\n");
     let mut cover_meta = String::new();
 
     // Cover (optional): the image, a cover page, and the spine entry come first so
@@ -88,7 +96,8 @@ pub(crate) fn package_epub(
 
         let cover_xhtml = format!(
             r#"<?xml version="1.0" encoding="utf-8"?>
-<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="{lang}"><head><title>Cover</title>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="{lang}" lang="{lang}"><head><title>Cover</title>
 <style>html,body{{margin:0;padding:0;height:100%;text-align:center}}img{{max-width:100%;max-height:100%}}</style></head>
 <body><div><img src="images/{name}" alt="Cover"/></div></body></html>"#,
             lang = esc(language),
@@ -126,11 +135,13 @@ pub(crate) fn package_epub(
         let href = format!("{id}.xhtml");
         let xhtml = format!(
             r#"<?xml version="1.0" encoding="utf-8"?>
-<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="{lang}"><head><title>{t}</title></head>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="{lang}" lang="{lang}"><head><title>{t}</title>
+<link rel="stylesheet" type="text/css" href="style.css"/></head>
 <body>
 {body}</body></html>"#,
             lang = esc(language),
-            t = esc(&ch.title),
+            t = esc(ch.title.as_deref().unwrap_or(title)),
             body = ch.body,
         );
         zip.start_file(format!("OEBPS/{href}"), deflated)?;
@@ -140,9 +151,16 @@ pub(crate) fn package_epub(
             "  <item id=\"{id}\" href=\"{href}\" media-type=\"application/xhtml+xml\"/>\n"
         ));
         spine.push_str(&format!("  <itemref idref=\"{id}\"/>\n"));
+        if let Some(t) = &ch.title {
+            nav_items.push_str(&format!("    <li><a href=\"{href}\">{}</a></li>\n", esc(t)));
+        }
+    }
+    // The nav's list may not be empty: a book with no titled chapter gets one
+    // entry, the book's title, at its start.
+    if nav_items.is_empty() && !chapters.is_empty() {
         nav_items.push_str(&format!(
-            "    <li><a href=\"{href}\">{}</a></li>\n",
-            esc(&ch.title)
+            "    <li><a href=\"ch001.xhtml\">{}</a></li>\n",
+            esc(title)
         ));
     }
 
@@ -150,8 +168,10 @@ pub(crate) fn package_epub(
     zip.write_all(
         format!(
             r#"<?xml version="1.0" encoding="utf-8"?>
-<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="{lang}">
-<head><title>Contents</title></head>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="{lang}" lang="{lang}">
+<head><title>Contents</title>
+<link rel="stylesheet" type="text/css" href="style.css"/></head>
 <body><nav epub:type="toc"><h1>Contents</h1><ol>
 {nav_items}</ol></nav></body></html>"#,
             lang = esc(language),
@@ -167,7 +187,7 @@ pub(crate) fn package_epub(
  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
   <dc:identifier id="bookid">urn:uuid:{uuid}</dc:identifier>
   <dc:title>{title}</dc:title>
-  <dc:language>{lang}</dc:language>
+{creator}  <dc:language>{lang}</dc:language>
   <meta property="dcterms:modified">{modified}</meta>
 {cover_meta} </metadata>
  <manifest>
@@ -181,6 +201,9 @@ pub(crate) fn package_epub(
             uuid = uuid::Uuid::new_v4(),
             modified = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ"),
             title = esc(title),
+            creator = author
+                .map(|a| format!("  <dc:creator>{}</dc:creator>\n", esc(a)))
+                .unwrap_or_default(),
             lang = esc(language),
             cover_meta = cover_meta,
         )
@@ -190,6 +213,20 @@ pub(crate) fn package_epub(
     zip.finish()?;
     Ok(())
 }
+
+/// A plain book style: indented, justified, hyphenated paragraphs; headings,
+/// the paragraph after them and figures not indented; images never wider or
+/// taller than the screen. A reader's own settings still win where they are set.
+const STYLESHEET: &str = "\
+body { margin: 0; }
+p { margin: 0; text-indent: 1.2em; text-align: justify; -webkit-hyphens: auto; hyphens: auto; }
+h1, h2, h3, h4, h5, h6 { text-align: left; -webkit-hyphens: manual; hyphens: manual; page-break-after: avoid; break-after: avoid; }
+h1 { margin: 1em 0 1.2em; }
+h2, h3, h4, h5, h6 { margin: 1.4em 0 0.6em; }
+h1 + p, h2 + p, h3 + p, h4 + p, h5 + p, h6 + p, div.figure + p { text-indent: 0; }
+div.figure { margin: 1em 0; text-align: center; text-indent: 0; page-break-inside: avoid; break-inside: avoid; }
+img { max-width: 100%; max-height: 95vh; height: auto; }
+";
 
 /// Escape text for inclusion in XHTML, dropping chars illegal in XML 1.0.
 pub(crate) fn esc(s: &str) -> String {
@@ -230,12 +267,12 @@ mod tests {
     #[test]
     fn writes_a_valid_epub() {
         let chapters = vec![RenderedChapter {
-            title: "Chapter <1>".to_string(),
+            title: Some("Chapter <1>".to_string()),
             body: "<h1>Chapter &lt;1&gt;</h1>\n<p>Hello &amp; welcome.</p>\n".to_string(),
         }];
         let out =
             std::env::temp_dir().join(format!("epublift_pkg_test_{}.epub", std::process::id()));
-        package_epub(&out, "My Title", "en", &chapters, &[], None).unwrap();
+        package_epub(&out, "My Title", None, "en", &chapters, &[], None).unwrap();
         let bytes = std::fs::read(&out).unwrap();
         let _ = std::fs::remove_file(&out);
 
@@ -246,5 +283,80 @@ mod tests {
             bytes.windows(20).any(|w| w == b"application/epub+zip"),
             "mimetype entry missing"
         );
+    }
+
+    /// Every XHTML file has a DOCTYPE and `lang`: EPUB 3 does not require the
+    /// DOCTYPE, but Sigil "cleans" a file without one on open, and says so.
+    #[test]
+    fn every_xhtml_file_has_a_doctype_and_lang() {
+        let chapters = vec![RenderedChapter {
+            title: Some("One".to_string()),
+            body: "<p>x</p>\n".to_string(),
+        }];
+        let cover = ImageAsset {
+            name: "cover.png".to_string(),
+            media_type: "image/png".to_string(),
+            data: vec![0x89, b'P', b'N', b'G'],
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let out = dir.path().join("book.epub");
+        package_epub(
+            &out,
+            "T",
+            Some("A. Writer"),
+            "tr",
+            &chapters,
+            &[],
+            Some(&cover),
+        )
+        .unwrap();
+        let mut zip = zip::ZipArchive::new(std::fs::File::open(&out).unwrap()).unwrap();
+        let mut seen = 0;
+        for i in 0..zip.len() {
+            let mut f = zip.by_index(i).unwrap();
+            if !f.name().unwrap().ends_with(".xhtml") {
+                continue;
+            }
+            let mut text = String::new();
+            std::io::Read::read_to_string(&mut f, &mut text).unwrap();
+            assert!(text.contains("<!DOCTYPE html>"), "{}", f.name().unwrap());
+            assert!(text.contains(r#" lang="tr""#), "{}", f.name().unwrap());
+            seen += 1;
+        }
+        assert_eq!(seen, 3, "cover, chapter and nav");
+    }
+
+    fn nav_of(chapters: Vec<RenderedChapter>) -> String {
+        let dir = tempfile::tempdir().unwrap();
+        let out = dir.path().join("book.epub");
+        package_epub(&out, "The Book", None, "en", &chapters, &[], None).unwrap();
+        let report = epubveri::validate_bytes(std::fs::read(&out).unwrap());
+        assert_eq!(report.fatals() + report.errors(), 0);
+        let mut zip = zip::ZipArchive::new(std::fs::File::open(&out).unwrap()).unwrap();
+        let mut nav = String::new();
+        std::io::Read::read_to_string(&mut zip.by_name("OEBPS/nav.xhtml").unwrap(), &mut nav)
+            .unwrap();
+        nav
+    }
+
+    /// A chapter without a title gets no made-up name: the nav leaves it out,
+    /// unless no chapter has one, when the book's title stands for it.
+    #[test]
+    fn an_untitled_chapter_is_left_out_of_the_nav() {
+        let ch = |title: Option<&str>| RenderedChapter {
+            title: title.map(str::to_string),
+            body: "<p>x</p>\n".to_string(),
+        };
+        let nav = nav_of(vec![ch(None), ch(Some("One")), ch(Some("Two"))]);
+        assert!(!nav.contains("ch001.xhtml"), "{nav}");
+        assert!(nav.contains(r#"<a href="ch002.xhtml">One</a>"#), "{nav}");
+        assert!(!nav.contains("Section"), "{nav}");
+
+        let nav = nav_of(vec![ch(None), ch(None)]);
+        assert!(
+            nav.contains(r#"<a href="ch001.xhtml">The Book</a>"#),
+            "{nav}"
+        );
+        assert_eq!(nav.matches("<li>").count(), 1, "{nav}");
     }
 }

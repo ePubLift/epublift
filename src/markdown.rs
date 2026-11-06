@@ -155,19 +155,11 @@ pub fn import_collection(
         .or(first_h1)
         .unwrap_or_else(title_fallback);
 
-    let n = chapters.len();
     let rendered: Vec<RenderedChapter> = chapters
         .into_iter()
-        .enumerate()
-        .map(|(i, (title, body))| {
-            let title = title.filter(|t| !t.is_empty()).unwrap_or_else(|| {
-                if n == 1 {
-                    book_title.clone()
-                } else {
-                    format!("Section {}", i + 1)
-                }
-            });
-            RenderedChapter { title, body }
+        .map(|(title, body)| RenderedChapter {
+            title: title.filter(|t| !t.is_empty()),
+            body,
         })
         .collect();
 
@@ -179,6 +171,7 @@ pub fn import_collection(
     package_epub(
         output,
         &book_title,
+        None,
         &language,
         &rendered,
         &images,

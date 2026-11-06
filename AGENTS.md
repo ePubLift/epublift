@@ -125,7 +125,10 @@ uploaded. The others are synchronous server endpoints.
   ko zh). A new key goes in every block; there is no English fallback.
 - Port 8080 is fixed. Environment variables and the hardening profile are in
   `docs/web-service.md`.
-- OCR is not on the web: it would need asynchronous jobs.
+- Import PDF reads a scan by OCR up to 50 pages (`OCR_MAX_PAGES` in
+  `epublift-web/src/main.rs`, inside the 120 s request timeout); a longer one is
+  refused before OCR starts. The Docker image carries the two OCR models
+  (`EPUBLIFT_OCR_MODELS`); change them with paginaverto.
 - Smart Import uses Mistral with the operator's own key. The hosted instance has
   none, on purpose (`docs/smart-import.md`).
 

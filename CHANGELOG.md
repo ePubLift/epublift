@@ -10,6 +10,35 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+### Added
+- **Web: Import PDF reads scans by OCR**, up to 50 pages, with the CLI's
+  engine (Latin-script languages, Turkish letters included). The result says
+  the book was read by OCR, and warns when its language is one OCR cannot read.
+  A longer scan is refused before OCR starts, pointing to the CLI or Smart
+  Import. The image carries the two OCR models (10.5 MB, checked by SHA-256 at
+  build time), so the service downloads nothing and still runs with no route
+  out.
+- **Web: a file of the wrong type is refused in the browser** before upload,
+  in the page's language (a dropped file skipped the picker's filter), and the
+  upload modes' errors are shown in the page's language where they are known.
+
+### Fixed
+- **`import` writes a DOCTYPE and `lang` in every XHTML file** (PDF and
+  Markdown). EPUB 3 does not require the DOCTYPE, but Sigil "cleaned" every file
+  without one on open and said so.
+- **An imported PDF gets its title and author from the file name** when the PDF
+  has none: `Felsefe 101 (Paul Kleinman) (z-library.sk, 1lib.sk, z-lib.sk).pdf`
+  becomes "Felsefe 101" by Paul Kleinman, not the whole file name. Site names,
+  download numbers and a computer's name as author ("Lenovo") are left out.
+- **Imported books have a style sheet** (PDF and Markdown): indented,
+  justified, hyphenated paragraphs, and images that fit the screen. Before,
+  a large picture could overflow it.
+- **No more "Section 1" in an imported book.** The part of a PDF before its
+  first heading (cover, imprint, blurb) got an English heading "Section 1" that
+  the book does not have, and a Markdown chapter without a heading was listed
+  as "Section n". Such a part now has no made-up heading and stays out of the
+  table of contents; a book with no heading at all lists its title once.
+
 ## [cli-v5.1.0] - 2026-11-06
 
 ### Changed

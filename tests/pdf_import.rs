@@ -29,6 +29,7 @@ fn import_text(pdf: &Path) -> (pdf::ImportSummary, String, usize) {
     let opts = ImportOptions {
         mode: Mode::Reflow,
         language: Some("en".into()),
+        max_ocr_pages: None,
     };
     let summary = pdf::import(pdf, &out, &opts).expect("import failed");
 
@@ -124,4 +125,28 @@ fn project_hail_mary_cid_spacing() {
         !text.contains("autom ated") && !text.contains("bestI"),
         "spacing artifacts returned"
     );
+}
+
+/// A scan longer than `max_ocr_pages` is refused before OCR starts (so before
+/// the models are loaded or downloaded), with the page count.
+#[cfg(feature = "pdf-ocr")]
+#[test]
+fn a_scan_over_the_page_limit_is_refused_before_ocr() {
+    let pdf = sample("clean_prose_scan.pdf");
+    if !pdf.exists() {
+        eprintln!("skip: {} not present", pdf.display());
+        return;
+    }
+    let out = std::env::temp_dir().join(format!("epublift_it_limit_{}.epub", std::process::id()));
+    let opts = ImportOptions {
+        mode: Mode::Reflow,
+        language: Some("en".into()),
+        max_ocr_pages: Some(1),
+    };
+    let err = pdf::import(&pdf, &out, &opts).expect_err("a 2-page scan passed a 1-page limit");
+    assert_eq!(
+        err.downcast_ref::<pdf::ScanTooLong>(),
+        Some(&pdf::ScanTooLong { pages: 2, max: 1 })
+    );
+    assert!(!out.exists());
 }

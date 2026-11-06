@@ -54,7 +54,7 @@ publish = false
 # `pdf` adds the experimental PDF → EPUB importer (text tiers; OCR not yet);
 # `markdown` adds the Markdown → EPUB importer (the offline core behind a future
 # AI "Smart Import"). Both pure Rust.
-epublift = { path = "..", features = ["epub34", "metadata", "pdf", "markdown", "smart-import"] }
+epublift = { path = "..", features = ["epub34", "metadata", "pdf-ocr", "markdown", "smart-import"] }
 axum = { version = "0.8", features = ["multipart"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal"] }
 tower = "0.5"

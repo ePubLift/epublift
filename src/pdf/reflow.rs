@@ -13,29 +13,30 @@ use paginaverto::{Block, BlockKind, Chapter, Run};
 pub(crate) fn write_epub(
     out: &Path,
     title: &str,
+    author: Option<&str>,
     language: &str,
     chapters: &[Chapter<'_>],
 ) -> Result<()> {
     let mut images: Vec<ImageAsset> = Vec::new();
     let mut rendered: Vec<RenderedChapter> = Vec::new();
 
-    for (i, ch) in chapters.iter().enumerate() {
-        let heading = ch
-            .title
-            .clone()
-            .unwrap_or_else(|| format!("Section {}", i + 1));
-
-        let mut body = format!("<h1>{}</h1>\n", esc(&heading));
+    for ch in chapters {
+        // No heading is made up for a chapter the PDF gives none (its front
+        // matter): the nav leaves it out.
+        let mut body = match &ch.title {
+            Some(t) => format!("<h1>{}</h1>\n", esc(t)),
+            None => String::new(),
+        };
         for block in ch.blocks {
             render_block(block, &mut body, &mut images);
         }
         rendered.push(RenderedChapter {
-            title: heading,
+            title: ch.title.clone(),
             body,
         });
     }
 
-    package_epub(out, title, language, &rendered, &images, None)
+    package_epub(out, title, author, language, &rendered, &images, None)
 }
 
 fn render_block(block: &Block, body: &mut String, images: &mut Vec<ImageAsset>) {
@@ -107,7 +108,7 @@ mod tests {
         ];
         let dir = tempfile::tempdir().unwrap();
         let out = dir.path().join("book.epub");
-        write_epub(&out, "My Title", "en", &doc.chapters()).unwrap();
+        write_epub(&out, "My Title", None, "en", &doc.chapters()).unwrap();
         let report = epubveri::validate_bytes(std::fs::read(&out).unwrap());
         assert_eq!(report.fatals() + report.errors(), 0);
     }

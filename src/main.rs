@@ -822,6 +822,7 @@ fn run_import(args: &ImportArgs) -> Result<()> {
         let opts = ImportOptions {
             mode,
             language: args.language.clone(),
+            max_ocr_pages: None,
         };
         let summary = pdf::import(&args.input, &output, &opts)?;
         eprintln!(

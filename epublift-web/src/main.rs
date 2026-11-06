@@ -28,6 +28,10 @@ use tower_http::timeout::TimeoutLayer;
 /// real defense — not obscurity.
 const MAX_UPLOAD_BYTES: usize = 50 * 1024 * 1024; // 50 MiB
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(120);
+/// The most pages Import PDF reads by OCR, so a scan finishes inside
+/// [`REQUEST_TIMEOUT`]; a longer one is refused before OCR starts. The CLI has
+/// no such limit.
+const OCR_MAX_PAGES: usize = 50;
 /// AVIF encoder speed for the experimental 3.4 path. Faster than the CLI default
 /// (4) so an interactive request stays well under [`REQUEST_TIMEOUT`] even on a
 /// photo-heavy book — AVIF (rav1e) is slow at low speeds. Costs a little size.
@@ -534,6 +538,8 @@ fn classify_error(msg: &str, status: StatusCode) -> &'static str {
         "no_isbn"
     } else if m.contains("encryption.xml") {
         "fonts_obfuscated"
+    } else if m.contains("pages are read by ocr here") {
+        "scan_too_long"
     } else {
         "failed"
     }
@@ -750,7 +756,11 @@ async fn import(
                 "pdf" => {
                     let input_path = tmp.path().join(format!("{base}.pdf"));
                     std::fs::write(&input_path, &file_bytes)?;
-                    let opts = epublift::pdf::ImportOptions { mode, language };
+                    let opts = epublift::pdf::ImportOptions {
+                        mode,
+                        language,
+                        max_ocr_pages: Some(OCR_MAX_PAGES),
+                    };
                     let s = epublift::pdf::import(&input_path, &out_path, &opts)?;
                     ImportResponse {
                         output_name,
@@ -760,6 +770,8 @@ async fn import(
                         images: 0,
                         final_size: 0,
                         download_token: String::new(),
+                        ocr: s.used_ocr,
+                        ocr_misreads_language: s.ocr_misreads_language,
                         unread_pages: s
                             .unread_pages
                             .into_iter()
@@ -780,6 +792,8 @@ async fn import(
                         images: s.images,
                         final_size: 0,
                         download_token: String::new(),
+                        ocr: false,
+                        ocr_misreads_language: false,
                         unread_pages: Vec::new(),
                     }
                 }
@@ -795,6 +809,8 @@ async fn import(
                         images: s.images,
                         final_size: 0,
                         download_token: String::new(),
+                        ocr: false,
+                        ocr_misreads_language: false,
                         unread_pages: Vec::new(),
                     }
                 }
@@ -836,6 +852,10 @@ struct ImportResponse {
     images: usize,
     final_size: u64,
     download_token: String,
+    /// PDF only: the text was read by OCR.
+    ocr: bool,
+    /// PDF only: OCR's model lacks the letters of the book's language.
+    ocr_misreads_language: bool,
     /// PDF only: pages not (fully) read, by problem (`ocr_failed`,
     /// `undecodable_images`, `image_not_read`).
     unread_pages: Vec<UnreadPages>,
@@ -863,6 +883,8 @@ struct SmartConfig {
 #[derive(Serialize)]
 struct ConfigResponse {
     smart_import: SmartConfig,
+    /// The most pages Import PDF reads by OCR.
+    ocr_max_pages: usize,
 }
 
 /// Capability endpoint the SPA reads on load to decide whether to unlock Smart
@@ -882,6 +904,7 @@ async fn config(State(state): State<Arc<AppState>>) -> Json<ConfigResponse> {
             enabled: !providers.is_empty(),
             providers,
         },
+        ocr_max_pages: OCR_MAX_PAGES,
     })
 }
 
@@ -971,6 +994,8 @@ async fn smart_import(
                     images: s.images,
                     final_size: out_bytes.len() as u64,
                     download_token: String::new(),
+                    ocr: false,
+                    ocr_misreads_language: false,
                     unread_pages: Vec::new(),
                 },
                 out_bytes,

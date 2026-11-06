@@ -63,8 +63,16 @@ and names them; the rest of the book is written.
 
 The book's title is the one the PDF gives itself (its document properties),
 unless that is empty or what a program left there (a file name, "Microsoft
-Word - …", "Untitled"); then it is the file name. `epublift meta set --title`
-changes it afterwards.
+Word - …", "Untitled"). Then it comes from the file name, read the common way:
+in `Title (Author) (site.one, site.two).pdf` the groups naming web sites are
+dropped, the last group left is the author, `_ ` stands for `: `, and a
+download's trailing numbers (`[#1829082]-5445572`) go. The author is the file
+name's, else the PDF's own unless that names a computer or account ("Lenovo",
+"User"). `epublift meta set --title` / `--author` change them afterwards.
+
+The book has a small style sheet: indented, justified and hyphenated
+paragraphs, and figures that never overflow the screen. A reader's own
+settings still win.
 
 ## Accuracy
 
@@ -96,9 +104,12 @@ PDF, not a faithful reproduction.
 In the web UI, pick the **Import PDF** mode, drop a `.pdf`, choose the book's
 language, and convert. The result reports the chapter and paragraph counts, the
 pages that could not be read (as the CLI's warnings), and a one-time download
-link. The web build has no OCR: a scan without a text layer is refused, and
-[Smart Import](smart-import.md) reads it instead when the server has a key. The hosted service processes the upload in memory and
-deletes it immediately, like every other mode.
+link. A scan without a text layer is read by OCR, up to 50 pages, so that it
+finishes inside the web's 120-second request limit; a longer one is refused
+before OCR starts, and the CLI (no limit) or [Smart Import](smart-import.md)
+reads it. The Docker image carries the OCR models, checked by SHA-256 at build
+time, so the service never downloads them. The hosted service processes the
+upload in memory and deletes it immediately, like every other mode.
 
 ## What works, and what doesn't yet
 
@@ -172,5 +183,5 @@ veripublica family's PDF reader; epublift writes the EPUB (step 4).
 4. **Write** a minimal, valid EPUB 3.3.
 
 Everything is pure-Rust and offline; no upload leaves your machine on the
-self-hosted web service, and the CLI touches the network only to download the
-OCR models once.
+self-hosted web service (its image carries the OCR models), and the CLI touches
+the network only to download the OCR models once.

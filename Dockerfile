@@ -54,6 +54,21 @@ RUN adduser -D -u 10001 epublift
 
 COPY --from=builder /app/target/release/epublift-web /usr/local/bin/epublift-web
 
+# The OCR models Import PDF reads scans with (paginaverto's ocrs detection model
+# and PaddlePaddle's PP-OCRv5 Latin recognition model, 10.5 MB together), baked
+# in at the SHA-256 paginaverto publishes, so the service never downloads them
+# and runs on a network with no route out. Change both together with paginaverto.
+# ADD from a URL would write the files, and a folder it makes, readable by root
+# only: the folder is made first and the files opened to all.
+RUN mkdir -p /usr/local/share/epublift/ocr-models
+ADD --chmod=644 --checksum=sha256:a917b23dbd9524b465df7e922641b3ff2981623df4ded5a0234004ef2fee7cfe \
+    https://ocrs-models.s3-accelerate.amazonaws.com/text-detection.onnx \
+    /usr/local/share/epublift/ocr-models/text-detection.onnx
+ADD --chmod=644 --checksum=sha256:7888113072263cb471b93f66dd5e2ad70548dc526fa1ace760d0d973dd121498 \
+    https://huggingface.co/PaddlePaddle/latin_PP-OCRv5_mobile_rec_onnx/resolve/89d3a50e2c27e2e7cceeab0e944c25c807d5db4f/inference.onnx \
+    /usr/local/share/epublift/ocr-models/latin_PP-OCRv5_mobile_rec.onnx
+ENV EPUBLIFT_OCR_MODELS=/usr/local/share/epublift/ocr-models
+
 USER epublift
 EXPOSE 8080
 
