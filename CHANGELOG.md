@@ -10,10 +10,7 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
-### Added
-- **Web: Import PDF names the pages it could not read**, as the CLI does: a
-  page that is only an image in a PDF with a text layer, or whose image could
-  not be decoded. In all 13 languages.
+## [cli-v5.1.0] - 2026-11-06
 
 ### Changed
 - **`import` reads PDFs through paginaverto 0.3.** What a reader notices:
@@ -38,6 +35,21 @@ are tagged with the component they belong to.
   - **The book's title comes from the PDF** (its document properties) when it
     has a real one, else from the file name as before.
   `docs/pdf-import.md` has the numbers.
+
+## [web-v1.32.0] - 2026-11-06
+
+### Added
+- **Import PDF names the pages it could not read**, as the CLI does: a page
+  that is only an image in a PDF with a text layer, or whose image could not be
+  decoded. In all 13 languages.
+
+### Changed
+- **Import PDF uses the new engine (see cli-v5.1.0):** chapters follow the
+  PDF's own outline or contents page, headings inside a chapter and italics
+  stay, JBIG2, JPEG 2000 and CCITT figures reach the book, covers and plates of
+  scans with a text layer are kept, and the title comes from the PDF when it
+  has a real one. The web build has no OCR: a scan without a text layer is
+  still refused, and Smart Import reads it.
 
 ## [cli-v5.0.0] - 2026-11-04
 
