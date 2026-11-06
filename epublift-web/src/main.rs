@@ -760,6 +760,11 @@ async fn import(
                         images: 0,
                         final_size: 0,
                         download_token: String::new(),
+                        unread_pages: s
+                            .unread_pages
+                            .into_iter()
+                            .map(|(problem, pages)| UnreadPages { problem, pages })
+                            .collect(),
                     }
                 }
                 "md" | "markdown" => {
@@ -775,6 +780,7 @@ async fn import(
                         images: s.images,
                         final_size: 0,
                         download_token: String::new(),
+                        unread_pages: Vec::new(),
                     }
                 }
                 "zip" => {
@@ -789,6 +795,7 @@ async fn import(
                         images: s.images,
                         final_size: 0,
                         download_token: String::new(),
+                        unread_pages: Vec::new(),
                     }
                 }
                 other => anyhow::bail!(
@@ -829,6 +836,15 @@ struct ImportResponse {
     images: usize,
     final_size: u64,
     download_token: String,
+    /// PDF only: pages not (fully) read, by problem (`ocr_failed`,
+    /// `undecodable_images`, `image_not_read`).
+    unread_pages: Vec<UnreadPages>,
+}
+
+#[derive(Serialize)]
+struct UnreadPages {
+    problem: &'static str,
+    pages: Vec<u32>,
 }
 
 #[derive(Serialize)]
@@ -955,6 +971,7 @@ async fn smart_import(
                     images: s.images,
                     final_size: out_bytes.len() as u64,
                     download_token: String::new(),
+                    unread_pages: Vec::new(),
                 },
                 out_bytes,
             ))

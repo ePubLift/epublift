@@ -848,10 +848,8 @@ fn run_import(args: &ImportArgs) -> Result<()> {
             let label = if pages.len() == 1 { "page" } else { "pages" };
             eprintln!("warning: {label} {}: {what}", page_list(pages));
         }
-        if let Some(language) = args.language.as_deref()
-            && summary.used_ocr
-            && !paginaverto::recognises(language)
-        {
+        if summary.ocr_misreads_language {
+            let language = args.language.as_deref().unwrap_or_default();
             eprintln!(
                 "warning: this scan was read by OCR, whose model lacks the letters of \
                  \"{language}\" (it reads Latin-script languages only): the text is wrong \

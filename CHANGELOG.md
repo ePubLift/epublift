@@ -10,6 +10,11 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+### Added
+- **Web: Import PDF names the pages it could not read**, as the CLI does: a
+  page that is only an image in a PDF with a text layer, or whose image could
+  not be decoded. In all 13 languages.
+
 ### Changed
 - **`import` reads PDFs through paginaverto 0.3.** What a reader notices:
   - **OCR reads Turkish and the other Latin-script alphabets.** Recognition now
@@ -30,6 +35,8 @@ are tagged with the component they belong to.
     in a non-Latin script (Cyrillic, Greek, Arabic, CJK and others), or in
     Azerbaijani, Vietnamese or Uzbek, whose letters it lacks, says the text is
     wrong or missing.
+  - **The book's title comes from the PDF** (its document properties) when it
+    has a real one, else from the file name as before.
   `docs/pdf-import.md` has the numbers.
 
 ## [cli-v5.0.0] - 2026-11-04

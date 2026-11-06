@@ -61,6 +61,11 @@ pinned address). A cache from before cli-v4.5.2 holds the detection model as
 be decoded, or a page that is only an image in a PDF read from its text layer)
 and names them; the rest of the book is written.
 
+The book's title is the one the PDF gives itself (its document properties),
+unless that is empty or what a program left there (a file name, "Microsoft
+Word - …", "Untitled"); then it is the file name. `epublift meta set --title`
+changes it afterwards.
+
 ## Accuracy
 
 Measured with paginaverto 0.3 on two Turkish books, against a reference:
@@ -89,8 +94,10 @@ PDF, not a faithful reproduction.
 ## Web usage
 
 In the web UI, pick the **Import PDF** mode, drop a `.pdf`, choose the book's
-language, and convert. The result reports the chapter and paragraph counts and a
-one-time download link. The hosted service processes the upload in memory and
+language, and convert. The result reports the chapter and paragraph counts, the
+pages that could not be read (as the CLI's warnings), and a one-time download
+link. The web build has no OCR: a scan without a text layer is refused, and
+[Smart Import](smart-import.md) reads it instead when the server has a key. The hosted service processes the upload in memory and
 deletes it immediately, like every other mode.
 
 ## What works, and what doesn't yet

@@ -318,6 +318,7 @@ function renderResult(m, data){
         size: '<b>' + fmtBytes(data.final_size) + '</b>',
       });
     }
+    renderImportNotes(data);
   } else if (m === 'restore'){
     const sizeStr = '<b>' + fmtBytes(data.output_size) + '</b>';
     const key = data.modernized ? 'sub_restore_modernized' : 'sub_restore_exact';
@@ -326,6 +327,28 @@ function renderResult(m, data){
 
   result.classList.remove('show'); void result.offsetWidth; result.classList.add('show');
   result.scrollIntoView({ behavior:'smooth', block:'center' });
+}
+
+// The pages a PDF import could not read (the web build has no OCR; a scan is
+// refused before this). Text only (textContent), one line each.
+const IMPORT_PAGE_KEYS = {
+  ocr_failed: 'imp_ocr_failed',
+  undecodable_images: 'imp_undecodable',
+  image_not_read: 'imp_image_not_read',
+};
+function pageList(pages){
+  const shown = pages.slice(0, 20).join(', ');
+  return pages.length > 20 ? fill('imp_pages_more', { p: shown, n: pages.length - 20 }) : shown;
+}
+function renderImportNotes(data){
+  for (const u of (data.unread_pages || [])){
+    const key = IMPORT_PAGE_KEYS[u.problem];
+    if (!key) continue;
+    const div = document.createElement('div');
+    div.className = 'imp-note';
+    div.textContent = fill(key, { p: pageList(u.pages) });
+    resultSub.appendChild(div);
+  }
 }
 
 // ---- validate (client-side WASM) ---------------------------------------------

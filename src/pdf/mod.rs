@@ -60,6 +60,9 @@ pub struct ImportSummary {
     /// (`ocr_failed`, `undecodable_images`, `image_not_read`) and its pages,
     /// numbered from 1. The rest of the book is written.
     pub unread_pages: Vec<(&'static str, Vec<u32>)>,
+    /// OCR read the book, and its model lacks the letters of the book's
+    /// language: the text is wrong or missing.
+    pub ocr_misreads_language: bool,
 }
 
 /// Read the PDF. Without OCR first: only a scan needs the 10.5 MB of models, so
@@ -102,6 +105,28 @@ fn unread_pages(doc: &paginaverto::Document) -> Vec<(&'static str, Vec<u32>)> {
     out
 }
 
+/// The title the PDF gives itself, its `/Info` `Title`, unless it is empty or
+/// what a program left there: a file name, or "Microsoft Word - <file>".
+fn info_title(doc: &paginaverto::Document) -> Option<String> {
+    let title = doc.metadata.info.get("Title")?.trim();
+    if is_placeholder_title(title) {
+        return None;
+    }
+    Some(title.split_whitespace().collect::<Vec<_>>().join(" "))
+}
+
+fn is_placeholder_title(title: &str) -> bool {
+    const FILE_EXTENSIONS: &[&str] = &[
+        ".doc", ".docx", ".odt", ".rtf", ".txt", ".pdf", ".indd", ".qxd", ".qxp", ".pages", ".tex",
+        ".dvi", ".ps", ".ai", ".p65", ".pm6", ".fm", ".html", ".htm", ".xml",
+    ];
+    let lower = title.to_lowercase();
+    !title.chars().any(char::is_alphabetic)
+        || lower.starts_with("microsoft word - ")
+        || lower.starts_with("untitled")
+        || FILE_EXTENSIONS.iter().any(|ext| lower.ends_with(ext))
+}
+
 /// Import the PDF at `input`, writing a reflow EPUB to `output`.
 pub fn import(input: &Path, output: &Path, opts: &ImportOptions) -> Result<ImportSummary> {
     if opts.mode == Mode::Fixed {
@@ -119,10 +144,12 @@ pub fn import(input: &Path, output: &Path, opts: &ImportOptions) -> Result<Impor
         e => e.into(),
     })?;
 
-    let title = input
-        .file_stem()
-        .map(|s| s.to_string_lossy().into_owned())
-        .unwrap_or_else(|| "Imported book".into());
+    let title = info_title(&doc).unwrap_or_else(|| {
+        input
+            .file_stem()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "Imported book".into())
+    });
     // The option, else the PDF's own /Lang (paginaverto never guesses).
     let language = doc.language.as_deref().unwrap_or("en");
 
@@ -138,5 +165,37 @@ pub fn import(input: &Path, output: &Path, opts: &ImportOptions) -> Result<Impor
             .count(),
         used_ocr,
         unread_pages: unread_pages(&doc),
+        ocr_misreads_language: used_ocr
+            && opts
+                .language
+                .as_deref()
+                .is_some_and(|l| !paginaverto::recognises(l)),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_placeholder_title;
+
+    #[test]
+    fn a_title_a_program_left_is_not_used() {
+        for title in [
+            "",
+            "  ",
+            "1234",
+            "Microsoft Word - chapter1.docx",
+            "book_final.indd",
+            "scan.PDF",
+            "Untitled-1",
+        ] {
+            assert!(is_placeholder_title(title.trim()), "{title:?}");
+        }
+        for title in [
+            "Şeker Portakalı",
+            "Thinking, Fast and Slow",
+            "1984 Revisited",
+        ] {
+            assert!(!is_placeholder_title(title), "{title}");
+        }
+    }
 }
