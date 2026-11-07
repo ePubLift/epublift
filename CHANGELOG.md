@@ -22,6 +22,22 @@ are tagged with the component they belong to.
   in the page's language (a dropped file skipped the picker's filter), and the
   upload modes' errors are shown in the page's language where they are known.
 
+- **An imported PDF has its cover.** When page 1 is a cover picture,
+  it becomes the EPUB's cover and opens the book, instead of coming through as
+  separate photos and paragraphs of its lettering. A cover whose lettering is
+  set in fonts over the picture is not found yet.
+- **Imported books carry images a reader can show:** at most 1,920 pixels on
+  the longest side (an 8" reader at 300 ppi), and 2,560 for the cover (Amazon
+  KDP's ideal). A JPEG keeps its own quality, gray stays gray, and nothing is
+  enlarged or kept when it would not be smaller. `import` only; the optimizer
+  does not resize.
+
+### Changed
+- **`import` reads PDFs through paginaverto 0.3.1:** words broken by a
+  soft hyphen at a line end are joined again (about 2,000 to 4,500 broken words
+  in 3 of our 12 test PDFs), and fewer paragraphs break in the middle of a
+  sentence.
+
 ### Fixed
 - **`import` writes a DOCTYPE and `lang` in every XHTML file** (PDF and
   Markdown). EPUB 3 does not require the DOCTYPE, but Sigil "cleaned" every file

@@ -193,6 +193,12 @@ fn load_cover(path: &Path) -> Result<Option<ImageAsset>> {
         .extension()
         .and_then(|e| e.to_str())
         .map(str::to_ascii_lowercase);
+    // Down to a cover's size first, so the WebP is made from what is kept.
+    let data = match ext.as_deref().and_then(media_type_for) {
+        Some(mt) => crate::epub_writer::fit_image(&data, mt, crate::epub_writer::COVER_LONG_SIDE)
+            .unwrap_or(data),
+        None => data,
+    };
     if let Some(webp) = crate::images::optimize_to_webp(&data, COVER_QUALITY) {
         return Ok(Some(ImageAsset {
             name: "cover.webp".into(),

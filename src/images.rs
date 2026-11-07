@@ -331,8 +331,8 @@ fn push_unique(pairs: &mut Vec<(String, String)>, old: String, new: String) {
 
 /// Bounds on a single image decode, to defend against decode-bombs (e.g. a tiny
 /// PNG declaring 100k×100k). Comfortably above any real e-book image.
-const MAX_IMAGE_DIM: u32 = 16_384;
-const MAX_IMAGE_ALLOC: u64 = 512 * 1024 * 1024; // 512 MiB
+pub(crate) const MAX_IMAGE_DIM: u32 = 16_384;
+pub(crate) const MAX_IMAGE_ALLOC: u64 = 512 * 1024 * 1024; // 512 MiB
 
 /// Decode an in-memory image, enforcing the decode-bomb limits.
 pub(crate) fn decode_image(bytes: &[u8]) -> Result<DynamicImage> {
@@ -485,7 +485,7 @@ const ZIGZAG_TO_NATURAL: [usize; 64] = [
 /// (exact, 1 to 100, for encoders that scale the table the libjpeg way). Returns
 /// `None` if the JPEG can't be parsed. Used to avoid re-encoding a low-quality
 /// source at a higher quality.
-fn estimate_jpeg_quality(data: &[u8]) -> Option<u8> {
+pub(crate) fn estimate_jpeg_quality(data: &[u8]) -> Option<u8> {
     let mut i = 2; // skip the SOI marker
     while i + 4 <= data.len() {
         if data[i] != 0xFF {

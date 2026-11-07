@@ -7,15 +7,17 @@ use anyhow::Result;
 
 use crate::epub_writer::{ImageAsset, RenderedChapter, esc, package_epub};
 
-use paginaverto::{Block, BlockKind, Chapter, Run};
+use paginaverto::{Block, BlockKind, Chapter, Figure, Run};
 
-/// Write `chapters` as a reflow EPUB to `out`.
+/// Write `chapters` as a reflow EPUB to `out`, with `cover` (page 1's picture,
+/// when paginaverto found one) as its cover.
 pub(crate) fn write_epub(
     out: &Path,
     title: &str,
     author: Option<&str>,
     language: &str,
     chapters: &[Chapter<'_>],
+    cover: Option<&Figure>,
 ) -> Result<()> {
     let mut images: Vec<ImageAsset> = Vec::new();
     let mut rendered: Vec<RenderedChapter> = Vec::new();
@@ -36,7 +38,20 @@ pub(crate) fn write_epub(
         });
     }
 
-    package_epub(out, title, author, language, &rendered, &images, None)
+    let cover = cover.map(|fig| ImageAsset {
+        name: format!("cover.{}", fig.ext),
+        media_type: fig.media_type.to_string(),
+        data: fig.data.clone(),
+    });
+    package_epub(
+        out,
+        title,
+        author,
+        language,
+        &rendered,
+        &images,
+        cover.as_ref(),
+    )
 }
 
 fn render_block(block: &Block, body: &mut String, images: &mut Vec<ImageAsset>) {
@@ -92,7 +107,7 @@ fn render_runs(runs: &[Run]) -> String {
 #[cfg(test)]
 mod tests {
     use super::{heading_tag, write_epub};
-    use paginaverto::{Block, Document, Run};
+    use paginaverto::{Block, Document, Figure, Run};
 
     #[test]
     fn writes_a_valid_epub() {
@@ -108,9 +123,58 @@ mod tests {
         ];
         let dir = tempfile::tempdir().unwrap();
         let out = dir.path().join("book.epub");
-        write_epub(&out, "My Title", None, "en", &doc.chapters()).unwrap();
+        write_epub(&out, "My Title", None, "en", &doc.chapters(), None).unwrap();
         let report = epubveri::validate_bytes(std::fs::read(&out).unwrap());
         assert_eq!(report.fatals() + report.errors(), 0);
+    }
+
+    /// paginaverto's cover becomes the EPUB's `cover-image`, opening the book,
+    /// scaled down to the cover's long side.
+    #[test]
+    fn the_cover_is_the_books_cover_image() {
+        let img = image::RgbImage::from_fn(1800, 3000, |x, y| {
+            image::Rgb([(x * 255 / 1800) as u8, (y * 255 / 3000) as u8, 128])
+        });
+        let mut jpeg = Vec::new();
+        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpeg, 90)
+            .encode_image(&img)
+            .unwrap();
+        let cover = Figure::new(jpeg, "image/jpeg", "jpg");
+        let mut doc = Document::default();
+        doc.blocks = vec![Block::paragraph("p1", vec![Run::new("Text.", false)])];
+        let dir = tempfile::tempdir().unwrap();
+        let out = dir.path().join("book.epub");
+        write_epub(&out, "T", None, "en", &doc.chapters(), Some(&cover)).unwrap();
+
+        let bytes = std::fs::read(&out).unwrap();
+        let report = epubveri::validate_bytes(bytes.clone());
+        assert_eq!(report.fatals() + report.errors(), 0);
+        let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
+        let mut opf = String::new();
+        std::io::Read::read_to_string(&mut zip.by_name("OEBPS/content.opf").unwrap(), &mut opf)
+            .unwrap();
+        assert!(
+            opf.contains(
+                r#"href="images/cover.jpg" media-type="image/jpeg" properties="cover-image""#
+            ),
+            "{opf}"
+        );
+        assert!(
+            opf.find(r#"idref="cover""#) < opf.find(r#"idref="ch001""#),
+            "{opf}"
+        );
+        let mut data = Vec::new();
+        std::io::Read::read_to_end(
+            &mut zip.by_name("OEBPS/images/cover.jpg").unwrap(),
+            &mut data,
+        )
+        .unwrap();
+        let (w, h) = image::ImageReader::new(std::io::Cursor::new(data))
+            .with_guessed_format()
+            .unwrap()
+            .into_dimensions()
+            .unwrap();
+        assert_eq!((w, h), (1536, 2560));
     }
 
     #[test]

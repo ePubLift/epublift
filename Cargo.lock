@@ -1992,9 +1992,9 @@ dependencies = [
 
 [[package]]
 name = "paginaverto"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "26fe14935c4c35b60e9c3f88176db2e0ca3ed514b36db28ddcf6d6bf88fe9fa4"
+checksum = "6db6a173ad1277c61f4d2064493cf9b9bb8462774baec52c1926c166bf482249"
 dependencies = [
  "hayro-ccitt",
  "hayro-jbig2",
@@ -2008,9 +2008,9 @@ dependencies = [
 
 [[package]]
 name = "paginaverto-ocr"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "99ea9ad729e3d5712cda55a3c19615bb5a503850554f9fa4cfb74384131814d1"
+checksum = "707587dfbdfcea6bdf3a3d9237faeb2efded3ce0d1089ec0d2c0486a6983f274"
 dependencies = [
  "image",
  "ocrs",

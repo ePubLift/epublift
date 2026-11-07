@@ -74,6 +74,22 @@ The book has a small style sheet: indented, justified and hyphenated
 paragraphs, and figures that never overflow the screen. A reader's own
 settings still win.
 
+**The cover** is page 1's picture when page 1 is a cover: an image filling the
+page with no text drawn over it. It becomes the EPUB's `cover-image` and opens
+the book, and nothing of page 1 is repeated as text or figures. A cover whose
+lettering is set in fonts over the picture is not found yet; that book has no
+cover, and page 1 comes through as text and figures.
+
+**Image sizes.** A PDF's images are often print-size (2,500 × 3,300 pixels or
+more), which no reader shows. An imported book keeps at most **1,920 pixels on
+an image's longest side** (an 8" reader at 300 ppi, so every 6–8" reader shows
+it at full sharpness) and **2,560 for the cover** (Amazon KDP's ideal cover,
+above Apple Books' 1,400-pixel short side). A JPEG is re-encoded at no more
+than its own quality, a PNG losslessly; gray stays gray, and the colour profile
+is kept. A smaller image is never enlarged, and an image is kept as it is when
+the smaller one would not be smaller in bytes. This applies to `import` only;
+the EPUB optimizer does not resize.
+
 ## Accuracy
 
 Measured with paginaverto 0.3 on two Turkish books, against a reference:
@@ -150,8 +166,7 @@ upload in memory and deletes it immediately, like every other mode.
   complete and correctly spaced, but several source paragraphs may share one.
 - **Footnotes, lists, captions, tables and equations** are not yet told apart:
   they come through as paragraphs. Figure **placement** is per-page (approximate), not at the
-  exact original position, and the cover image appears as the first figure rather
-  than as EPUB cover metadata.
+  exact original position.
 - **Front-matter heading noise**: scholarly scans with long bibliographies can
   produce a few spurious chapter entries. Cosmetic; the body text is unaffected.
 

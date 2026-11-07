@@ -47,7 +47,9 @@ fn import_text(pdf: &Path) -> (pdf::ImportSummary, String, usize) {
     for i in 0..zip.len() {
         let mut f = zip.by_index(i).unwrap();
         let name = f.name().unwrap().to_string();
-        if name.starts_with("OEBPS/images/") {
+        // Figures only: page 1's picture, when it is a cover, is the book's
+        // cover, not a figure.
+        if name.starts_with("OEBPS/images/") && !name.starts_with("OEBPS/images/cover.") {
             images += 1;
         }
         if name.ends_with(".xhtml") {

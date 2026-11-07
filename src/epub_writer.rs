@@ -29,6 +29,91 @@ use anyhow::{Context, Result};
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipWriter};
 
+/// The longest side a cover keeps: Amazon KDP's ideal cover (1600 × 2560),
+/// above Apple Books' 1400-pixel short side, and enough for 10–11" readers.
+pub(crate) const COVER_LONG_SIDE: u32 = 2560;
+/// The longest side an image inside the book keeps: an 8" reader at 300 ppi
+/// (1440 × 1920), so every 6–8" reader shows it at full sharpness.
+pub(crate) const IMAGE_LONG_SIDE: u32 = 1920;
+
+/// `data` scaled down to `long_side` on its longest side, in its own format,
+/// or `None` to keep it as it is. A book made by `import` carries print-size
+/// images (a PDF's photos, a scan's pages) no reader can show.
+///
+/// The book is never made worse: only a JPEG or PNG larger than `long_side`
+/// is touched; a JPEG is re-encoded at no more than its own quality, a PNG
+/// losslessly; gray stays gray and an ICC profile is kept; a JPEG whose EXIF
+/// turns it is left alone; and the result is kept only when it is smaller.
+pub(crate) fn fit_image(data: &[u8], media_type: &str, long_side: u32) -> Option<Vec<u8>> {
+    use image::{ImageDecoder, ImageEncoder, metadata::Orientation};
+    let is_jpeg = match media_type {
+        "image/jpeg" => true,
+        "image/png" => false,
+        _ => return None,
+    };
+    let reader = || {
+        let mut r = image::ImageReader::new(std::io::Cursor::new(data))
+            .with_guessed_format()
+            .ok()?;
+        let mut limits = image::Limits::default();
+        limits.max_image_width = Some(crate::images::MAX_IMAGE_DIM);
+        limits.max_image_height = Some(crate::images::MAX_IMAGE_DIM);
+        limits.max_alloc = Some(crate::images::MAX_IMAGE_ALLOC);
+        r.limits(limits);
+        Some(r)
+    };
+    let (w, h) = reader()?.into_dimensions().ok()?;
+    if w.max(h) <= long_side {
+        return None;
+    }
+    let mut decoder = reader()?.into_decoder().ok()?;
+    if decoder.orientation().ok()? != Orientation::NoTransforms {
+        return None;
+    }
+    let icc = decoder.icc_profile().ok().flatten();
+    let img = image::DynamicImage::from_decoder(decoder).ok()?;
+    let img = img.resize(long_side, long_side, image::imageops::FilterType::Lanczos3);
+    let mut out = Vec::new();
+    if is_jpeg {
+        let quality = crate::images::estimate_jpeg_quality(data).unwrap_or(90);
+        let img = match img {
+            image::DynamicImage::ImageLuma8(_) | image::DynamicImage::ImageRgb8(_) => img,
+            image::DynamicImage::ImageLumaA8(_) | image::DynamicImage::ImageLuma16(_) => {
+                img.into_luma8().into()
+            }
+            _ => img.into_rgb8().into(),
+        };
+        let mut enc = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, quality);
+        if let Some(p) = icc {
+            enc.set_icc_profile(p).ok()?;
+        }
+        enc.write_image(
+            img.as_bytes(),
+            img.width(),
+            img.height(),
+            img.color().into(),
+        )
+        .ok()?;
+    } else {
+        let mut enc = image::codecs::png::PngEncoder::new_with_quality(
+            &mut out,
+            image::codecs::png::CompressionType::Best,
+            image::codecs::png::FilterType::Adaptive,
+        );
+        if let Some(p) = icc {
+            enc.set_icc_profile(p).ok()?;
+        }
+        enc.write_image(
+            img.as_bytes(),
+            img.width(),
+            img.height(),
+            img.color().into(),
+        )
+        .ok()?;
+    }
+    (out.len() < data.len()).then_some(out)
+}
+
 /// One chapter: a plain-text `title` (used for the nav entry and `<title>`) and
 /// its inner-`<body>` XHTML — already well-formed and escaped by the caller
 /// (including its own heading markup). A chapter without a title (the front
@@ -51,6 +136,8 @@ pub(crate) struct ImageAsset {
 /// `cover` is set, it's embedded as the EPUB cover image: a `cover-image`
 /// manifest entry, an EPUB2-fallback `<meta name="cover">`, and a `cover.xhtml`
 /// page placed first in the spine. `author`, when known, is the `dc:creator`.
+/// Every image is first fitted to a reader ([`fit_image`]): the cover to
+/// [`COVER_LONG_SIDE`], the others to [`IMAGE_LONG_SIDE`].
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn package_epub(
     out: &Path,
@@ -92,7 +179,8 @@ pub(crate) fn package_epub(
     // it opens the book. Already-compressed image bytes are stored, not deflated.
     if let Some(c) = cover {
         zip.start_file(format!("OEBPS/images/{}", c.name), stored)?;
-        zip.write_all(&c.data)?;
+        let fitted = fit_image(&c.data, &c.media_type, COVER_LONG_SIDE);
+        zip.write_all(fitted.as_deref().unwrap_or(&c.data))?;
 
         let cover_xhtml = format!(
             r#"<?xml version="1.0" encoding="utf-8"?>
@@ -121,7 +209,8 @@ pub(crate) fn package_epub(
     // Images are already compressed (JPEG/PNG/WebP/…) → store, don't deflate.
     for (i, img) in images.iter().enumerate() {
         zip.start_file(format!("OEBPS/images/{}", img.name), stored)?;
-        zip.write_all(&img.data)?;
+        let fitted = fit_image(&img.data, &img.media_type, IMAGE_LONG_SIDE);
+        zip.write_all(fitted.as_deref().unwrap_or(&img.data))?;
         manifest.push_str(&format!(
             "  <item id=\"img{:03}\" href=\"images/{}\" media-type=\"{}\"/>\n",
             i + 1,
@@ -358,5 +447,59 @@ mod tests {
             "{nav}"
         );
         assert_eq!(nav.matches("<li>").count(), 1, "{nav}");
+    }
+
+    fn jpeg(w: u32, h: u32, quality: u8) -> Vec<u8> {
+        let img = image::RgbImage::from_fn(w, h, |x, y| {
+            image::Rgb([(x % 256) as u8, (y % 256) as u8, ((x * y) % 256) as u8])
+        });
+        let mut out = Vec::new();
+        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, quality)
+            .encode_image(&img)
+            .unwrap();
+        out
+    }
+
+    fn size_of(data: &[u8]) -> (u32, u32) {
+        image::ImageReader::new(std::io::Cursor::new(data))
+            .with_guessed_format()
+            .unwrap()
+            .into_dimensions()
+            .unwrap()
+    }
+
+    /// A print-size JPEG comes down to the long side, keeps its shape, stays a
+    /// JPEG at no more than its own quality, and is smaller.
+    #[test]
+    fn a_large_jpeg_is_scaled_down_at_its_own_quality() {
+        let src = jpeg(2400, 3200, 60);
+        let out = fit_image(&src, "image/jpeg", IMAGE_LONG_SIDE).unwrap();
+        assert_eq!(size_of(&out), (1440, 1920));
+        assert!(out.len() < src.len());
+        assert_eq!(crate::images::estimate_jpeg_quality(&out), Some(60));
+    }
+
+    /// What a reader can already show, and what is not a JPEG or PNG, is kept.
+    #[test]
+    fn a_small_image_or_another_format_is_kept() {
+        assert!(fit_image(&jpeg(1440, 1920, 90), "image/jpeg", IMAGE_LONG_SIDE).is_none());
+        assert!(fit_image(&jpeg(1600, 2560, 90), "image/jpeg", COVER_LONG_SIDE).is_none());
+        assert!(fit_image(&jpeg(3000, 3000, 90), "image/webp", IMAGE_LONG_SIDE).is_none());
+        assert!(fit_image(b"not an image", "image/png", IMAGE_LONG_SIDE).is_none());
+    }
+
+    /// A gray PNG stays a gray PNG.
+    #[test]
+    fn a_gray_png_stays_gray() {
+        let img =
+            image::GrayImage::from_fn(4000, 1000, |x, y| image::Luma([((x ^ y) % 256) as u8]));
+        let mut src = Vec::new();
+        image::DynamicImage::ImageLuma8(img)
+            .write_to(&mut std::io::Cursor::new(&mut src), image::ImageFormat::Png)
+            .unwrap();
+        let out = fit_image(&src, "image/png", IMAGE_LONG_SIDE).unwrap();
+        let back = image::load_from_memory(&out).unwrap();
+        assert_eq!((back.width(), back.height()), (1920, 480));
+        assert_eq!(back.color(), image::ColorType::L8);
     }
 }

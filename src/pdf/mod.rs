@@ -291,7 +291,14 @@ pub fn import(input: &Path, output: &Path, opts: &ImportOptions) -> Result<Impor
     let language = doc.language.as_deref().unwrap_or("en");
 
     let chapters = doc.chapters();
-    reflow::write_epub(output, &title, author.as_deref(), language, &chapters)?;
+    reflow::write_epub(
+        output,
+        &title,
+        author.as_deref(),
+        language,
+        &chapters,
+        doc.cover.as_ref(),
+    )?;
 
     Ok(ImportSummary {
         chapters: chapters.len(),

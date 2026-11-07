@@ -62,6 +62,9 @@ A whole book rarely lives in one `.md`. Point `import` at a **folder** — or a
   spine. The cover is re-encoded to WebP when that comes out smaller (the same
   size-safe rule the optimizer uses), so a huge source cover doesn't bloat the
   book.
+- **Image sizes:** a JPEG or PNG keeps at most 1,920 pixels on its longest
+  side, and the cover 2,560, as in [PDF import](pdf-import.md); a smaller image
+  is never enlarged.
 - The **book title** defaults to the folder / zip name.
 - Each file's images resolve relative to **that file's** own folder, so a zip
   that keeps per-chapter image subfolders still works.
