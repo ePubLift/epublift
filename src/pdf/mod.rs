@@ -151,7 +151,7 @@ fn info_text(doc: &paginaverto::Document, key: &str) -> Option<String> {
 /// sites are dropped, and a last group that is left is the author (up to a
 /// "[sort form]"). Underscores stand for spaces in a name that has none, and
 /// "_ " for the ": " a file name cannot hold; a download's trailing numbers
-/// ("[#1829082]-5445572") are dropped.
+/// ("[#1234567]-7654321") are dropped.
 fn title_and_author_from_file_name(stem: &str) -> (Option<String>, Option<String>) {
     let mut name = if stem.contains(' ') {
         stem.replace("_ ", ": ")
@@ -335,12 +335,12 @@ mod tests {
             (title.unwrap_or_default(), author.unwrap_or_default())
         };
         assert_eq!(
-            t("Felsefe 101 (Paul Kleinman) (z-library.sk, 1lib.sk, z-lib.sk)"),
-            ("Felsefe 101".into(), "Paul Kleinman".into())
+            t("Küçük Kitap (Ayşe Yazar) (example.org, example.net, example.com)"),
+            ("Küçük Kitap".into(), "Ayşe Yazar".into())
         );
         assert_eq!(
-            t("Harry Potter (J. K. Rowling [Rowling, J. K.]) (z-library.sk)"),
-            ("Harry Potter".into(), "J. K. Rowling".into())
+            t("A Small Book (J. Writer [Writer, J.]) (example.org)"),
+            ("A Small Book".into(), "J. Writer".into())
         );
         assert_eq!(
             t("Project_Hail_Mary(Andy_Weir)"),
@@ -351,17 +351,14 @@ mod tests {
             ("aliceinwonderlan00delarich".into(), String::new())
         );
         assert_eq!(
-            t("SANAT_ CIA DERSLERİ[#1829082]-5445572"),
-            ("SANAT: CIA DERSLERİ".into(), String::new())
+            t("KİTAP_ ALT BAŞLIK[#1234567]-7654321"),
+            ("KİTAP: ALT BAŞLIK".into(), String::new())
         );
         assert_eq!(t("Kitap 1-2"), ("Kitap 1-2".into(), String::new()));
         // A year or an edition in parentheses is not an author.
         assert_eq!(t("Kitap (2019)"), ("Kitap (2019)".into(), String::new()));
         // Nothing but a group: it stays the title.
-        assert_eq!(
-            t("(Paul Kleinman)"),
-            ("(Paul Kleinman)".into(), String::new())
-        );
+        assert_eq!(t("(Ayşe Yazar)"), ("(Ayşe Yazar)".into(), String::new()));
     }
 
     #[test]

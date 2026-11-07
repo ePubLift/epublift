@@ -66,7 +66,7 @@ unless that is empty or what a program left there (a file name, "Microsoft
 Word - …", "Untitled"). Then it comes from the file name, read the common way:
 in `Title (Author) (site.one, site.two).pdf` the groups naming web sites are
 dropped, the last group left is the author, `_ ` stands for `: `, and a
-download's trailing numbers (`[#1829082]-5445572`) go. The author is the file
+download's trailing numbers (`[#1234567]-7654321`) go. The author is the file
 name's, else the PDF's own unless that names a computer or account ("Lenovo",
 "User"). `epublift meta set --title` / `--author` change them afterwards.
 

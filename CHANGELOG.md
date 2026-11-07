@@ -10,18 +10,9 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
-### Added
-- **Web: Import PDF reads scans by OCR**, up to 50 pages, with the CLI's
-  engine (Latin-script languages, Turkish letters included). The result says
-  the book was read by OCR, and warns when its language is one OCR cannot read.
-  A longer scan is refused before OCR starts, pointing to the CLI or Smart
-  Import. The image carries the two OCR models (10.5 MB, checked by SHA-256 at
-  build time), so the service downloads nothing and still runs with no route
-  out.
-- **Web: a file of the wrong type is refused in the browser** before upload,
-  in the page's language (a dropped file skipped the picker's filter), and the
-  upload modes' errors are shown in the page's language where they are known.
+## [cli-v5.2.0] - 2026-11-07
 
+### Added
 - **An imported PDF has its cover.** When page 1 is a cover picture,
   it becomes the EPUB's cover and opens the book, instead of coming through as
   separate photos and paragraphs of its lettering. A cover whose lettering is
@@ -43,9 +34,9 @@ are tagged with the component they belong to.
   Markdown). EPUB 3 does not require the DOCTYPE, but Sigil "cleaned" every file
   without one on open and said so.
 - **An imported PDF gets its title and author from the file name** when the PDF
-  has none: `Felsefe 101 (Paul Kleinman) (z-library.sk, 1lib.sk, z-lib.sk).pdf`
-  becomes "Felsefe 101" by Paul Kleinman, not the whole file name. Site names,
-  download numbers and a computer's name as author ("Lenovo") are left out.
+  has none: `Title (Author) (site.one, site.two).pdf` becomes "Title" by
+  Author, not the whole file name. Site names, download numbers and a
+  computer's name as author ("Lenovo") are left out.
 - **Imported books have a style sheet** (PDF and Markdown): indented,
   justified, hyphenated paragraphs, and images that fit the screen. Before,
   a large picture could overflow it.
@@ -54,6 +45,27 @@ are tagged with the component they belong to.
   the book does not have, and a Markdown chapter without a heading was listed
   as "Section n". Such a part now has no made-up heading and stays out of the
   table of contents; a book with no heading at all lists its title once.
+
+## [web-v1.33.0] - 2026-11-07
+
+### Added
+- **Import PDF reads scans by OCR**, up to 50 pages, with the CLI's
+  engine (Latin-script languages, Turkish letters included). The result says
+  the book was read by OCR, and warns when its language is one OCR cannot read.
+  A longer scan is refused before OCR starts, pointing to the CLI or Smart
+  Import. The image carries the two OCR models (10.5 MB, checked by SHA-256 at
+  build time), so the service downloads nothing and still runs with no route
+  out.
+- **A file of the wrong type is refused in the browser** before upload,
+  in the page's language (a dropped file skipped the picker's filter), and the
+  upload modes' errors are shown in the page's language where they are known.
+
+### Changed
+- **Import PDF and Import Markdown use the new engine (see cli-v5.2.0):** an
+  imported PDF has its cover, images are sized for readers, words broken by a
+  soft hyphen are joined again, every file has a DOCTYPE and `lang`, the title
+  and author come from the file name when the PDF has none, the book has a
+  style sheet, and no "Section 1" is made up.
 
 ## [cli-v5.1.0] - 2026-11-06
 
