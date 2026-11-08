@@ -55,6 +55,7 @@ const MODE_CFG = {
   repair:   { accept: '.epub',  dropKey: 'drop_title', hKey: 'opt_h_repair', ctaKey: 'cta_repair', workKey: 'cta_working_repair' },
 };
 const importLang = document.getElementById('importLang');
+const importKeepPageNumbers = document.getElementById('importKeepPageNumbers');
 // Smart Import (AI OCR) elements + capability flag (set from /config on load).
 const smartProvider = document.getElementById('smartProvider');
 const smartLang = document.getElementById('smartLang');
@@ -233,6 +234,7 @@ go.addEventListener('click', async () => {
       }
     } else if (mode === 'import'){
       if (importLang) fd.append('language', importLang.value);
+      if (importKeepPageNumbers) fd.append('keep_page_numbers', importKeepPageNumbers.checked ? 'true' : 'false');
     } else if (mode === 'smart'){
       if (smartProvider) fd.append('provider', smartProvider.value);
       if (smartLang) fd.append('language', smartLang.value);
@@ -354,6 +356,7 @@ function renderImportNotes(data){
   };
   if (data.ocr) note(T('imp_by_ocr'));
   if (data.ocr_misreads_language) note(T('imp_ocr_language'));
+  if (data.page_numbers_removed) note(fill('imp_page_numbers', { n: data.page_numbers_removed }));
   for (const u of (data.unread_pages || [])){
     const key = IMPORT_PAGE_KEYS[u.problem];
     if (key) note(fill(key, { p: pageList(u.pages) }));

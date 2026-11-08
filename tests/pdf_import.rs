@@ -30,6 +30,7 @@ fn import_text(pdf: &Path) -> (pdf::ImportSummary, String, usize) {
         mode: Mode::Reflow,
         language: Some("en".into()),
         max_ocr_pages: None,
+        keep_page_numbers: false,
     };
     let summary = pdf::import(pdf, &out, &opts).expect("import failed");
 
@@ -144,6 +145,7 @@ fn a_scan_over_the_page_limit_is_refused_before_ocr() {
         mode: Mode::Reflow,
         language: Some("en".into()),
         max_ocr_pages: Some(1),
+        keep_page_numbers: false,
     };
     let err = pdf::import(&pdf, &out, &opts).expect_err("a 2-page scan passed a 1-page limit");
     assert_eq!(
@@ -151,4 +153,139 @@ fn a_scan_over_the_page_limit_is_refused_before_ocr() {
         Some(&pdf::ScanTooLong { pages: 2, max: 1 })
     );
     assert!(!out.exists());
+}
+
+/// A born-digital PDF of 14 pages of prose, a footer "X n X" on each, made
+/// here so that nothing copyrighted is needed. Page 7 stops mid-sentence and
+/// page 8 goes on in lower case, so paginaverto glues page 7's footer to the
+/// front of page 8's first paragraph.
+fn pdf_with_footers() -> Vec<u8> {
+    let words = [
+        "the", "quick", "brown", "fox", "jumps", "over", "a", "lazy", "dog", "while", "the",
+        "river", "runs", "slowly", "past", "the", "old", "mill",
+    ];
+    let mut seed = 7u32;
+    let mut line = |n: usize| -> String {
+        (0..n)
+            .map(|_| {
+                seed = seed.wrapping_mul(1_103_515_245).wrapping_add(12_345);
+                words[(seed >> 16) as usize % words.len()]
+            })
+            .collect::<Vec<_>>()
+            .join(" ")
+    };
+    fn add(objects: &mut Vec<String>, o: String) -> usize {
+        objects.push(o);
+        objects.len()
+    }
+    let mut objects: Vec<String> = Vec::new();
+    let font = add(
+        &mut objects,
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".into(),
+    );
+    let mut contents = Vec::new();
+    for page in 1..=14u32 {
+        let mut lines: Vec<String> = Vec::new();
+        if page == 1 {
+            lines.push("CHAPTER ONE".into());
+        }
+        lines.push(if page == 8 {
+            format!("middle of a sentence that goes on {}.", line(6))
+        } else {
+            format!("A {}.", line(10))
+        });
+        for _ in 0..18 {
+            lines.push(format!("{}.", line(11)));
+        }
+        if page == 7 {
+            *lines.last_mut().unwrap() = "This last sentence of the page stops in the".into();
+        }
+        let mut ops = String::from("BT /F1 11 Tf 72 740 Td 14 TL\n");
+        for l in &lines {
+            ops.push_str(&format!("({l}) Tj T*\n"));
+        }
+        ops.push_str(&format!("ET BT /F1 10 Tf 290 40 Td (X {page} X) Tj ET"));
+        contents.push(add(
+            &mut objects,
+            format!("<< /Length {} >>\nstream\n{ops}\nendstream", ops.len()),
+        ));
+    }
+    let pages_id = objects.len() + contents.len() + 1;
+    let kids: Vec<String> = contents
+        .iter()
+        .map(|c| {
+            let id = add(
+                &mut objects,
+                format!(
+                    "<< /Type /Page /Parent {pages_id} 0 R /MediaBox [0 0 612 792] \
+                     /Resources << /Font << /F1 {font} 0 R >> >> /Contents {c} 0 R >>"
+                ),
+            );
+            format!("{id} 0 R")
+        })
+        .collect();
+    let pages = add(
+        &mut objects,
+        format!(
+            "<< /Type /Pages /Kids [{}] /Count {} >>",
+            kids.join(" "),
+            kids.len()
+        ),
+    );
+    assert_eq!(pages, pages_id);
+    let catalog = add(
+        &mut objects,
+        format!("<< /Type /Catalog /Pages {pages_id} 0 R >>"),
+    );
+    let mut out = b"%PDF-1.4\n".to_vec();
+    let mut offsets = Vec::new();
+    for (i, o) in objects.iter().enumerate() {
+        offsets.push(out.len());
+        out.extend_from_slice(format!("{} 0 obj\n{o}\nendobj\n", i + 1).as_bytes());
+    }
+    let xref = out.len();
+    out.extend_from_slice(
+        format!("xref\n0 {}\n0000000000 65535 f \n", objects.len() + 1).as_bytes(),
+    );
+    for o in offsets {
+        out.extend_from_slice(format!("{o:010} 00000 n \n").as_bytes());
+    }
+    out.extend_from_slice(
+        format!(
+            "trailer\n<< /Size {} /Root {catalog} 0 R >>\nstartxref\n{xref}\n%%EOF\n",
+            objects.len() + 1
+        )
+        .as_bytes(),
+    );
+    out
+}
+
+/// A page number dressed as "X n X" is neither a bare numeral nor a running
+/// head to paginaverto: it comes through on every page, once glued to the
+/// paragraph that continues over the page. `import` takes them all out and
+/// joins that paragraph again; `keep_page_numbers` leaves them in.
+#[test]
+fn decorated_page_numbers_are_taken_out_unless_kept() {
+    let dir = tempfile::tempdir().unwrap();
+    let pdf = dir.path().join("footers.pdf");
+    std::fs::write(&pdf, pdf_with_footers()).unwrap();
+
+    let (summary, text, _) = import_text(&pdf);
+    assert_eq!(summary.page_numbers_removed, 14);
+    assert!(!text.contains("X 7 X"), "{text}");
+    assert!(
+        text.contains("stops in the middle of a sentence that goes on"),
+        "{text}"
+    );
+
+    let out = dir.path().join("kept.epub");
+    let opts = ImportOptions {
+        mode: Mode::Reflow,
+        language: Some("en".into()),
+        max_ocr_pages: None,
+        keep_page_numbers: true,
+    };
+    let kept = pdf::import(&pdf, &out, &opts).unwrap();
+    assert_eq!(kept.page_numbers_removed, 0);
+    assert_eq!(kept.paragraphs, summary.paragraphs + 14);
 }

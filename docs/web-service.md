@@ -40,7 +40,8 @@ choose a mode from the switcher at the top of the panel:
   text layer (born-digital books and already-searchable scans), including modern
   Type0/CID fonts. A scan without a text layer is read by OCR, up to 50 pages
   (Latin-script languages; the models are in the image, nothing is downloaded);
-  a longer scan is refused before OCR starts, pointing to the CLI.
+  a longer scan is refused before OCR starts, pointing to the CLI. The PDF's
+  printed page numbers are taken out unless you switch **Keep page numbers** on.
 - **Import Markdown** *(experimental)* — turn [Markdown into a reflowable
   EPUB](markdown-import.md): drop a single `.md`, or a **`.zip`** of a whole
   book. Every `.md` in the zip becomes a chapter (in filename order), referenced
