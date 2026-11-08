@@ -486,6 +486,16 @@
             <option value="pl">Polski</option>
             <option value="ru">Русский</option>
           </select>
+          <div class="toggle-row" style="margin-top:14px;">
+            <div class="txt">
+              <span style="font-weight:600;font-size:15px;" data-i18n="import_pagenum_title">Keep page numbers</span>
+              <small data-i18n="import_pagenum_desc">Leave the PDF's printed page numbers in the text. Off, a line that recurs on every page with only its number changed is taken out.</small>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="importKeepPageNumbers" />
+              <span class="slot"></span>
+            </label>
+          </div>
         </div>
 
         <!-- smart: AI OCR (PDF -> Markdown -> EPUB), config-gated by a server API key -->

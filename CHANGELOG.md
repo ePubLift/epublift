@@ -10,6 +10,18 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+### Added
+- **`import` takes the PDF's printed page numbers out of the text** (CLI and
+  web). paginaverto drops a bare numeral and a running head that recurs letter
+  for letter; a page number dressed in something else (`X 12 X`, `- 12 -`) came
+  through as a paragraph on every page, or glued to the front of the paragraph
+  that continues over the page. A line that recurs on at least a quarter of the
+  pages with only its number changed, rising through the book, at the top or
+  the foot of its pages, now goes, and a paragraph it was glued to is joined
+  again to the sentence the page before broke off. `--keep-page-numbers`, or
+  the web's **Keep page numbers** switch, leaves them in; the summary says how
+  many went.
+
 ## [cli-v5.2.0] - 2026-11-07
 
 ### Added

@@ -28,6 +28,7 @@ use std::path::Path;
 
 #[cfg(feature = "pdf-ocr")]
 mod ocr;
+mod page_numbers;
 mod reflow;
 
 /// Output layout mode.
@@ -50,6 +51,10 @@ pub struct ImportOptions {
     /// The most pages OCR may read: a longer scan is refused with
     /// [`ScanTooLong`] before any page is recognised. `None` reads any length.
     pub max_ocr_pages: Option<usize>,
+    /// Leave the PDF's printed page numbers in the text. By default a line
+    /// that recurs on the pages with only its number changed ("X 12 X",
+    /// "- 12 -") is taken out; paginaverto drops bare numerals either way.
+    pub keep_page_numbers: bool,
 }
 
 /// A scan longer than [`ImportOptions::max_ocr_pages`].
@@ -85,6 +90,9 @@ pub struct ImportSummary {
     /// OCR read the book, and its model lacks the letters of the book's
     /// language: the text is wrong or missing.
     pub ocr_misreads_language: bool,
+    /// Printed page numbers taken out of the text, beyond the bare numerals
+    /// paginaverto drops itself. 0 with [`ImportOptions::keep_page_numbers`].
+    pub page_numbers_removed: usize,
 }
 
 /// Read the PDF. Without OCR first: only a scan needs the 10.5 MB of models, so
@@ -266,7 +274,7 @@ pub fn import(input: &Path, output: &Path, opts: &ImportOptions) -> Result<Impor
     }
 
     let (doc, used_ocr) = read(input, opts)?;
-    let doc = doc.map_err(|e| match e {
+    let mut doc = doc.map_err(|e| match e {
         paginaverto::Error::Open(cause) => {
             anyhow::anyhow!(cause).context(format!("failed to open PDF {}", input.display()))
         }
@@ -275,6 +283,11 @@ pub fn import(input: &Path, output: &Path, opts: &ImportOptions) -> Result<Impor
         }
         e => e.into(),
     })?;
+    let page_numbers_removed = if opts.keep_page_numbers {
+        0
+    } else {
+        page_numbers::strip(&mut doc)
+    };
 
     // The PDF's own title and author, else what the file name says.
     let stem = input
@@ -314,6 +327,7 @@ pub fn import(input: &Path, output: &Path, opts: &ImportOptions) -> Result<Impor
                 .language
                 .as_deref()
                 .is_some_and(|l| !paginaverto::recognises(l)),
+        page_numbers_removed,
     })
 }
 
