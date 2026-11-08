@@ -737,6 +737,7 @@ async fn import(
         Some("fixed") => epublift::pdf::Mode::Fixed,
         _ => epublift::pdf::Mode::Reflow,
     };
+    let keep_page_numbers = field_on(&fields, "keep_page_numbers");
 
     // Bound concurrent jobs (shares the convert pool).
     let _permit = state
@@ -760,6 +761,7 @@ async fn import(
                         mode,
                         language,
                         max_ocr_pages: Some(OCR_MAX_PAGES),
+                        keep_page_numbers,
                     };
                     let s = epublift::pdf::import(&input_path, &out_path, &opts)?;
                     ImportResponse {
@@ -772,6 +774,7 @@ async fn import(
                         download_token: String::new(),
                         ocr: s.used_ocr,
                         ocr_misreads_language: s.ocr_misreads_language,
+                        page_numbers_removed: s.page_numbers_removed,
                         unread_pages: s
                             .unread_pages
                             .into_iter()
@@ -794,6 +797,7 @@ async fn import(
                         download_token: String::new(),
                         ocr: false,
                         ocr_misreads_language: false,
+                        page_numbers_removed: 0,
                         unread_pages: Vec::new(),
                     }
                 }
@@ -811,6 +815,7 @@ async fn import(
                         download_token: String::new(),
                         ocr: false,
                         ocr_misreads_language: false,
+                        page_numbers_removed: 0,
                         unread_pages: Vec::new(),
                     }
                 }
@@ -856,6 +861,8 @@ struct ImportResponse {
     ocr: bool,
     /// PDF only: OCR's model lacks the letters of the book's language.
     ocr_misreads_language: bool,
+    /// PDF only: printed page numbers taken out of the text.
+    page_numbers_removed: usize,
     /// PDF only: pages not (fully) read, by problem (`ocr_failed`,
     /// `undecodable_images`, `image_not_read`).
     unread_pages: Vec<UnreadPages>,
@@ -954,6 +961,7 @@ async fn smart_import(
         .get("language")
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty());
+    let keep_page_numbers = field_on(&fields, "keep_page_numbers");
     let base = Path::new(&raw_name)
         .file_stem()
         .and_then(|s| s.to_str())
@@ -982,6 +990,7 @@ async fn smart_import(
                 provider,
                 api_key,
                 language,
+                keep_page_numbers,
             };
             let s = epublift::smart_import::import(&file_bytes, &out_path, tmp.path(), &opts)?;
             let out_bytes = std::fs::read(&out_path)?;
@@ -996,6 +1005,7 @@ async fn smart_import(
                     download_token: String::new(),
                     ocr: false,
                     ocr_misreads_language: false,
+                    page_numbers_removed: s.page_numbers_removed,
                     unread_pages: Vec::new(),
                 },
                 out_bytes,
@@ -1018,6 +1028,7 @@ async fn smart_import(
         provider = provider.id(),
         chapters = resp.chapters,
         images = resp.images,
+        page_numbers_removed = resp.page_numbers_removed,
         bytes = out_bytes.len(),
         "smart import completed"
     );

@@ -46,6 +46,7 @@ Flags:
 | `-o, --output <EPUB>` | output path (default: alongside the PDF) |
 | `--language <code>` | content language (BCP-47, e.g. `tr`); sets `dc:language` |
 | `--mode reflow\|fixed` | `reflow` (default). `fixed` (preserve page images) is **not implemented yet** |
+| `--keep-page-numbers` | leave the PDF's printed page numbers in the text (by default they are taken out, see [Page numbers](#page-numbers)) |
 
 The `import` subcommand exists when the binary is built `--features pdf` (the
 pre-built release binaries include it). **OCR of scanned PDFs additionally needs
@@ -73,6 +74,21 @@ name's, else the PDF's own unless that names a computer or account ("Lenovo",
 The book has a small style sheet: indented, justified and hyphenated
 paragraphs, and figures that never overflow the screen. A reader's own
 settings still win.
+
+### Page numbers
+
+A bare page number on a page is dropped by paginaverto, as is a running head
+that recurs letter for letter. A page number dressed in something else —
+`X 12 X`, `- 12 -`, `~ 12 ~` — is neither, and came through as a paragraph on
+every page, or glued to the front of the paragraph that continues over the
+page. `import` finds the lines that recur on at least a quarter of the pages
+(three at least) with only their number changed, rising through the book, at
+the top or the foot of their pages, and takes them out; a paragraph that had
+one glued on is joined again to the sentence the page before broke off. The
+summary says how many went. `--keep-page-numbers` leaves them in. A line of
+this kind numbered in roman numerals (front matter) is not matched yet.
+[Smart Import](smart-import.md#page-numbers) applies the same rule to the
+text its OCR service returns.
 
 **The cover** is page 1's picture when page 1 is a cover: an image filling the
 page with no text drawn over it. It becomes the EPUB's `cover-image` and opens
@@ -118,9 +134,10 @@ PDF, not a faithful reproduction.
 ## Web usage
 
 In the web UI, pick the **Import PDF** mode, drop a `.pdf`, choose the book's
-language, and convert. The result reports the chapter and paragraph counts, the
-pages that could not be read (as the CLI's warnings), and a one-time download
-link. A scan without a text layer is read by OCR, up to 50 pages, so that it
+language, and convert; the PDF's printed page numbers are taken out unless you
+switch **Keep page numbers** on. The result reports the chapter and paragraph
+counts, the page numbers taken out, the pages that could not be read (as the
+CLI's warnings), and a one-time download link. A scan without a text layer is read by OCR, up to 50 pages, so that it
 finishes inside the web's 120-second request limit; a longer one is refused
 before OCR starts, and the CLI (no limit) or [Smart Import](smart-import.md)
 reads it. The Docker image carries the OCR models, checked by SHA-256 at build
@@ -137,7 +154,8 @@ upload in memory and deletes it immediately, like every other mode.
 - **Accurate word spacing** from the font's real glyph widths (`/Widths`,
   `/W`), not estimates. On a born-digital test book the converted text matched
   the publisher's own EPUB at **~99.8% word overlap**.
-- Structure: running headers/footers and page numbers stripped, line-break
+- Structure: running headers/footers and page numbers stripped (a page number
+  in a decoration, `X 12 X`, too; `--keep-page-numbers` leaves them in), line-break
   hyphens re-joined ("in-\ncreased" → "increased"), paragraphs reassembled, and
   headings detected (font size on born-digital pages, ALL-CAPS otherwise).
   Chapters follow the PDF's own outline when it is a real table of contents,

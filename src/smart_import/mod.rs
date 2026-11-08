@@ -81,6 +81,19 @@ pub struct SmartOptions {
     pub api_key: String,
     /// Content language (BCP-47) passed through to the Markdown importer.
     pub language: Option<String>,
+    /// Keep the PDF's printed page numbers. By default a line that recurs at
+    /// the top or foot of the pages with only its number changed is taken out
+    /// of the OCR text before the book is built.
+    pub keep_page_numbers: bool,
+}
+
+/// What a Smart Import produced (for the web to report).
+#[derive(Debug, Clone, Copy)]
+pub struct SmartSummary {
+    pub chapters: usize,
+    pub images: usize,
+    /// Printed page numbers taken out of the OCR text.
+    pub page_numbers_removed: usize,
 }
 
 /// OCR `pdf` with the chosen provider, materialise the Markdown + images under
@@ -90,27 +103,38 @@ pub fn import(
     output: &Path,
     workdir: &Path,
     opts: &SmartOptions,
-) -> Result<crate::markdown::ImportSummary> {
+) -> Result<SmartSummary> {
     if opts.api_key.trim().is_empty() {
         bail!("no API key configured for {}", opts.provider.label());
     }
 
-    let ocr = match opts.provider {
+    let mut ocr = match opts.provider {
         Provider::Mistral => mistral::ocr(&opts.api_key, pdf)?,
     };
-    if ocr.markdown.trim().is_empty() {
+    if ocr.pages.iter().all(|p| p.trim().is_empty()) {
         bail!("the OCR service returned no text for this PDF");
     }
+    let page_numbers_removed = if opts.keep_page_numbers {
+        0
+    } else {
+        crate::page_numbers::strip_markdown_pages(&mut ocr.pages)
+    };
+    let markdown = ocr.pages.join("\n\n");
 
     for (name, bytes) in &ocr.images {
         std::fs::write(workdir.join(name), bytes)
             .with_context(|| format!("failed to write OCR image {name}"))?;
     }
     let md_path = workdir.join("book.md");
-    std::fs::write(&md_path, &ocr.markdown).context("failed to write OCR markdown")?;
+    std::fs::write(&md_path, &markdown).context("failed to write OCR markdown")?;
 
     let md_opts = crate::markdown::ImportOptions {
         language: opts.language.clone(),
     };
-    crate::markdown::import(&md_path, output, &md_opts)
+    let s = crate::markdown::import(&md_path, output, &md_opts)?;
+    Ok(SmartSummary {
+        chapters: s.chapters,
+        images: s.images,
+        page_numbers_removed,
+    })
 }

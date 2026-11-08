@@ -55,6 +55,17 @@ UI changes.
   operator pays; many operators will leave Smart Import off there and rely on
   self-hosting, where each user runs their own instance with their own key.
 
+## Page numbers
+
+The OCR service reads the printed page numbers along with the text, so a
+footer like `× 12 ×` or a bare `12` would come through on every page. Smart
+Import takes them out before the book is built: a line at the top or the foot
+of its page that recurs on at least a quarter of the pages (three at least)
+with only its number changed, rising through the book, goes, however Markdown
+dresses it (`# 12`, `**12**`). The result says how many went. The **Keep page
+numbers** switch leaves them in. This is the same rule the offline
+[PDF import](pdf-import.md#page-numbers) applies.
+
 ## Limitations
 
 - Web-only for now (no CLI subcommand).

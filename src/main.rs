@@ -346,6 +346,12 @@ struct ImportArgs {
     /// Content language (BCP-47, e.g. "tr"). Used for de-hyphenation/metadata.
     #[arg(long)]
     language: Option<String>,
+
+    /// [PDF only] Keep the PDF's printed page numbers in the text. By default
+    /// a line that recurs on the pages with only its number changed ("X 12 X",
+    /// "- 12 -") is taken out.
+    #[arg(long)]
+    keep_page_numbers: bool,
 }
 
 /// `epublift meta …` — read or edit a book's metadata. See docs/metadata.md.
@@ -823,10 +829,11 @@ fn run_import(args: &ImportArgs) -> Result<()> {
             mode,
             language: args.language.clone(),
             max_ocr_pages: None,
+            keep_page_numbers: args.keep_page_numbers,
         };
         let summary = pdf::import(&args.input, &output, &opts)?;
         eprintln!(
-            "[EXPERIMENTAL] imported {} → {} ({} chapters, {} paragraphs{})",
+            "[EXPERIMENTAL] imported {} → {} ({} chapters, {} paragraphs{}{})",
             args.input.display(),
             output.display(),
             summary.chapters,
@@ -835,6 +842,10 @@ fn run_import(args: &ImportArgs) -> Result<()> {
                 ", read by OCR"
             } else {
                 ""
+            },
+            match summary.page_numbers_removed {
+                0 => String::new(),
+                n => format!(", {n} page numbers left out"),
             },
         );
         for (problem, pages) in &summary.unread_pages {
