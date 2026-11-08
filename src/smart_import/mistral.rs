@@ -18,7 +18,8 @@
 //!
 //! Calls `POST https://api.mistral.ai/v1/ocr` with the PDF inlined as a base64
 //! data URL and `include_image_base64: true`. The response is a list of pages,
-//! each with `markdown` and `images` (base64); we stitch the pages together and
+//! each with `markdown` and `images` (base64); we keep the pages apart (so the
+//! printed page numbers can be found and taken out) for the caller to stitch, and
 //! return the images so the offline Markdown importer can embed them.
 //!
 //! The live HTTP call can't be exercised without an API key, so the response
@@ -31,7 +32,8 @@ use serde_json::Value;
 /// OCR'd document: stitched Markdown plus its decoded images (`filename`, bytes)
 /// where the filenames match the rewritten `![…](filename)` references.
 pub(crate) struct OcrResult {
-    pub markdown: String,
+    /// One Markdown string per PDF page, in order.
+    pub pages: Vec<String>,
     pub images: Vec<(String, Vec<u8>)>,
 }
 
@@ -80,17 +82,17 @@ fn error_message(resp: &[u8]) -> String {
     truncate(text.trim(), 300)
 }
 
-/// Reconstruct stitched Markdown + decoded images from an OCR response.
+/// Reconstruct the per-page Markdown + decoded images from an OCR response.
 ///
 /// Image ids are page-scoped (`img-0.jpeg` can repeat per page), so we namespace
-/// each as `p{page}_{id}` and rewrite that page's links to match before joining.
+/// each as `p{page}_{id}` and rewrite that page's links to match.
 fn parse_ocr_response(value: &Value) -> Result<OcrResult> {
     let pages = value
         .get("pages")
         .and_then(|p| p.as_array())
         .context("OCR response had no 'pages' array")?;
 
-    let mut markdown = String::new();
+    let mut out: Vec<String> = Vec::with_capacity(pages.len());
     let mut images: Vec<(String, Vec<u8>)> = Vec::new();
 
     for (pi, page) in pages.iter().enumerate() {
@@ -125,13 +127,10 @@ fn parse_ocr_response(value: &Value) -> Result<OcrResult> {
             }
         }
 
-        if !markdown.is_empty() {
-            markdown.push_str("\n\n");
-        }
-        markdown.push_str(&page_md);
+        out.push(page_md);
     }
 
-    Ok(OcrResult { markdown, images })
+    Ok(OcrResult { pages: out, images })
 }
 
 /// Decode an image that may be a bare base64 string or a `data:…;base64,…` URI.
@@ -219,10 +218,11 @@ mod tests {
             ]
         });
         let out = parse_ocr_response(&resp).unwrap();
-        // Page link rewritten to the namespaced filename, both pages stitched.
-        assert!(out.markdown.contains("](./p0_img-0.jpeg)"));
-        assert!(out.markdown.contains("# Title"));
-        assert!(out.markdown.contains("More on page two."));
+        // Page link rewritten to the namespaced filename, one string per page.
+        assert_eq!(out.pages.len(), 2);
+        assert!(out.pages[0].contains("](./p0_img-0.jpeg)"));
+        assert!(out.pages[0].contains("# Title"));
+        assert_eq!(out.pages[1], "More on page two.");
         assert_eq!(out.images.len(), 1);
         assert_eq!(out.images[0].0, "p0_img-0.jpeg");
         assert_eq!(&out.images[0].1[..8], b"\x89PNG\r\n\x1a\n");

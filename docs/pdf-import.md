@@ -87,6 +87,8 @@ the top or the foot of their pages, and takes them out; a paragraph that had
 one glued on is joined again to the sentence the page before broke off. The
 summary says how many went. `--keep-page-numbers` leaves them in. A line of
 this kind numbered in roman numerals (front matter) is not matched yet.
+[Smart Import](smart-import.md#page-numbers) applies the same rule to the
+text its OCR service returns.
 
 **The cover** is page 1's picture when page 1 is a cover: an image filling the
 page with no text drawn over it. It becomes the EPUB's `cover-image` and opens

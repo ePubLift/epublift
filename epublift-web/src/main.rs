@@ -961,6 +961,7 @@ async fn smart_import(
         .get("language")
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty());
+    let keep_page_numbers = field_on(&fields, "keep_page_numbers");
     let base = Path::new(&raw_name)
         .file_stem()
         .and_then(|s| s.to_str())
@@ -989,6 +990,7 @@ async fn smart_import(
                 provider,
                 api_key,
                 language,
+                keep_page_numbers,
             };
             let s = epublift::smart_import::import(&file_bytes, &out_path, tmp.path(), &opts)?;
             let out_bytes = std::fs::read(&out_path)?;
@@ -1003,7 +1005,7 @@ async fn smart_import(
                     download_token: String::new(),
                     ocr: false,
                     ocr_misreads_language: false,
-                    page_numbers_removed: 0,
+                    page_numbers_removed: s.page_numbers_removed,
                     unread_pages: Vec::new(),
                 },
                 out_bytes,
@@ -1026,6 +1028,7 @@ async fn smart_import(
         provider = provider.id(),
         chapters = resp.chapters,
         images = resp.images,
+        page_numbers_removed = resp.page_numbers_removed,
         bytes = out_bytes.len(),
         "smart import completed"
     );

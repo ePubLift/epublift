@@ -25,15 +25,7 @@ use std::collections::HashMap;
 
 use paginaverto::{Block, BlockKind, Document, Run};
 
-/// A page-number line is short: this many characters at most, …
-const MAX_CHARS: usize = 40;
-/// … and this many words besides the number.
-const MAX_WORDS: usize = 6;
-/// A line recurs on at least this many pages, …
-const MIN_HITS: usize = 3;
-/// … and on at least a quarter of the book's pages: a chapter's numbered title
-/// ("Chapter 12") recurs too, but once in many pages.
-const PAGES_PER_HIT: usize = 4;
+use crate::page_numbers::{Template, qualifies};
 
 /// Where a page-number line was found.
 struct Hit {
@@ -44,60 +36,6 @@ struct Hit {
     /// How many bytes of the block's text the line takes: all of it, or a
     /// prefix the next page's paragraph was glued to.
     len: usize,
-}
-
-/// A line reduced to its shape: what comes before and after the number.
-struct Template {
-    head: String,
-    tail: String,
-}
-
-impl Template {
-    /// The line's shape, if it is short and holds one number: the text up to
-    /// and after a run of 1 to 5 digits, the only digits in it.
-    fn of(text: &str) -> Option<Template> {
-        let text = text.trim();
-        if text.is_empty() || text.chars().count() > MAX_CHARS {
-            return None;
-        }
-        let start = text.find(|c: char| c.is_ascii_digit())?;
-        let end = text[start..]
-            .find(|c: char| !c.is_ascii_digit())
-            .map_or(text.len(), |n| start + n);
-        if end - start > 5 || text[end..].chars().any(|c| c.is_ascii_digit()) {
-            return None;
-        }
-        let (head, tail) = (&text[..start], &text[end..]);
-        if head.split_whitespace().count() + tail.split_whitespace().count() > MAX_WORDS {
-            return None;
-        }
-        Some(Template {
-            head: head.to_string(),
-            tail: tail.to_string(),
-        })
-    }
-
-    /// Does `text` start with this line? Its number, and how many bytes it
-    /// takes, when the rest is nothing, or a word after a space. A bare number
-    /// has no shape to match a paragraph's first word by.
-    fn matches(&self, text: &str) -> Option<(u32, usize)> {
-        let rest = text.strip_prefix(self.head.as_str())?;
-        let digits = rest
-            .find(|c: char| !c.is_ascii_digit())
-            .unwrap_or(rest.len());
-        if digits == 0 || digits > 5 {
-            return None;
-        }
-        let value = rest[..digits].parse().ok()?;
-        let after = rest[digits..].strip_prefix(self.tail.as_str())?;
-        let len = text.len() - after.len();
-        let dressed = !self.head.is_empty() || !self.tail.is_empty();
-        match after.chars().next() {
-            None => Some((value, len)),
-            Some(' ') if dressed => Some((value, len + 1)),
-            _ => None,
-        }
-    }
 }
 
 /// Take the printed page numbers out of `doc`'s blocks. How many went.
@@ -114,9 +52,8 @@ fn strip_blocks(blocks: &mut Vec<Block>, pages: usize) -> usize {
     let mut whole: HashMap<String, (Template, Vec<usize>)> = HashMap::new();
     for (at, block) in blocks.iter().enumerate().filter(|(_, b)| is_paragraph(b)) {
         if let Some(t) = Template::of(&block.text()) {
-            let key = format!("{}\u{0}{}", t.head, t.tail);
             whole
-                .entry(key)
+                .entry(t.key())
                 .or_insert_with(|| (t, Vec::new()))
                 .1
                 .push(at);
@@ -157,12 +94,9 @@ fn strip_blocks(blocks: &mut Vec<Block>, pages: usize) -> usize {
                 });
             }
         }
-        if found.len() < MIN_HITS || found.len() * PAGES_PER_HIT < pages {
-            continue;
-        }
-        // Page numbers go up.
-        let rising = found.windows(2).filter(|w| w[1].value > w[0].value).count();
-        if rising * 3 < (found.len() - 1) * 2 {
+        // Enough of them for the book, and rising through it.
+        let values: Vec<u32> = found.iter().map(|h| h.value).collect();
+        if !qualifies(&values, pages) {
             continue;
         }
         // A line on its own sits at the top or the bottom of its page.
