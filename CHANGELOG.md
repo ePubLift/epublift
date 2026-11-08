@@ -20,7 +20,8 @@ are tagged with the component they belong to.
   the foot of its pages, now goes, and a paragraph it was glued to is joined
   again to the sentence the page before broke off. `--keep-page-numbers`, or
   the web's **Keep page numbers** switch, leaves them in; the summary says how
-  many went.
+  many went. Smart Import applies the same rule to the text its OCR service
+  returns, page by page, before the book is built, and has the same switch.
 
 ## [cli-v5.2.0] - 2026-11-07
 

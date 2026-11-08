@@ -59,6 +59,7 @@ const importKeepPageNumbers = document.getElementById('importKeepPageNumbers');
 // Smart Import (AI OCR) elements + capability flag (set from /config on load).
 const smartProvider = document.getElementById('smartProvider');
 const smartLang = document.getElementById('smartLang');
+const smartKeepPageNumbers = document.getElementById('smartKeepPageNumbers');
 const smartDisabledEl = document.getElementById('smartDisabled');
 const smartEnabledEl = document.getElementById('smartEnabled');
 let smartEnabled = false;
@@ -238,6 +239,7 @@ go.addEventListener('click', async () => {
     } else if (mode === 'smart'){
       if (smartProvider) fd.append('provider', smartProvider.value);
       if (smartLang) fd.append('language', smartLang.value);
+      if (smartKeepPageNumbers) fd.append('keep_page_numbers', smartKeepPageNumbers.checked ? 'true' : 'false');
     }
     // archive sends only the file.
     const res = await fetch(cfg.endpoint, { method:'POST', body: fd });

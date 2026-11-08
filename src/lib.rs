@@ -36,6 +36,8 @@ pub mod markdown;
 pub mod meta;
 mod nav;
 mod opf;
+#[cfg(any(feature = "pdf", feature = "smart-import"))]
+mod page_numbers;
 #[cfg(feature = "pdf")]
 pub mod pdf;
 mod presentational;
