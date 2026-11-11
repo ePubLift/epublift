@@ -7,7 +7,7 @@ resolver = "2"
 
 [package]
 name = "epublift"
-version = "5.2.0"
+version = "5.3.0"
 edition = "2024"
 license = "AGPL-3.0-or-later"
 description = "EPUB toolbox: upgrade to EPUB 3.3, optionally shrink images to WebP, validate, repair, edit metadata, archive"
@@ -75,7 +75,7 @@ required-features = ["img-calib"]
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
-zip = { version = "9.3.0", default-features = false, features = ["deflate"] }
+zip = { version = "9.5.1", default-features = false, features = ["deflate"] }
 # Inflates stored and deflated EPUB entries from their raw bytes
 # (`entry_reader`), on the pure-Rust backend zip's "deflate" feature uses.
 flate2 = { version = "1.1", default-features = false, features = ["zlib-rs"] }
@@ -89,7 +89,7 @@ regex = "1"
 # (text layer, or OCR with its `ocr` feature); we build the EPUB. Pinned
 # exactly, as paginaverto pins its own engines; never its `cli` feature.
 # Optional so the default build doesn't carry it. See src/pdf/.
-paginaverto = { version = "=0.3.1", optional = true }
+paginaverto = { version = "=0.3.2", optional = true }
 # [EXPERIMENTAL] Markdown import (`epublift import file.md`): turn a Markdown
 # file (e.g. an AI-OCR'd PDF) into a reflowable EPUB. pulldown-cmark is the
 # CommonMark standard, pure Rust, zero C. default-features off drops its bundled
@@ -109,21 +109,21 @@ base64 = { version = "0.23", optional = true }
 # hostile document is declined instead of aborting the process. The validator
 # itself (`epublift check`) stays behind the opt-in `validate` feature; see
 # docs/validate.md.
-epubveri = "0.37.1"
+epubveri = "0.40.1"
 # epubsana, the family's confirm-each-step repairer: `epublift repair` runs its
 # core `repair()` — the same function `epubsana` and its browser build run — so
 # a book repaired here and there comes back identical. Pure Rust, on the same
 # epubveri, zip 9 and roxmltree 0.21 as we are. See docs/repair.md.
-epubsana = "0.39.0"
+epubsana = "0.40.0"
 # kepubverto, the family's KEPUB converter: `--kepub` and the web's .kepub run
 # its `convert()` on the packaged book, so the Kobo markup is exactly what
 # `kepubverto` writes. Pure Rust, on the same epubveri, zip 9 and
 # roxmltree 0.21.
-kepubverto = "0.4.0"
+kepubverto = "0.5.0"
 # styloria, the family's CSS parser: the upgrade asks its cascade whether the
 # book's CSS already sets a property before writing a presentational attribute
 # as CSS (src/presentational.rs). Its 0.x minors don't mix types, so this floor
-# moves with epubveri's (epubveri 0.37 is on styloria 0.19).
+# moves with epubveri's (epubveri 0.40 is on styloria 0.19).
 styloria = "0.19"
 # `--format json` on `check` and `repair`: the shared veripublica envelope.
 # epubsana already links it, so it costs the default build nothing.
@@ -267,7 +267,7 @@ webpki-roots = ["dep:webpki-roots"]
 
 [dev-dependencies]
 # Used by the integration tests to assemble EPUB fixtures and inspect output.
-zip = { version = "9.3.0", default-features = false, features = ["deflate"] }
+zip = { version = "9.5.1", default-features = false, features = ["deflate"] }
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 tempfile = "3"
 

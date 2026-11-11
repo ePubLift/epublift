@@ -14,7 +14,7 @@ This modernizes the input and saves it next to the original as
 `<input_name>_v3.3.epub`, plus a performance report in `<input_name>_report.txt`.
 
 Print the version you are running (with the exact commit when the build knew
-it, e.g. `epublift 5.2.0+…`):
+it, e.g. `epublift 5.3.0+…`):
 
 ```bash
 epublift --version        # or -V
@@ -170,9 +170,9 @@ error- or fatal-severity finding), `1` if any book is invalid, `2` if an input
 couldn't be read at all — so it drops straight into a build script: `for f in dist/*.epub; do epublift check -i "$f" || exit 1; done`. It's
 compiled only with the opt-in `validate` feature
 (`cargo build --features validate`; included in the release binaries). epubveri
-is **pre-1.0** (99.7% message-ID recall on epubcheck's own test suite — not yet
-full parity), so
-treat a clean check as strong evidence, not a conformance certificate. Full
+is **pre-1.0** and follows the EPUB specification where it and epubcheck
+disagree, so a book can pass one and fail the other. Treat a clean check as
+strong evidence, not a conformance certificate. Full
 details: [Validation](validate.md).
 
 ### Images: kept by default, WebP with `--webp`

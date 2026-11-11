@@ -979,12 +979,13 @@ fn run_check(args: &CheckArgs) -> Result<()> {
                 );
             }
         }
-        // Honest footer: epubveri is pre-1.0 and not yet full epubcheck parity.
+        // Honest footer: epubveri is pre-1.0 and follows the specification
+        // where it and epubcheck disagree.
         if !args.quiet || envelope.status != "ok" {
             eprintln!(
-                "\nValidated with epubveri (pure-Rust, JVM-free; pre-1.0 — 99.7% of \
-                 epubcheck's own test cases caught with the same message ID, not yet \
-                 full parity)."
+                "\nValidated with epubveri (pure-Rust, JVM-free, pre-1.0). It follows the \
+                 EPUB specification where it and epubcheck disagree; if a retailer asks \
+                 for epubcheck, run it too."
             );
         }
     }

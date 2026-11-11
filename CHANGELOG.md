@@ -10,6 +10,37 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+## [cli-v5.3.0] - 2026-11-12
+
+### Changed
+- **`check` judges a book by the EPUB specification where it and epubcheck
+  disagree** (epubveri 0.40.1). Some books that passed before now fail, most
+  often for an EPUB 3 image with no `alt`. On our 562-book shelf, 2 original
+  books and 24 upgraded books that passed before now fail. The footer under
+  `check` says so, instead of quoting a match rate against epubcheck.
+- **An EPUB 2 book upgraded to 3.3 can now be reported invalid for images
+  with no `alt`.** EPUB 2 does not require `alt`, EPUB 3 does, and the upgrade
+  does not invent one: `alt=""` would call a content image decorative.
+- **`repair` runs epubsana 0.40.0.** Its repairs are unchanged; it grades with
+  the same epubveri as `check`.
+- **`--kepub` runs kepubverto 0.5.0:** an image that needs no `alt` because a
+  figure caption stands in for it is no longer wrapped in a span that made it
+  an error.
+- `import` reads PDFs through paginaverto 0.3.2 (no change to its output),
+  and zip 9.5.1.
+
+## [web-v1.34.0] - 2026-11-12
+
+### Changed
+- **Validate and Repair run epubveri 0.40.1 and epubsana 0.40.0 in the
+  browser**, the same versions as cli-v5.3.0, and give every book on our
+  562-book shelf the same verdict as the CLI. Validate judges a book by the
+  EPUB specification where it and epubcheck disagree, so some books that passed
+  before now fail; the note under Validate says so, in all 13 languages.
+- **Optimize, .kepub and Import run cli-v5.3.0's engine:** EPUB 2 books
+  upgraded to 3.3 can be reported invalid for images with no `alt`, and .kepub
+  no longer turns a captioned figure image into an error.
+
 ## [cli-v5.2.0] - 2026-11-07
 
 ### Added
