@@ -940,7 +940,7 @@ checksum = "877362cb7b70d1c617f0cd3c67708bd58d894a86af5104018e2c10ebaee3c02f"
 
 [[package]]
 name = "epublift"
-version = "5.3.0"
+version = "5.4.0"
 dependencies = [
  "almost-enough",
  "any_ascii",
@@ -986,7 +986,7 @@ dependencies = [
 
 [[package]]
 name = "epublift-web"
-version = "1.34.0"
+version = "1.35.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -1007,9 +1007,9 @@ dependencies = [
 
 [[package]]
 name = "epubsana"
-version = "0.40.0"
+version = "0.41.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9d2bfc18206f8e1301d5eb88621e58fc97f6acdc26d12c92e4ba46abda6f9168"
+checksum = "696d28d6117cbfda097881550cbd3ccec1ec54e0adaf16052cd1bc3668e4358d"
 dependencies = [
  "epubveri",
  "flate2",
@@ -1023,9 +1023,9 @@ dependencies = [
 
 [[package]]
 name = "epubveri"
-version = "0.40.1"
+version = "0.43.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "041917a3e71cb605705a12a36ccec450f7c418098b70c3b19526b8e7f80c2d8c"
+checksum = "4f6316b33ad8a1705c4aabcedcbcc941b1f95176e9e81d2316a9aad3ccb26640"
 dependencies = [
  "flate2",
  "roxmltree",
@@ -1069,7 +1069,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1589,9 +1589,9 @@ dependencies = [
 
 [[package]]
 name = "kepubverto"
-version = "0.5.0"
+version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "adf7c41822a2028fa428cd3e3bea6dd53749bb8c300a4a21c2be52916f41e136"
+checksum = "46c0648ba1d8517fef15939aaf1a20a5c1a66f0759c4809c4696e7bfdebff2c7"
 dependencies = [
  "epubveri",
  "flate2",
@@ -2644,7 +2644,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3017,9 +3017,9 @@ dependencies = [
 
 [[package]]
 name = "styloria"
-version = "0.19.0"
+version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3709f2f825ab4035ae1371bafe5ff9dd293c62d602b2fb8f9df2250bf4b71c52"
+checksum = "191cf971761f136690bfa12fa7e602d851aa7a04313fb2ef9c8faa511a216b9e"
 
 [[package]]
 name = "subtle"
@@ -3068,10 +3068,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.3.4",
+ "getrandom 0.4.3",
  "once_cell",
  "rustix",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3521,7 +3521,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

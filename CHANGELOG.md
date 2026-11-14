@@ -10,6 +10,32 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+## [cli-v5.4.0] - 2026-11-14
+
+### Changed
+- **In an EPUB 3 book, a style sheet with a CSS parse error no longer makes
+  the book invalid** (epubveri 0.43.0). EPUB 3.3 does not require a style
+  sheet to parse; `check` still reports it, now as usage (CSS-008). EPUB 2 is
+  unchanged. On our 562-book shelf, 12 books upgraded to 3.3 carried such a
+  finding, and 2 of them now pass.
+- **`--kepub` writes a file name the same way in the table of contents as in
+  the manifest** (kepubverto 0.5.2). When they were spelled differently
+  (`%27` against `'`), a Kobo counted the book twice: it opened halfway
+  through and showed double the pages. 3 books on our shelf were affected.
+- `repair` runs epubsana 0.41.0; its repairs on our shelf are unchanged.
+- Minimum supported Rust is 1.98.
+
+## [web-v1.35.0] - 2026-11-14
+
+### Changed
+- **Validate and Repair run epubveri 0.43.0 and epubsana 0.41.0 in the
+  browser**, the same versions as cli-v5.4.0, and give every book on our
+  562-book shelf the same verdict as the CLI. In an EPUB 3 book, a style
+  sheet with a CSS parse error is now reported as usage, not an error.
+- **Optimize, .kepub and Import run cli-v5.4.0's engine:** .kepub writes a
+  file name the same way in the table of contents as in the manifest, so a
+  Kobo no longer opens such a book halfway through with double the pages.
+
 ## [cli-v5.3.0] - 2026-11-12
 
 ### Changed
