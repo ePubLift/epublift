@@ -416,13 +416,13 @@ dependencies = [
 
 [[package]]
 name = "brotli"
-version = "9.1.1"
+version = "9.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "627b7cfb0578f0eafce087a90fcd40add1231900b69e4d4de2d456260a4f5d81"
+checksum = "9071f285ed78f04f37d675abaaef5de7689e2f30a216c8dc6795465d81910a13"
 dependencies = [
  "alloc-no-stdlib 3.0.0",
  "alloc-stdlib 0.3.0",
- "brotli-decompressor 6.3.1",
+ "brotli-decompressor 6.3.2",
 ]
 
 [[package]]
@@ -437,9 +437,9 @@ dependencies = [
 
 [[package]]
 name = "brotli-decompressor"
-version = "6.3.1"
+version = "6.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "75c74c9c51b9140663e196b5fb88bc94c334d7a497c8311cb759d8557874747f"
+checksum = "cc031cd87c6529082b0b65c604e86af0ed7744841b17ccfe60b1e31fa606179e"
 dependencies = [
  "alloc-no-stdlib 3.0.0",
  "alloc-stdlib 0.3.0",
@@ -940,7 +940,7 @@ checksum = "877362cb7b70d1c617f0cd3c67708bd58d894a86af5104018e2c10ebaee3c02f"
 
 [[package]]
 name = "epublift"
-version = "5.4.0"
+version = "5.5.0"
 dependencies = [
  "almost-enough",
  "any_ascii",
@@ -986,7 +986,7 @@ dependencies = [
 
 [[package]]
 name = "epublift-web"
-version = "1.35.0"
+version = "1.36.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -1007,9 +1007,9 @@ dependencies = [
 
 [[package]]
 name = "epubsana"
-version = "0.41.0"
+version = "0.42.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "696d28d6117cbfda097881550cbd3ccec1ec54e0adaf16052cd1bc3668e4358d"
+checksum = "d71e304107dd0a673cd5c5535beb1f7d1fc5ffd84afe04eab8d1c403430dbcf5"
 dependencies = [
  "epubveri",
  "flate2",
@@ -1023,9 +1023,9 @@ dependencies = [
 
 [[package]]
 name = "epubveri"
-version = "0.43.0"
+version = "0.47.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4f6316b33ad8a1705c4aabcedcbcc941b1f95176e9e81d2316a9aad3ccb26640"
+checksum = "a828c0ee9d719442154dff02190700a1b9bbb2e8f4a5f2958d46d6a043e6bbc1"
 dependencies = [
  "flate2",
  "roxmltree",
@@ -1589,9 +1589,9 @@ dependencies = [
 
 [[package]]
 name = "kepubverto"
-version = "0.5.2"
+version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "46c0648ba1d8517fef15939aaf1a20a5c1a66f0759c4809c4696e7bfdebff2c7"
+checksum = "333a51529aed2a11833c3ec6c5b6e3162d6d7f78301960eff8671772e9055fee"
 dependencies = [
  "epubveri",
  "flate2",
@@ -1999,9 +1999,9 @@ dependencies = [
 
 [[package]]
 name = "paginaverto"
-version = "0.3.2"
+version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f81f073a3b626df6a7359dbb973be596bd64f15a912cd7d697a3cf199eb3c345"
+checksum = "c5c28390134590ff930c56adc674165a6224bf7109471f1ce96fb8e265ffd04c"
 dependencies = [
  "hayro-ccitt",
  "hayro-jbig2",
@@ -2015,9 +2015,9 @@ dependencies = [
 
 [[package]]
 name = "paginaverto-ocr"
-version = "0.3.2"
+version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "84828a493541c4798ed3b7e7040b508fb2082f0a24bbe988a4fb3dda0daa3cff"
+checksum = "3525ce46c50253aaef04b96efe00bb42e87b79742d7deead199a04bf7855d729"
 dependencies = [
  "image",
  "ocrs",
@@ -3017,9 +3017,9 @@ dependencies = [
 
 [[package]]
 name = "styloria"
-version = "0.20.0"
+version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "191cf971761f136690bfa12fa7e602d851aa7a04313fb2ef9c8faa511a216b9e"
+checksum = "8d8cb8448e7728986bdb80b509085ff366f50bea769492cbad8227b54f316765"
 
 [[package]]
 name = "subtle"
@@ -4057,9 +4057,9 @@ dependencies = [
 
 [[package]]
 name = "zip"
-version = "9.5.1"
+version = "9.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e3476fd497ac8af5b1ec7b51acab7bef380f7e8dd8e0487595bafd839417a302"
+checksum = "63e50f7b2212e4635244be3c363b53273d159f2523eb7db3096c1d2861c1b603"
 dependencies = [
  "constant_time_eq",
  "crc32fast",

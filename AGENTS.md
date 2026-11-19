@@ -194,7 +194,10 @@ docs/                  user guides; docs/design/ holds design notes
 
 ## Build and test
 
-MSRV is the latest stable minus two, equal in both crates (`rust-version`).
+MSRV (`rust-version`, equal in both crates) is the lowest Rust the shipped
+build compiles with. It rises only when a dependency or our own code needs it,
+and the CI `msrv` job builds with exactly it. Release binaries, packages and
+the Docker image build on latest stable.
 
 ```sh
 cargo fmt --all --check

@@ -10,6 +10,43 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+## [cli-v5.5.0] - 2026-11-19
+
+### Security
+- **`import` can no longer be crashed by a crafted PDF** (paginaverto 0.3.3).
+  A PDF whose streams point their length at one another, thousands deep,
+  overflowed the stack of the PDF parser and aborted the process
+  (GHSA-4597-5x94-x3xg). Such a file is now refused before it is parsed; a
+  correct PDF has no such chain, and imports are unchanged.
+
+### Changed
+- **`repair` can remove `clear` from a `<br>` when nothing in the book
+  floats** (epubsana 0.42.0). Without a float the attribute changes nothing on
+  the page. It needs a decision, so `repair` asks, or applies it with `-y`. On
+  our 562-book shelf, 6 books that `repair -y` left invalid now come out valid.
+- `check` runs epubveri 0.47.0. On our shelf it reports exactly what 0.43.0
+  did, for every original book and for every book after the upgrade and
+  `--kepub`.
+- `--kepub` runs kepubverto 0.5.3; its output on our shelf is unchanged.
+- **Minimum supported Rust is back to 1.97,** the lowest version the build
+  compiles with (paginaverto 0.3.3 needs it for PDF import). From now on it
+  rises only when a dependency or our own code needs a newer Rust, not
+  whenever stable moves. Release binaries, packages and the Docker image are
+  unaffected: they build on the latest stable.
+
+## [web-v1.36.0] - 2026-11-19
+
+### Security
+- **Import PDF can no longer be crashed by a crafted PDF** (paginaverto
+  0.3.3, the same fix as cli-v5.5.0).
+
+### Changed
+- **Validate and Repair run epubveri 0.47.0 and epubsana 0.42.0 in the
+  browser**, the same versions as cli-v5.5.0, and give every book on our
+  562-book shelf the same verdict as the CLI. Repair can now remove `clear`
+  from a `<br>` when nothing in the book floats.
+- **Optimize, .kepub and Import run cli-v5.5.0's engine.**
+
 ## [cli-v5.4.0] - 2026-11-14
 
 ### Changed
