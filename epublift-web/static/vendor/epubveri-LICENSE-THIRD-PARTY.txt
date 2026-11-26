@@ -468,7 +468,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 
 ================================================================
-hashbrown 0.17.1 (MIT)
+hashbrown 0.17.2 (MIT)
 ================================================================
 
 Copyright (c) 2016 Amanieu d'Antras
@@ -531,7 +531,7 @@ DEALINGS IN THE SOFTWARE.
 
 ================================================================
 itoa 1.0.19 (MIT)
-pin-project-lite 0.2.17 (MIT)
+pin-project-lite 0.2.18 (MIT)
 serde 1.0.229 (MIT)
 serde_core 1.0.229 (MIT)
 serde_json 1.0.154 (MIT)
@@ -624,7 +624,7 @@ THE SOFTWARE.
 
 
 ================================================================
-nix 0.31.4 (MIT)
+nix 0.32.0 (MIT)
 ================================================================
 
 The MIT License (MIT)
@@ -941,7 +941,7 @@ DEALINGS IN THE SOFTWARE.
 
 
 ================================================================
-zip 9.7.0 (MIT)
+zip 9.8.1 (MIT)
 ================================================================
 
 The MIT License (MIT)

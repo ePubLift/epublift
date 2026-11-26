@@ -10,6 +10,39 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+## [cli-v5.6.0] - 2026-11-26
+
+### Changed
+- **`repair` has ten new repairs** (epubsana 0.44.0). Among them: it removes
+  `link`, `vlink` and `alink` from `<body>` where they colour nothing,
+  rewrites a damaged `mimetype` entry, converts a text file in a legacy
+  single-byte encoding to UTF-8 (it asks first), points the spine at the
+  book's NCX (it asks first) and writes `en_US` as `en-US` (it asks first).
+  On our 562-book shelf, `repair -y` applies one more repair, in one book,
+  which clears 4 of its errors.
+- **`check` runs epubveri 0.50.0**, which checks more of HTML in EPUB 3: a
+  `<meta>` needs exactly one of `name`, `http-equiv`, `charset` or
+  `itemprop`, and `name` needs `content`; an `itemprop` must belong to an
+  item; a file read as UTF-8 must be UTF-8; HTML's customizable `select` is
+  accepted. On our shelf, one book that was already invalid gains 29 errors
+  (DRM `<meta>` elements without `content`); every other book, original or
+  upgraded, gets the same findings as before.
+- `--kepub` runs kepubverto 0.6.0, which numbers spans as kepubify 5.0.0
+  does; on our shelf its output is unchanged.
+- PDF import runs paginaverto 0.3.4; output unchanged.
+- Minimum supported Rust stays 1.97. The rest of the family declares 1.95;
+  we stay until it reaches 1.97, then all move together.
+- Also: styloria 0.23.1, zip 9.8.2 (fixes the file-header length checks when
+  reading a ZIP).
+
+## [web-v1.37.0] - 2026-11-26
+
+### Changed
+- **Validate and Repair run epubveri 0.50.0 and epubsana 0.44.0 in the
+  browser**, the same versions as cli-v5.6.0, and give every book on our
+  562-book shelf the same verdict as the CLI. Repair has ten new repairs.
+- **Optimize, .kepub and Import run cli-v5.6.0's engine.**
+
 ## [cli-v5.5.0] - 2026-11-19
 
 ### Security
