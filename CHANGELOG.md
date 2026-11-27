@@ -10,28 +10,46 @@ are tagged with the component they belong to.
 
 ## [Unreleased]
 
+## [cli-v6.0.0] - 2026-11-28
+
+### Changed (breaking)
+- **`--image-format avif` is refused (exit 2)**, on the default command and on
+  `restore --target 3.4`: the AVIF encoder wrote some images visibly corrupt.
+  `--image-format jxl` and `best` stay; AVIF returns when imagoverto writes it.
+
 ### Changed
-- (CLI, web) **Images are converted by imagoverto 0.1**, the family's image
-  converter; epublift keeps the book's rules on top (format by EPUB version,
-  the cap at a source JPEG's quality, the original kept when the result is not
-  smaller). On our 562-book shelf with `--webp`, 11,382 of 11,539 WebP images
-  come out byte-identical, every book gets the same findings, and the time is
-  the same. A JPEG whose quality the old reader could not read is now capped
-  at it: in one book, 45 images that were kept convert, smaller.
-- (CLI, web) A converted image keeps its source's colour profile (Adobe RGB,
-  Display P3; a gray profile as its RGB equivalent, since WebP has no gray)
-  unless the profile is plain sRGB; before, every profile was dropped. On the
-  shelf, 32 of 11,600 WebP images carry one.
-- (CLI, web) **A CMYK JPEG is kept as it is**, with a message: it used to be
-  converted without its colour profile, so its colours shifted. On the shelf,
-  one cover.
-- (CLI, web) **`--target 3.4` writes no AVIF for now:** its encoder wrote some
-  images visibly corrupt. Photos (JPEG) go to JPEG XL, line-art (PNG) to WebP;
-  `--image-format best` picks the smaller of WebP and JPEG XL;
-  `--image-format avif` is refused with a message, and the web's AVIF choice
-  is gone. AVIF returns when imagoverto writes it.
-- (CLI) The crate manifest no longer sets `homepage`, which only repeated
+- **Images are converted by imagoverto 0.1**, the family's image converter;
+  epublift keeps the book's rules on top (format by EPUB version, the cap at a
+  source JPEG's quality, the original kept when the result is not smaller).
+  On our 562-book shelf with `--webp`, 11,382 of 11,539 WebP images come out
+  byte-identical, every book gets the same findings, and the time is the
+  same. A JPEG whose quality the old reader could not read is now capped at
+  it: in one book, 45 images that were kept convert, smaller.
+- **`--target 3.4` writes no AVIF for now.** Photos (JPEG) go to JPEG XL,
+  line-art (PNG) to WebP; `--image-format best` picks the smaller of WebP and
+  JPEG XL.
+- A converted image keeps its source's colour profile (Adobe RGB, Display P3;
+  a gray profile as its RGB equivalent, since WebP has no gray) unless the
+  profile is plain sRGB; before, every profile was dropped. On the shelf, 32
+  of 11,600 WebP images carry one.
+- The crate manifest no longer sets `homepage`, which only repeated
   `repository`; newer cargo warns about it (`cargo::redundant_homepage`).
+
+### Fixed
+- **A CMYK JPEG is kept as it is**, with a message: it used to be converted
+  without its colour profile, so its colours shifted. On the shelf, one cover.
+
+## [web-v1.38.0] - 2026-11-28
+
+### Changed
+- **Optimize, .kepub and Import run cli-v6.0.0's engine:** images are
+  converted by imagoverto 0.1, a colour profile other than plain sRGB is kept,
+  and EPUB 3.4 writes JPEG XL for photos and WebP for line-art. The AVIF
+  choice is gone until its encoder is fixed.
+
+### Fixed
+- **A CMYK JPEG is kept as it is**: it used to be converted with shifted
+  colours.
 
 ## [cli-v5.6.0] - 2026-11-26
 

@@ -131,7 +131,7 @@ compound" insight into a 3.4-native pipeline.
 
 ## Implementation status
 
-**Since cli-v5.7.0: images go through imagoverto, and AVIF output is
+**Since cli-v6.0.0: images go through imagoverto, and AVIF output is
 paused.** imagoverto (the family's image converter) does the encoding; its
 0.1 writes no AVIF, because the AVIF encoder (zenravif 0.1.3) wrote 9 of 120
 shelf images visibly corrupt. Until AVIF returns through imagoverto, the
