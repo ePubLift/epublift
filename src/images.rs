@@ -1,5 +1,11 @@
-//! Image optimization: convert raster manifest images (JPEG/PNG) to WebP and
-//! update every reference to them across the package.
+//! Image optimization: re-encode raster manifest images (JPEG/PNG) and update
+//! every reference to them across the package.
+//!
+//! One image in, one image out is imagoverto's work: decoding, encoding, the
+//! 1–100 quality scale, gray, alpha, limits. This module holds the book's
+//! rules on top of it: which images, into what format for the EPUB version,
+//! the quality cap at a source JPEG's own, keep the original when the result
+//! is not smaller, and the manifest and reference rewrite.
 
 use crate::opf::{ImageChange, ManifestItem};
 use crate::util::{basename, quote, unquote, with_ext};
@@ -10,18 +16,27 @@ use std::fs;
 use std::io::Cursor;
 use std::path::Path;
 use walkdir::WalkDir;
-use zenwebp::{EncodeRequest, LossyConfig, PixelLayout};
 
 /// Output image format the optimizer re-encodes raster images to. WebP is the
-/// EPUB 3.3 target; AVIF and JPEG XL become core media types in EPUB 3.4 and are
-/// emitted under `--target 3.4` (experimental, behind the `epub34` feature).
+/// EPUB 3.3 target; JPEG XL (and AVIF, once imagoverto writes it) become core
+/// media types in EPUB 3.4 and are emitted under `--target 3.4` (experimental,
+/// behind the `epub34` feature). JPEG and PNG, core in every EPUB version, are
+/// the way back for readers that show none of the newer formats.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ImageFormat {
     #[default]
     WebP,
     Avif,
     Jxl,
+    Jpeg,
+    Png,
 }
+
+/// Why AVIF output is refused: imagoverto 0.1 writes no AVIF (its encoder,
+/// zenravif 0.1.3, wrote 9 of 120 shelf images visibly corrupt). It returns
+/// with zenravif 0.2.
+pub const AVIF_PAUSED: &str = "AVIF output is paused until its encoder is fixed: it corrupted some \
+     images. Use JPEG XL (`jxl`) or WebP instead";
 
 impl ImageFormat {
     /// File extension (no dot) for this format's output files.
@@ -30,6 +45,8 @@ impl ImageFormat {
             ImageFormat::WebP => "webp",
             ImageFormat::Avif => "avif",
             ImageFormat::Jxl => "jxl",
+            ImageFormat::Jpeg => "jpg",
+            ImageFormat::Png => "png",
         }
     }
 
@@ -39,6 +56,8 @@ impl ImageFormat {
             ImageFormat::WebP => "image/webp",
             ImageFormat::Avif => "image/avif",
             ImageFormat::Jxl => "image/jxl",
+            ImageFormat::Jpeg => "image/jpeg",
+            ImageFormat::Png => "image/png",
         }
     }
 
@@ -48,6 +67,18 @@ impl ImageFormat {
             ImageFormat::WebP => "WebP",
             ImageFormat::Avif => "AVIF",
             ImageFormat::Jxl => "JPEG XL",
+            ImageFormat::Jpeg => "JPEG",
+            ImageFormat::Png => "PNG",
+        }
+    }
+
+    fn to_imagoverto(self) -> imagoverto::Format {
+        match self {
+            ImageFormat::WebP => imagoverto::Format::WebP,
+            ImageFormat::Avif => imagoverto::Format::Avif,
+            ImageFormat::Jxl => imagoverto::Format::Jxl,
+            ImageFormat::Jpeg => imagoverto::Format::Jpeg,
+            ImageFormat::Png => imagoverto::Format::Png,
         }
     }
 }
@@ -59,14 +90,13 @@ pub enum FormatPolicy {
     /// EPUB 3.3 default of WebP).
     Fixed(ImageFormat),
     /// Content-adaptive (the EPUB 3.4 default): pick per image from its *source*
-    /// format, which is a free content-type signal — publishers use JPEG for
-    /// photographs and PNG for line-art/screenshots. Measured at equal perceptual
-    /// quality: AVIF wins on photos, WebP wins on line-art (see
-    /// docs/design/epub-3.4-image-codec-choice.md). So **JPEG → AVIF, PNG → WebP**.
+    /// format, a free content-type signal — publishers use JPEG for photographs
+    /// and PNG for line-art/screenshots. **JPEG → JPEG XL, PNG → WebP** while
+    /// AVIF output is paused (it was JPEG → AVIF; see
+    /// docs/design/epub-3.4-image-codec-choice.md).
     Auto,
     /// Thorough: encode every candidate format per image and keep the smallest
-    /// (at matched quality, since `--quality` is calibrated). Best size, but
-    /// pays the cost of multiple encodes per image (notably the slow AVIF one).
+    /// (at matched quality, since the quality scale is one across formats).
     Best,
 }
 
@@ -78,7 +108,7 @@ impl FormatPolicy {
         match self {
             FormatPolicy::Fixed(f) => f,
             FormatPolicy::Auto => match media_type {
-                "image/jpeg" | "image/jpg" => ImageFormat::Avif,
+                "image/jpeg" | "image/jpg" => ImageFormat::Jxl,
                 _ => ImageFormat::WebP,
             },
             FormatPolicy::Best => ImageFormat::WebP,
@@ -89,8 +119,17 @@ impl FormatPolicy {
     pub fn label(self) -> &'static str {
         match self {
             FormatPolicy::Fixed(f) => f.label(),
-            FormatPolicy::Auto => "AVIF for photos, WebP for line-art",
+            FormatPolicy::Auto => "JPEG XL for photos, WebP for line-art",
             FormatPolicy::Best => "smallest per image",
+        }
+    }
+
+    /// The formats tried for one image.
+    fn candidates(self, media_type: &str) -> Vec<ImageFormat> {
+        match self {
+            FormatPolicy::Fixed(f) => vec![f],
+            FormatPolicy::Auto => vec![self.format_for(media_type)],
+            FormatPolicy::Best => vec![ImageFormat::WebP, ImageFormat::Jxl],
         }
     }
 }
@@ -117,22 +156,24 @@ pub struct OptimizeResult {
     pub ref_pairs: Vec<(String, String)>,
 }
 
-/// Raster media types we convert, all mapped to `image/webp`.
+/// Raster media types we convert.
 fn is_target_media_type(mt: &str) -> bool {
     matches!(mt, "image/jpeg" | "image/jpg" | "image/png")
 }
 
-/// Convert all eligible manifest images to WebP at the given quality, deleting
-/// originals and recording the manifest/reference changes.
+/// Convert all eligible manifest images by `policy` at the given quality,
+/// deleting originals and recording the manifest/reference changes.
 pub fn optimize_images(
     package_dir: &Path,
     items: &[ManifestItem],
     cover_id: Option<&str>,
     quality: u8,
     policy: FormatPolicy,
-    avif_speed: u8,
     progress: &dyn Fn(&str),
 ) -> Result<OptimizeResult> {
+    if policy == FormatPolicy::Fixed(ImageFormat::Avif) {
+        anyhow::bail!("{AVIF_PAUSED}.");
+    }
     let mut result = OptimizeResult {
         metrics: Vec::new(),
         manifest_changes: HashMap::new(),
@@ -158,8 +199,6 @@ pub fn optimize_images(
 
         let old_name = basename(&decoded_href).to_string();
 
-        // Read the original bytes once: we need its size, its raw bytes (to
-        // estimate JPEG quality), and its decoded pixels.
         let orig_bytes = match fs::read(&img_path) {
             Ok(b) => b,
             Err(e) => {
@@ -169,54 +208,32 @@ pub fn optimize_images(
         };
         let orig_size = orig_bytes.len() as u64;
 
-        let dynimg = match decode_image(&orig_bytes) {
-            Ok(d) => d,
-            Err(e) => {
-                progress(&format!("  [!] Failed to decode image {old_name}: {e}"));
-                continue;
-            }
-        };
-
-        // (2) Never re-encode *above* the source quality. A chart saved as a
-        // q43 JPEG gains nothing from a q80 WebP — it only inflates. For JPEG
-        // sources we cap the WebP quality at the source's estimated quality.
-        let is_jpeg = matches!(item.media_type.as_str(), "image/jpeg" | "image/jpg");
-        let eff_quality = if is_jpeg {
-            estimate_jpeg_quality(&orig_bytes)
-                .map(|q| quality.min(q))
-                .unwrap_or(quality)
-        } else {
-            quality
-        };
-
-        // (3) Encode. Fixed/Auto is a single format; `Best` tries every candidate
-        // and keeps the smallest — valid because `--quality` is calibrated to equal
-        // perceptual quality across codecs, so smallest bytes = smallest at matched
-        // quality. (Grayscale stays grayscale inside each encoder.) Encode to memory
-        // first so we can compare sizes against the original.
-        let candidates: Vec<ImageFormat> = match policy {
-            FormatPolicy::Fixed(f) => vec![f],
-            FormatPolicy::Auto => vec![policy.format_for(&item.media_type)],
-            FormatPolicy::Best => vec![ImageFormat::WebP, ImageFormat::Avif, ImageFormat::Jxl],
-        };
+        // Encode to memory first so we can compare sizes against the original.
+        // `Best` tries every candidate and keeps the smallest — valid because
+        // the quality scale is one across formats, so smallest bytes = smallest
+        // at matched quality.
         let mut best: Option<(ImageFormat, Vec<u8>)> = None;
-        for cand in candidates {
-            if let Ok(bytes) = encode_image(&dynimg, eff_quality, cand, avif_speed)
-                && best.as_ref().is_none_or(|(_, b)| bytes.len() < b.len())
-            {
-                best = Some((cand, bytes));
+        let mut last_err = None;
+        for cand in policy.candidates(&item.media_type) {
+            match reencode(&orig_bytes, quality, cand) {
+                Ok(bytes) if best.as_ref().is_none_or(|(_, b)| bytes.len() < b.len()) => {
+                    best = Some((cand, bytes));
+                }
+                Ok(_) => {}
+                Err(e) => last_err = Some(e),
             }
         }
         let (format, encoded) = match best {
             Some(x) => x,
             None => {
-                progress(&format!("  [!] Failed to convert image {old_name}"));
+                let why = last_err.map(|e| format!(": {e}")).unwrap_or_default();
+                progress(&format!("  [!] Failed to convert image {old_name}{why}"));
                 continue;
             }
         };
         let new_size = encoded.len() as u64;
 
-        // (1) Keep whichever is smaller. If the re-encode isn't actually smaller,
+        // Keep whichever is smaller. If the re-encode isn't actually smaller,
         // leave the original untouched — no rewrite, no manifest/reference change —
         // so the output can never grow.
         if new_size >= orig_size {
@@ -300,26 +317,195 @@ pub fn optimize_images(
     Ok(result)
 }
 
+/// The libjpeg quality (1–100) a JPEG was saved at, read by imagoverto from
+/// its quantization table (exact for libjpeg-scaled tables); `None` for
+/// anything that is not a readable JPEG.
+pub(crate) fn source_jpeg_quality(data: &[u8]) -> Option<u8> {
+    imagoverto::inspect(data).ok()?.jpeg_quality
+}
+
+/// The libjpeg quality imagoverto writes for a JPEG target at `quality` on its
+/// own (WebP) scale. A copy of imagoverto 0.1.4's `src/encode.rs` curve, which
+/// is not public API: imagoverto announces a refit in its release notes.
+fn imagoverto_jpeg_quality(quality: u8) -> u8 {
+    let q = f32::from(quality).clamp(45.0, 95.0);
+    (0.004615 * q * q - 0.17453 * q + 65.691).round() as u8
+}
+
+/// The highest imagoverto quality whose JPEG output is not above `source` on
+/// the libjpeg scale; `None` when even its lowest (libjpeg 67) is above it.
+fn jpeg_cap(source: u8) -> Option<u8> {
+    (1..=100u8)
+        .rev()
+        .find(|&q| imagoverto_jpeg_quality(q) <= source)
+}
+
+/// The quality `original` is re-encoded at for `format`: `quality`, capped for
+/// a JPEG source at the source's own (re-encoding above it only inflates).
+/// `Ok(None)` is a lossless target (PNG). An error when the cap cannot hold:
+/// a JPEG target for a source JPEG saved below anything imagoverto writes.
+fn target_quality(original: &[u8], quality: u8, format: ImageFormat) -> Result<Option<u8>> {
+    let source = source_jpeg_quality(original);
+    Ok(match (format, source) {
+        (ImageFormat::Png, _) => None,
+        (ImageFormat::Jpeg, Some(src)) => match jpeg_cap(src) {
+            Some(cap) => Some(quality.min(cap)),
+            None => anyhow::bail!(
+                "the source JPEG (quality {src}) is below the lowest JPEG quality written; kept"
+            ),
+        },
+        (_, Some(src)) => Some(quality.min(src)),
+        (_, None) => Some(quality),
+    })
+}
+
+/// Re-encode one in-memory raster image to `format` by the optimizer's own
+/// rules (the JPEG quality cap; gray, alpha and limits are imagoverto's),
+/// without the keep-if-not-smaller decision: the bytes [`optimize_images`]
+/// would weigh against the original. The building block of size estimates.
+pub fn reencode(original: &[u8], quality: u8, format: ImageFormat) -> Result<Vec<u8>> {
+    if format == ImageFormat::Avif {
+        anyhow::bail!("{AVIF_PAUSED}.");
+    }
+    let mut options = imagoverto::Options::new(format.to_imagoverto());
+    if let Some(q) = target_quality(original, quality, format)? {
+        options = options.with_quality(q);
+    }
+    Ok(imagoverto::convert(original, &options)?.bytes)
+}
+
+/// One raster image of a book, as an estimate reads it.
+pub struct EstimateInput<'a> {
+    pub media_type: &'a str,
+    pub bytes: &'a [u8],
+}
+
+/// What re-encoding a book's images to one format would come to.
+///
+/// Both totals cover every image: the measured ones by their real encode, the
+/// rest by the measured images' ratio. When `images_measured == images`, the
+/// totals are exact, not an estimate.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FormatEstimate {
+    pub format: ImageFormat,
+    /// The images as they are now.
+    pub original_bytes: u64,
+    /// Each image re-encoded, or kept where the re-encode is not smaller (the
+    /// optimizer's default rule).
+    pub smallest_bytes: u64,
+    /// Every image re-encoded, whatever the size (a format chosen for a device).
+    pub converted_bytes: u64,
+    pub images: usize,
+    pub images_measured: usize,
+    /// Images that could not be decoded or encoded; they stay as they are and
+    /// are counted at their original size.
+    pub images_failed: usize,
+}
+
+impl FormatEstimate {
+    pub fn is_exact(&self) -> bool {
+        self.images_measured + self.images_failed == self.images
+    }
+}
+
+/// Estimate the bytes of `images` re-encoded to `format` within `budget` of
+/// encode time.
+///
+/// Measured on 77 shelf books (2026-10-29), a time budget beats a fixed sample
+/// size: most books then fit whole and the answer is exact. When a book does
+/// not fit, its largest images are encoded first for half the budget (they
+/// carry most of the bytes), then an evenly spaced sample of the rest; the
+/// unmeasured images are scaled by the sample's ratio. Typical error under
+/// 1% for WebP (5 s) and JPEG XL (10 s), with rare books off by up to about
+/// 18%. One image is always measured, even past the budget.
+pub fn estimate_format(
+    images: &[EstimateInput<'_>],
+    format: ImageFormat,
+    quality: u8,
+    budget: std::time::Duration,
+) -> FormatEstimate {
+    let start = std::time::Instant::now();
+    let mut order: Vec<usize> = (0..images.len()).collect();
+    order.sort_by_key(|&i| std::cmp::Reverse(images[i].bytes.len()));
+
+    let mut est = FormatEstimate {
+        format,
+        original_bytes: images.iter().map(|i| i.bytes.len() as u64).sum(),
+        smallest_bytes: 0,
+        converted_bytes: 0,
+        images: images.len(),
+        images_measured: 0,
+        images_failed: 0,
+    };
+    let mut measured = vec![false; images.len()];
+    let encode = |i: usize, est: &mut FormatEstimate, measured: &mut [bool]| {
+        let img = &images[i];
+        let orig = img.bytes.len() as u64;
+        // imagoverto turns a codec panic into an error, except on wasm.
+        match reencode(img.bytes, quality, format) {
+            Ok(b) => {
+                est.smallest_bytes += (b.len() as u64).min(orig);
+                est.converted_bytes += b.len() as u64;
+                est.images_measured += 1;
+            }
+            Err(_) => {
+                est.smallest_bytes += orig;
+                est.converted_bytes += orig;
+                est.images_failed += 1;
+            }
+        }
+        measured[i] = true;
+    };
+
+    // Largest first, for half the budget.
+    let mut k = 0;
+    while k < order.len() && (k == 0 || start.elapsed() < budget / 2) {
+        encode(order[k], &mut est, &mut measured);
+        k += 1;
+    }
+    // Then an evenly spaced sample of the rest, smallest stride first, so the
+    // sample spreads over the whole size range before it thickens.
+    let rest = &order[k..];
+    let mut stride = rest.len().next_power_of_two();
+    'sample: while stride >= 1 {
+        for &i in rest.iter().step_by(stride) {
+            if start.elapsed() >= budget {
+                break 'sample;
+            }
+            if !measured[i] {
+                encode(i, &mut est, &mut measured);
+            }
+        }
+        stride /= 2;
+    }
+
+    // Scale the unmeasured images by the measured ones' ratio.
+    let (mut m_orig, mut rest_orig) = (0u64, 0u64);
+    for (i, img) in images.iter().enumerate() {
+        if measured[i] {
+            m_orig += img.bytes.len() as u64;
+        } else {
+            rest_orig += img.bytes.len() as u64;
+        }
+    }
+    if rest_orig > 0 && m_orig > 0 {
+        let scale = |v: u64| v + (rest_orig as f64 * v as f64 / m_orig as f64).round() as u64;
+        est.smallest_bytes = scale(est.smallest_bytes);
+        est.converted_bytes = scale(est.converted_bytes);
+    }
+    est
+}
+
 /// Re-encode a standalone raster image (e.g. an import cover) to WebP at
 /// `quality`, returning the WebP bytes **only if they're smaller** than the
 /// original (the same size-safe rule the EPUB optimizer uses). `None` means
-/// "keep the original" — decode failed, or the re-encode wasn't smaller.
+/// "keep the original" — the conversion failed, or wasn't smaller.
 ///
 /// Unlike [`optimize_images`], this works on in-memory bytes with no manifest,
 /// so the Markdown importer can shrink a cover before embedding it.
 #[cfg(feature = "markdown")]
 pub fn optimize_to_webp(original: &[u8], quality: u8) -> Option<Vec<u8>> {
-    let dynimg = decode_image(original).ok()?;
-    // Don't re-encode a JPEG above its source quality (it would only inflate).
-    let is_jpeg = matches!(image::guess_format(original), Ok(image::ImageFormat::Jpeg));
-    let q = if is_jpeg {
-        estimate_jpeg_quality(original)
-            .map(|src| quality.min(src))
-            .unwrap_or(quality)
-    } else {
-        quality
-    };
-    let webp = encode_webp(&dynimg, q).ok()?;
+    let webp = reencode(original, quality, ImageFormat::WebP).ok()?;
     (webp.len() < original.len()).then_some(webp)
 }
 
@@ -330,11 +516,13 @@ fn push_unique(pairs: &mut Vec<(String, String)>, old: String, new: String) {
 }
 
 /// Bounds on a single image decode, to defend against decode-bombs (e.g. a tiny
-/// PNG declaring 100k×100k). Comfortably above any real e-book image.
-pub(crate) const MAX_IMAGE_DIM: u32 = 16_384;
-pub(crate) const MAX_IMAGE_ALLOC: u64 = 512 * 1024 * 1024; // 512 MiB
+/// PNG declaring 100k×100k), for the decodes still done here (covers, imported
+/// images): imagoverto's own limits.
+pub(crate) const MAX_IMAGE_DIM: u32 = imagoverto::MAX_DIMENSION;
+pub(crate) const MAX_IMAGE_ALLOC: u64 = imagoverto::MAX_DECODED_BYTES;
 
-/// Decode an in-memory image, enforcing the decode-bomb limits.
+/// Decode an in-memory JPEG or PNG, enforcing the decode-bomb limits. Used for
+/// covers and imported images, which epublift resizes itself.
 pub(crate) fn decode_image(bytes: &[u8]) -> Result<DynamicImage> {
     let mut reader = image::ImageReader::new(Cursor::new(bytes)).with_guessed_format()?;
     let mut limits = image::Limits::default();
@@ -343,215 +531,6 @@ pub(crate) fn decode_image(bytes: &[u8]) -> Result<DynamicImage> {
     limits.max_alloc = Some(MAX_IMAGE_ALLOC);
     reader.limits(limits);
     Ok(reader.decode()?)
-}
-
-/// Encode a decoded image to the requested output `format` at `quality` (1-100).
-/// AVIF / JPEG XL require the experimental `epub34` build feature.
-fn encode_image(
-    dynimg: &DynamicImage,
-    quality: u8,
-    format: ImageFormat,
-    avif_speed: u8,
-) -> Result<Vec<u8>> {
-    #[cfg(not(feature = "epub34"))]
-    let _ = avif_speed;
-    match format {
-        ImageFormat::WebP => encode_webp(dynimg, quality),
-        #[cfg(feature = "epub34")]
-        ImageFormat::Avif => encode_avif(dynimg, quality, avif_speed),
-        #[cfg(feature = "epub34")]
-        ImageFormat::Jxl => encode_jxl(dynimg, quality),
-        #[cfg(not(feature = "epub34"))]
-        ImageFormat::Avif | ImageFormat::Jxl => anyhow::bail!(
-            "{} output requires building epublift with the `epub34` feature",
-            format.label()
-        ),
-    }
-}
-
-/// Encode a decoded image to WebP bytes at `quality` (1-100). Grayscale is
-/// handed to zenwebp as RGB: lossy WebP has no gray mode (it stores YUV either
-/// way, so the file is the same size), and zenwebp 0.4's `L8`/`La8` input path
-/// copies gray straight into the limited-range Y plane, so every decoder
-/// stretches the contrast and clips shadows and highlights (a 0-255 ramp came
-/// back at 27.8 dB, 16 → 0 and 235 → 253; through RGB, 49.5 dB).
-fn encode_webp(dynimg: &DynamicImage, quality: u8) -> Result<Vec<u8>> {
-    let config = LossyConfig::new().with_quality(quality as f32);
-    let memory = if dynimg.color().has_alpha() {
-        let rgba = dynimg.to_rgba8();
-        let (w, h) = (rgba.width(), rgba.height());
-        EncodeRequest::lossy(&config, &rgba, PixelLayout::Rgba8, w, h).encode()?
-    } else {
-        let rgb = dynimg.to_rgb8();
-        let (w, h) = (rgb.width(), rgb.height());
-        EncodeRequest::lossy(&config, &rgb, PixelLayout::Rgb8, w, h).encode()?
-    };
-    Ok(memory)
-}
-
-/// Map a WebP-scale `--quality` (1-100, the reference) to the AVIF quality knob
-/// that yields the *same* perceptual quality (butteraugli) — so `--quality N`
-/// means the same thing across codecs. **Quadratic** fit over 40 JPEG-source
-/// images from 11 books (the relationship curves up steeply at high quality;
-/// a line under-shoots there). AVIF is only used for photographic (JPEG) content,
-/// where this is calibrated. The input is clamped to the fitted range so the
-/// parabola never turns back up on out-of-range inputs.
-/// See docs/design/epub-3.4-image-codec-choice.md.
-#[cfg(feature = "epub34")]
-fn calibrated_avif_quality(webp_quality: u8) -> f32 {
-    let q = (webp_quality as f32).clamp(45.0, 95.0);
-    (0.017529 * q * q - 1.70862 * q + 95.783).clamp(1.0, 100.0)
-}
-
-/// Map a WebP-scale `--quality` (1-100) to the JPEG XL butteraugli *distance*
-/// that matches WebP's perceptual quality (lower distance = higher quality).
-/// Same quadratic 40-image / 11-book calibration as above.
-#[cfg(feature = "epub34")]
-fn calibrated_jxl_distance(webp_quality: u8) -> f32 {
-    let q = (webp_quality as f32).clamp(45.0, 95.0);
-    (-0.000494 * q * q + 0.01808 * q + 3.639).clamp(0.4, 15.0)
-}
-
-/// Encode to AVIF via the pure-Rust imazen `zenavif` (rav1e) encoder, `quality`
-/// 1-100 (calibrated to the WebP scale). Grayscale is expanded to RGB (zenavif
-/// encodes RGB/RGBA only). Behind the experimental `epub34` feature.
-#[cfg(feature = "epub34")]
-fn encode_avif(dynimg: &DynamicImage, quality: u8, speed: u8) -> Result<Vec<u8>> {
-    use rgb::FromSlice;
-    let cfg = zenavif::EncoderConfig::new()
-        .quality(calibrated_avif_quality(quality))
-        .speed(speed.clamp(1, 10));
-    let stop = almost_enough::StopToken::new(zenavif::Unstoppable);
-    let encoded = if dynimg.color().has_alpha() {
-        let rgba = dynimg.to_rgba8();
-        let (w, h) = (rgba.width() as usize, rgba.height() as usize);
-        let img = imgref::Img::new(rgba.as_raw().as_rgba(), w, h);
-        zenavif::encode_rgba8(img, &cfg, stop)?
-    } else {
-        let rgb = dynimg.to_rgb8();
-        let (w, h) = (rgb.width() as usize, rgb.height() as usize);
-        let img = imgref::Img::new(rgb.as_raw().as_rgb(), w, h);
-        zenavif::encode_rgb8(img, &cfg, stop)?
-    };
-    Ok(encoded.avif_file)
-}
-
-/// Encode to JPEG XL via the pure-Rust imazen `zenjxl` encoder, lossy at the
-/// distance mapped from `quality` 1-100. Grayscale is expanded to RGB. Behind
-/// the experimental `epub34` feature. See docs/epub-3.4.md.
-#[cfg(feature = "epub34")]
-fn encode_jxl(dynimg: &DynamicImage, quality: u8) -> Result<Vec<u8>> {
-    use rgb::FromSlice;
-    let cfg = zenjxl::LossyConfig::new(calibrated_jxl_distance(quality));
-    let encoded = if dynimg.color().has_alpha() {
-        let rgba = dynimg.to_rgba8();
-        let (w, h) = (rgba.width() as usize, rgba.height() as usize);
-        let img = imgref::Img::new(rgba.as_raw().as_rgba(), w, h);
-        zenjxl::encode_rgba8(img, &cfg)?
-    } else {
-        let rgb = dynimg.to_rgb8();
-        let (w, h) = (rgb.width() as usize, rgb.height() as usize);
-        let img = imgref::Img::new(rgb.as_raw().as_rgb(), w, h);
-        zenjxl::encode_rgb8(img, &cfg)?
-    };
-    Ok(encoded)
-}
-
-/// The standard JPEG Annex-K luminance quantization table (quality 50 baseline).
-#[rustfmt::skip]
-const STD_LUMA_QT: [u16; 64] = [
-    16, 11, 10, 16,  24,  40,  51,  61,
-    12, 12, 14, 19,  26,  58,  60,  55,
-    14, 13, 16, 24,  40,  57,  69,  56,
-    14, 17, 22, 29,  51,  87,  80,  62,
-    18, 22, 37, 56,  68, 109, 103,  77,
-    24, 35, 55, 64,  81, 104, 113,  92,
-    49, 64, 78, 87, 103, 121, 120, 101,
-    72, 92, 95, 98, 112, 100, 103,  99,
-];
-
-/// Natural (row-major) index of the k-th coefficient in zigzag order, the order
-/// a DQT segment stores its 64 entries in.
-#[rustfmt::skip]
-const ZIGZAG_TO_NATURAL: [usize; 64] = [
-     0,  1,  8, 16,  9,  2,  3, 10, 17, 24, 32, 25, 18, 11,  4,  5,
-    12, 19, 26, 33, 40, 48, 41, 34, 27, 20, 13,  6,  7, 14, 21, 28,
-    35, 42, 49, 56, 57, 50, 43, 36, 29, 22, 15, 23, 30, 37, 44, 51,
-    58, 59, 52, 45, 38, 31, 39, 46, 53, 60, 61, 54, 47, 55, 62, 63,
-];
-
-/// Estimate the quality factor (1-100) a JPEG was saved at: the IJG/libjpeg
-/// quality whose scaled standard luminance table is closest to the JPEG's own
-/// (exact, 1 to 100, for encoders that scale the table the libjpeg way). Returns
-/// `None` if the JPEG can't be parsed. Used to avoid re-encoding a low-quality
-/// source at a higher quality.
-pub(crate) fn estimate_jpeg_quality(data: &[u8]) -> Option<u8> {
-    let mut i = 2; // skip the SOI marker
-    while i + 4 <= data.len() {
-        if data[i] != 0xFF {
-            i += 1;
-            continue;
-        }
-        let marker = data[i + 1];
-        // Standalone markers (SOI/EOI/RSTn) carry no length payload.
-        if marker == 0xD8 || marker == 0xD9 || (0xD0..=0xD7).contains(&marker) {
-            i += 2;
-            continue;
-        }
-        let seg_len = u16::from_be_bytes([data[i + 2], data[i + 3]]) as usize;
-        let end = i + 2 + seg_len;
-        if seg_len < 2 || end > data.len() {
-            break;
-        }
-        if marker == 0xDB {
-            // DQT: one or more tables, each prefixed by a precision/id byte.
-            let mut p = i + 4;
-            while p < end {
-                let precision = data[p] >> 4; // 0 = 8-bit, 1 = 16-bit
-                let table_id = data[p] & 0x0F;
-                p += 1;
-                let n = if precision == 1 { 128 } else { 64 };
-                if p + n > end {
-                    break;
-                }
-                if precision == 0 && table_id == 0 {
-                    // The DQT is in zigzag order; STD_LUMA_QT is row-major.
-                    let mut table = [0u16; 64];
-                    for (k, &q) in data[p..p + 64].iter().enumerate() {
-                        table[ZIGZAG_TO_NATURAL[k]] = q as u16;
-                    }
-                    if table.contains(&0) {
-                        return None;
-                    }
-                    // libjpeg's scaling: 5000/q below 50, 200-2q from 50 up.
-                    let distance = |quality: u32| -> u32 {
-                        let scale = if quality < 50 {
-                            5000 / quality
-                        } else {
-                            200 - 2 * quality
-                        };
-                        STD_LUMA_QT
-                            .iter()
-                            .zip(&table)
-                            .map(|(&std, &q)| {
-                                let scaled = ((std as u32 * scale + 50) / 100).clamp(1, 255);
-                                scaled.abs_diff(q as u32)
-                            })
-                            .sum()
-                    };
-                    // On a tie (a non-libjpeg table) the lowest quality wins.
-                    let quality = (1..=100).min_by_key(|&q| distance(q))?;
-                    return Some(quality as u8);
-                }
-                p += n;
-            }
-        }
-        if marker == 0xDA {
-            break; // start of scan — no more headers
-        }
-        i = end;
-    }
-    None
 }
 
 /// Scan XHTML/HTML/CSS/SVG/NCX files and update references to converted images.
@@ -643,37 +622,260 @@ mod tests {
         buf.into_inner()
     }
 
+    fn png(img: &DynamicImage) -> Vec<u8> {
+        let mut buf = Cursor::new(Vec::new());
+        img.write_to(&mut buf, image::ImageFormat::Png).unwrap();
+        buf.into_inner()
+    }
+
+    /// Decode any of the five formats back to pixels, through imagoverto's
+    /// lossless PNG output (the `image` crate here reads only JPEG and PNG).
+    fn pixels(bytes: &[u8]) -> DynamicImage {
+        let back = imagoverto::convert(bytes, &imagoverto::Options::new(imagoverto::Format::Png))
+            .unwrap()
+            .bytes;
+        image::load_from_memory(&back).unwrap()
+    }
+
+    fn gradient() -> DynamicImage {
+        DynamicImage::ImageRgb8(RgbImage::from_fn(48, 32, |x, y| {
+            Rgb([(x * 5) as u8, (y * 7) as u8, 90])
+        }))
+    }
+
+    fn with_alpha(opaque: bool) -> DynamicImage {
+        DynamicImage::ImageRgba8(image::RgbaImage::from_fn(16, 16, |x, _| {
+            image::Rgba([200, 100, 50, if opaque || x < 8 { 255 } else { 0 }])
+        }))
+    }
+
     #[test]
-    fn estimates_jpeg_quality_exactly() {
-        // The `image` crate scales the Annex K table the libjpeg way, so the
-        // estimate is exact at every quality.
-        // (The DQT is stored in zigzag order: comparing it unmapped with the
-        // row-major table under-estimated by up to 7, e.g. q75 as 71.)
+    fn reads_the_source_jpeg_quality_exactly() {
+        // The cap's input: the `image` crate scales the Annex K table the
+        // libjpeg way, so the reading is exact at every quality.
         for q in 1u8..=100 {
-            let est = estimate_jpeg_quality(&jpeg_at(q)).expect("should parse a real JPEG");
-            assert_eq!(est, q, "quality {q} estimated as {est}");
+            assert_eq!(source_jpeg_quality(&jpeg_at(q)), Some(q), "quality {q}");
+        }
+        assert_eq!(source_jpeg_quality(b"this is not a jpeg at all"), None);
+        assert_eq!(source_jpeg_quality(&png(&gradient())), None);
+    }
+
+    #[test]
+    fn a_jpeg_target_is_capped_on_the_libjpeg_scale() {
+        // imagoverto's worked examples (note of 2026-11-27).
+        for (source, cap) in [(75, 68), (80, 78), (85, 87), (90, 94), (91, 100), (99, 100)] {
+            assert_eq!(jpeg_cap(source), Some(cap), "source {source}");
+        }
+        assert_eq!(jpeg_cap(67), Some(46));
+        assert_eq!(jpeg_cap(66), None);
+        // What is written never exceeds the source.
+        for source in 67..=100u8 {
+            let cap = jpeg_cap(source).unwrap();
+            let written =
+                source_jpeg_quality(&reencode(&jpeg_at(source), 100, ImageFormat::Jpeg).unwrap());
+            assert!(written.unwrap() <= source, "source {source}, cap {cap}");
         }
     }
 
     #[test]
-    fn estimate_returns_none_for_non_jpeg() {
-        assert!(estimate_jpeg_quality(b"this is not a jpeg at all").is_none());
+    fn a_jpeg_saved_below_any_jpeg_output_is_not_turned_into_one() {
+        assert!(reencode(&jpeg_at(50), 80, ImageFormat::Jpeg).is_err());
+        // Other targets cap on their own scale and still convert.
+        assert!(reencode(&jpeg_at(50), 80, ImageFormat::WebP).is_ok());
+    }
+
+    #[test]
+    fn a_webp_target_is_capped_at_the_source_quality() {
+        assert_eq!(
+            target_quality(&jpeg_at(43), 80, ImageFormat::WebP).unwrap(),
+            Some(43)
+        );
+        assert_eq!(
+            target_quality(&jpeg_at(95), 80, ImageFormat::WebP).unwrap(),
+            Some(80)
+        );
+        assert_eq!(
+            target_quality(&png(&gradient()), 80, ImageFormat::WebP).unwrap(),
+            Some(80)
+        );
+        assert_eq!(
+            target_quality(&jpeg_at(95), 80, ImageFormat::Png).unwrap(),
+            None
+        );
     }
 
     #[test]
     fn webp_keeps_a_gray_image_tones() {
-        // A 0-255 ramp: through zenwebp's L8 input, 16 came back as 0 and 235
-        // as 253 (limited-range Y written as full range). Through RGB it stays.
+        // A 0-255 ramp: zenwebp's L8 input clipped 16 to 0 and 235 to 253.
         let ramp = DynamicImage::ImageLuma8(image::GrayImage::from_fn(256, 16, |x, _| {
             image::Luma([x as u8])
         }));
         for q in [80u8, 95] {
-            let (rgb, w, _) =
-                zenwebp::oneshot::decode_rgb(&encode_webp(&ramp, q).unwrap()).unwrap();
+            let back = pixels(&reencode(&png(&ramp), q, ImageFormat::WebP).unwrap()).to_luma8();
             for x in [16u32, 64, 128, 192, 235] {
-                let v = rgb[((8 * w + x) * 3) as usize] as i32;
+                let v = back.get_pixel(x, 8)[0] as i32;
                 assert!((v - x as i32).abs() <= 3, "q{q}: {x} came back as {v}");
             }
         }
+    }
+
+    #[test]
+    fn transparency_survives_webp_and_refuses_jpeg() {
+        let src = png(&with_alpha(false));
+        assert!(
+            pixels(&reencode(&src, 90, ImageFormat::WebP).unwrap())
+                .color()
+                .has_alpha()
+        );
+        assert!(reencode(&src, 80, ImageFormat::Jpeg).is_err());
+        // An alpha channel that is all opaque carries nothing: JPEG is fine.
+        assert!(reencode(&png(&with_alpha(true)), 80, ImageFormat::Jpeg).is_ok());
+    }
+
+    #[test]
+    fn reencode_turns_a_webp_into_jpeg_and_png() {
+        let webp = reencode(&png(&gradient()), 85, ImageFormat::WebP).unwrap();
+        let jpeg = reencode(&webp, 85, ImageFormat::Jpeg).unwrap();
+        assert_eq!(
+            imagoverto::Format::sniff(&jpeg),
+            Some(imagoverto::Format::Jpeg)
+        );
+        let png_back = reencode(&webp, 85, ImageFormat::Png).unwrap();
+        assert_eq!(
+            imagoverto::Format::sniff(&png_back),
+            Some(imagoverto::Format::Png)
+        );
+    }
+
+    #[test]
+    fn jpeg_xl_comes_back_at_its_size() {
+        let jxl = reencode(&jpeg_at(90), 85, ImageFormat::Jxl).unwrap();
+        assert_eq!(
+            imagoverto::Format::sniff(&jxl),
+            Some(imagoverto::Format::Jxl)
+        );
+        let img = pixels(&jxl);
+        assert_eq!((img.width(), img.height()), (64, 64));
+    }
+
+    #[test]
+    fn avif_output_is_paused() {
+        assert!(reencode(&jpeg_at(90), 85, ImageFormat::Avif).is_err());
+        let dir = tempfile::tempdir().unwrap();
+        let err = optimize_images(
+            dir.path(),
+            &[],
+            None,
+            80,
+            FormatPolicy::Fixed(ImageFormat::Avif),
+            &|_| {},
+        );
+        assert!(err.is_err());
+        // The 3.4 default sends photos to JPEG XL now, and `best` never tries AVIF.
+        assert_eq!(
+            FormatPolicy::Auto.format_for("image/jpeg"),
+            ImageFormat::Jxl
+        );
+        assert_eq!(
+            FormatPolicy::Auto.format_for("image/png"),
+            ImageFormat::WebP
+        );
+        assert!(
+            !FormatPolicy::Best
+                .candidates("image/jpeg")
+                .contains(&ImageFormat::Avif)
+        );
+    }
+
+    fn estimate_inputs() -> Vec<Vec<u8>> {
+        // Different sizes and content, so the largest-first order matters.
+        (1..=6u32)
+            .map(|k| {
+                let img = DynamicImage::ImageRgb8(RgbImage::from_fn(16 * k, 12 * k, |x, y| {
+                    Rgb([(x * 9 + k) as u8, (y * 5) as u8, (x ^ y) as u8])
+                }));
+                let mut buf = Cursor::new(Vec::new());
+                let enc = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut buf, 90);
+                img.write_with_encoder(enc).unwrap();
+                buf.into_inner()
+            })
+            .collect()
+    }
+
+    fn as_inputs(raw: &[Vec<u8>]) -> Vec<EstimateInput<'_>> {
+        raw.iter()
+            .map(|b| EstimateInput {
+                media_type: "image/jpeg",
+                bytes: b,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn an_estimate_with_time_to_spare_is_exact() {
+        let raw = estimate_inputs();
+        let est = estimate_format(
+            &as_inputs(&raw),
+            ImageFormat::WebP,
+            80,
+            std::time::Duration::from_secs(60),
+        );
+        assert!(est.is_exact());
+        assert_eq!(est.images_measured, 6);
+        let sizes: Vec<(u64, u64)> = raw
+            .iter()
+            .map(|b| {
+                let n = reencode(b, 80, ImageFormat::WebP).unwrap().len() as u64;
+                (n, n.min(b.len() as u64))
+            })
+            .collect();
+        assert_eq!(est.converted_bytes, sizes.iter().map(|s| s.0).sum::<u64>());
+        assert_eq!(est.smallest_bytes, sizes.iter().map(|s| s.1).sum::<u64>());
+        assert_eq!(
+            est.original_bytes,
+            raw.iter().map(|b| b.len() as u64).sum::<u64>()
+        );
+    }
+
+    #[test]
+    fn an_estimate_without_time_measures_the_largest_image_and_scales() {
+        let raw = estimate_inputs();
+        let est = estimate_format(
+            &as_inputs(&raw),
+            ImageFormat::WebP,
+            80,
+            std::time::Duration::ZERO,
+        );
+        assert_eq!(est.images_measured, 1);
+        assert!(!est.is_exact());
+        let largest = raw.iter().max_by_key(|b| b.len()).unwrap();
+        let one = reencode(largest, 80, ImageFormat::WebP).unwrap().len() as f64;
+        let expected = one * est.original_bytes as f64 / largest.len() as f64;
+        assert!((est.converted_bytes as f64 - expected).abs() <= 1.0);
+    }
+
+    #[test]
+    fn an_image_that_cannot_be_read_counts_at_its_own_size() {
+        let raw = estimate_inputs();
+        let junk = b"not an image".to_vec();
+        let inputs = vec![
+            EstimateInput {
+                media_type: "image/jpeg",
+                bytes: &raw[0],
+            },
+            EstimateInput {
+                media_type: "image/png",
+                bytes: &junk,
+            },
+        ];
+        let est = estimate_format(
+            &inputs,
+            ImageFormat::WebP,
+            80,
+            std::time::Duration::from_secs(60),
+        );
+        assert!(est.is_exact());
+        assert_eq!((est.images_measured, est.images_failed), (1, 1));
+        assert!(est.converted_bytes >= junk.len() as u64);
     }
 }

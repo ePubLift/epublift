@@ -7,7 +7,8 @@ choose a mode from the switcher at the top of the panel:
   *WebP* to re-encode them smaller), with an in-page audit report. Options:
   image format, image quality, ASCII filenames, and Kobo `.kepub` output. A **Target
   version** selector also offers **EPUB 3.4** (experimental) — the draft spec's
-  new **AVIF** / **JPEG XL** image formats; pick AVIF, JPEG XL, or keep original.
+  new **JPEG XL** image format; pick JPEG XL, WebP, or keep original. (The
+  draft also adds AVIF; its output is paused until its encoder is fixed.)
 - **Archive** — pack a book into a compact, **lossless** [`.eparc`](archiving.md)
   archive (solid Zstandard on text + fonts, media stored verbatim). Optional
   ASCII output name. An `.eparc` is an archive, not a readable e-book — keep it

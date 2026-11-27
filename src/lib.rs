@@ -61,7 +61,10 @@ use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
 use opf::RewriteParams;
 
-pub use images::{FormatPolicy, ImageFormat, ImageMetric};
+pub use images::{
+    AVIF_PAUSED, EstimateInput, FormatEstimate, FormatPolicy, ImageFormat, ImageMetric,
+    estimate_format, reencode,
+};
 
 /// This library's version: the engine inside both the `epublift` CLI and
 /// `epublift-web`, so a web build can say which CLI release it matches.
@@ -81,7 +84,7 @@ pub enum EpubVersion {
     #[default]
     V3_3,
     /// EPUB 3.4 — experimental: AVIF / JPEG XL images become core media types.
-    /// Requires the `epub34` build feature to emit AVIF/JXL. See docs/epub-3.4.md.
+    /// Requires the `epub34` build feature; emits JPEG XL (AVIF output is paused). See docs/epub-3.4.md.
     V3_4,
 }
 
@@ -107,7 +110,7 @@ impl EpubVersion {
 /// distrust a format their devices may not show. `WebP` re-encodes them for
 /// the smallest files on readers that support it (Apple Books, calibre, most
 /// apps); despite its name it means "convert", and [`Options::image_policy`]
-/// / the target version pick the format (AVIF/JXL under EPUB 3.4).
+/// / the target version pick the format (JPEG XL under EPUB 3.4).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ImageStrategy {
     /// Convert JPEG/PNG (size-safe: never grows, never upscales). WebP for
@@ -187,13 +190,9 @@ pub struct Options {
     /// How the output raster image format is chosen. `None` uses the target
     /// version's default ([`FormatPolicy::Fixed`]`(WebP)` for 3.3, the
     /// content-adaptive [`FormatPolicy::Auto`] for 3.4). `Some(..)` overrides:
-    /// `Fixed(f)` forces one format, `Best` keeps the smallest per image. AVIF /
-    /// JXL (incl. `Auto`/`Best` emitting them) need the `epub34` feature.
+    /// `Fixed(f)` forces one format, `Best` keeps the smallest per image.
+    /// `Fixed(Avif)` is refused while AVIF output is paused ([`AVIF_PAUSED`]).
     pub image_policy: Option<FormatPolicy>,
-    /// AVIF encoder speed, 1 (slowest/best) to 10 (fastest). The default (`4`)
-    /// favors size; an interactive caller (e.g. the web service) can raise it to
-    /// stay responsive. Only affects AVIF output (the `epub34` feature).
-    pub avif_speed: u8,
     /// Container packaging. Defaults to conformant [`Packaging::Deflate`];
     /// [`Packaging::Zstd`] is the experimental measurement mode and requires the
     /// `zstd-experimental` build feature.
@@ -210,7 +209,6 @@ impl Default for Options {
             target_version: EpubVersion::LATEST,
             image_strategy: ImageStrategy::default(),
             image_policy: None,
-            avif_speed: 4,
             kepub: false,
             kepub_webp: false,
             packaging: Packaging::default(),
@@ -607,7 +605,7 @@ pub fn convert(input: &Path, options: &Options, progress: impl Fn(&str)) -> Resu
         ImageStrategy::WebP => {
             // Format selection: an explicit policy wins; otherwise the version
             // default — 3.3 → WebP, 3.4 → content-adaptive (per image, from the
-            // source type: JPEG → AVIF, PNG → WebP).
+            // source type: JPEG → JPEG XL, PNG → WebP).
             let policy = options
                 .image_policy
                 .unwrap_or(match options.target_version {
@@ -624,7 +622,6 @@ pub fn convert(input: &Path, options: &Options, progress: impl Fn(&str)) -> Resu
                 info.cover_id.as_deref(),
                 quality,
                 policy,
-                options.avif_speed,
                 &progress,
             )?;
             images::update_document_references(temp_path, &opt.ref_pairs, &progress);

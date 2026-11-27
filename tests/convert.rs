@@ -42,6 +42,18 @@ fn png(w: u32, h: u32) -> Vec<u8> {
     buf.into_inner()
 }
 
+/// A solid-colour PNG at half transparency: at 2×2, WebP (with its alpha
+/// chunk) comes out larger than the PNG. An opaque one no longer does: the
+/// empty alpha channel is dropped and the WebP is smaller.
+fn translucent_png(w: u32, h: u32) -> Vec<u8> {
+    let img = RgbaImage::from_pixel(w, h, Rgba([0xe7, 0x4c, 0x3c, 0x80]));
+    let mut buf = Cursor::new(Vec::new());
+    DynamicImage::ImageRgba8(img)
+        .write_to(&mut buf, ImageFormat::Png)
+        .unwrap();
+    buf.into_inner()
+}
+
 fn text(path: &'static str, body: &str) -> Entry {
     Entry {
         path,
@@ -161,7 +173,7 @@ fn legacy_with_keepable_png() -> Vec<Entry> {
         },
         Entry {
             path: "OEBPS/images/logo.png",
-            data: png(2, 2),
+            data: translucent_png(2, 2),
         },
     ]
 }

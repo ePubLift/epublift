@@ -66,7 +66,7 @@ struct Args {
     output: Option<PathBuf>,
 
     /// Image quality, 1 to 100, when images are re-encoded (`--webp`, or the
-    /// AVIF/JPEG XL of `--target 3.4`).
+    /// JPEG XL of `--target 3.4`).
     #[arg(long, default_value_t = 80)]
     quality: i32,
 
@@ -112,18 +112,18 @@ struct Args {
     kepub_webp: bool,
 
     /// [EXPERIMENTAL] Target EPUB version: "3.3" (default) or "3.4". 3.4 uses the
-    /// new core image types content-adaptively: photos (JPEG sources) → AVIF,
+    /// new core image types content-adaptively: photos (JPEG sources) → JPEG XL,
     /// line-art (PNG sources) → WebP. Needs the `epub34` feature. See docs/epub-3.4.md.
     #[cfg(feature = "epub34")]
     #[arg(long, default_value = "3.3", value_name = "3.3|3.4")]
     target: String,
 
-    /// [EXPERIMENTAL] Image format for EPUB 3.4 (implies --target 3.4): "avif" or
-    /// "jxl" forces one format; "best" encodes every candidate per image and keeps
-    /// the smallest (thorough but slow). Default (no flag) is content-adaptive —
-    /// AVIF for JPEG sources, WebP for PNG.
+    /// [EXPERIMENTAL] Image format for EPUB 3.4 (implies --target 3.4): "jxl"
+    /// forces JPEG XL; "best" encodes WebP and JPEG XL per image and keeps the
+    /// smaller. Default (no flag) is content-adaptive — JPEG XL for JPEG sources,
+    /// WebP for PNG. "avif" is refused while AVIF output is paused.
     #[cfg(feature = "epub34")]
-    #[arg(long, value_name = "avif|jxl|best")]
+    #[arg(long, value_name = "jxl|best")]
     image_format: Option<String>,
 
     /// [EXPERIMENTAL] Package the container with Zstandard (ZIP method 93)
@@ -546,7 +546,7 @@ struct RestoreArgs {
     format: HumanFormat,
 
     /// Re-emit at a specific EPUB version instead of content-exact: "3.3", or
-    /// "3.4" (experimental, AVIF/JXL — needs the `epub34` build feature).
+    /// "3.4" (experimental, JPEG XL — needs the `epub34` build feature).
     #[arg(long, value_name = "3.3|3.4")]
     target: Option<String>,
 
@@ -581,10 +581,11 @@ struct RestoreArgs {
     quality: i32,
 
     /// [EXPERIMENTAL] Image format for a 3.4 re-target (implies --target 3.4):
-    /// "avif" or "jxl" forces one, "best" keeps the smallest per image. Default
-    /// (no flag) is content-adaptive — AVIF for JPEG sources, WebP for PNG.
+    /// "jxl" forces JPEG XL, "best" keeps the smaller of WebP and JPEG XL per
+    /// image. Default (no flag) is content-adaptive — JPEG XL for JPEG sources,
+    /// WebP for PNG. "avif" is refused while AVIF output is paused.
     #[cfg(feature = "epub34")]
-    #[arg(long, value_name = "avif|jxl|best")]
+    #[arg(long, value_name = "jxl|best")]
     image_format: Option<String>,
 }
 
@@ -1651,11 +1652,11 @@ fn run_convert(args: Args) -> Result<()> {
     #[cfg(feature = "epub34")]
     let image_policy = match args.image_format.as_deref() {
         None => None,
-        Some("avif") => Some(epublift::FormatPolicy::Fixed(epublift::ImageFormat::Avif)),
+        Some("avif") => anyhow::bail!("--image-format avif: {}.", epublift::AVIF_PAUSED),
         Some("jxl") => Some(epublift::FormatPolicy::Fixed(epublift::ImageFormat::Jxl)),
         Some("best") => Some(epublift::FormatPolicy::Best),
         Some(other) => {
-            anyhow::bail!("unknown --image-format '{other}'. Supported: avif, jxl, best.")
+            anyhow::bail!("unknown --image-format '{other}'. Supported: jxl, best.")
         }
     };
     // avif/jxl/best are 3.4 formats, so an explicit `--image-format` implies 3.4.
@@ -1689,7 +1690,6 @@ fn run_convert(args: Args) -> Result<()> {
             ImageStrategy::KeepOriginal
         },
         image_policy,
-        avif_speed: 4,
         kepub: args.kepub,
         kepub_webp: args.kepub_webp || (args.kepub && args.webp),
         packaging,
@@ -1830,11 +1830,11 @@ fn run_restore(args: &RestoreArgs) -> Result<()> {
     #[cfg(feature = "epub34")]
     let image_policy = match args.image_format.as_deref() {
         None => None,
-        Some("avif") => Some(epublift::FormatPolicy::Fixed(epublift::ImageFormat::Avif)),
+        Some("avif") => anyhow::bail!("--image-format avif: {}.", epublift::AVIF_PAUSED),
         Some("jxl") => Some(epublift::FormatPolicy::Fixed(epublift::ImageFormat::Jxl)),
         Some("best") => Some(epublift::FormatPolicy::Best),
         Some(other) => {
-            anyhow::bail!("unknown --image-format '{other}'. Supported: avif, jxl, best.")
+            anyhow::bail!("unknown --image-format '{other}'. Supported: jxl, best.")
         }
     };
     #[cfg(not(feature = "epub34"))]
@@ -1900,7 +1900,6 @@ fn run_restore(args: &RestoreArgs) -> Result<()> {
                 ImageStrategy::KeepOriginal
             },
             image_policy,
-            avif_speed: 4,
             kepub: args.kepub,
             kepub_webp: args.kepub_webp || (args.kepub && args.webp),
             packaging: epublift::Packaging::Deflate,
@@ -1946,7 +1945,7 @@ fn parse_target(s: &str) -> Result<EpubVersion> {
         "3.4" => Ok(EpubVersion::V3_4),
         #[cfg(not(feature = "epub34"))]
         "3.4" => {
-            bail!("EPUB 3.4 (AVIF/JXL) needs the experimental `epub34` build feature.")
+            bail!("EPUB 3.4 (JPEG XL) needs the experimental `epub34` build feature.")
         }
         "2" | "2.0" => {
             bail!("downgrading to EPUB 2.0 isn't supported — epublift is an upgrader.")

@@ -21,7 +21,6 @@ readme = "README.md"
 rust-version = "1.97"
 authors = ["Baris Kayadelen <baris@kayadelen.com>"]
 repository = "https://github.com/ePubLift/epublift"
-homepage = "https://github.com/ePubLift/epublift"
 keywords = ["epub", "webp", "ebook", "epub3", "converter"]
 categories = ["command-line-utilities", "multimedia::images"]
 # What goes to crates.io: the code and the files a reader of the crate needs.
@@ -69,12 +68,6 @@ name = "zstd-bench"
 path = "src/bin/zstd_bench.rs"
 required-features = ["zstd-experimental"]
 
-# Dev-only EPUB 3.4 image-codec calibration bench. Built only with `img-calib`.
-[[bin]]
-name = "img-calib"
-path = "src/bin/img_calib.rs"
-required-features = ["img-calib"]
-
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 zip = { version = "9.8.2", default-features = false, features = ["deflate"] }
@@ -82,7 +75,10 @@ zip = { version = "9.8.2", default-features = false, features = ["deflate"] }
 # (`entry_reader`), on the pure-Rust backend zip's "deflate" feature uses.
 flate2 = { version = "1.1", default-features = false, features = ["zlib-rs"] }
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
-zenwebp = "0.4"
+# Image conversion, one image in, one image out: the family's imagoverto
+# (WebP, JPEG XL, JPEG, PNG out; all five read; the quality scale, limits and
+# codec defects are its own). epublift keeps the book's rules on top of it.
+imagoverto = { version = "0.1.4", default-features = false }
 quick-xml = "0.42"
 roxmltree = "0.21"
 regex = "1"
@@ -147,18 +143,6 @@ crc32fast = { version = "1", optional = true }
 # for whole-file provenance/fixity; serde(_json) for the human-readable manifest.
 sha2 = { version = "0.11", optional = true }
 serde = { version = "1", features = ["derive"], optional = true }
-# Experimental EPUB 3.4 image codecs (opt-in, `epub34` feature). Pure Rust, no
-# FFI — part of the imazen `zen*` codec family we already use for WebP (zenwebp),
-# unified by the `zencodec` traits. AVIF via zenavif, JPEG XL via zenjxl. Gated
-# so the default shipped binary stays lean and 3.3-only; see docs/epub-3.4.md.
-zenavif = { version = "0.1", optional = true, features = ["encode"] }
-zenjxl = { version = "0.2", optional = true, features = ["encode"] }
-# Shared pixel types for the zen* encoders' convenience entry points
-# (`encode_rgb8(ImgRef<Rgb<u8>>, …)`); almost-enough provides the AVIF encoder's
-# cooperative-cancellation StopToken.
-rgb = { version = "0.8", optional = true }
-imgref = { version = "1", optional = true }
-almost-enough = { version = "0.4", optional = true }
 # Bench-only reference backend: the C libzstd. NEVER part of a shipped artifact —
 # gated behind `zstd-c-bench`, used only by the local benchmark to report the
 # pure-Rust floor vs the C ceiling. Keeps Guiding Principle #1 (pure Rust, no C).
@@ -173,7 +157,6 @@ brotli = { version = "9", optional = true }
 # choice trades away (and, via --mem-probe, at what memory cost). NEVER shipped —
 # gated behind `ceiling-bench`, keeps Guiding Principle #1 (pure Rust, no C).
 xz2 = { version = "0.1", optional = true }
-butteraugli = { version = "0.9", optional = true }
 rustls = { version = "0.23.40", default-features = false, features = ["std", "tls12", "logging"], optional = true }
 # Pinned to an unreleased commit of RustCrypto/rustls-rustcrypto: the last
 # release (0.0.2-alpha, 2024-04) pulls rustls-webpki 0.102 and its four
@@ -202,10 +185,10 @@ metadata = [
     "dep:webpki-roots",
     "dep:unicode-normalization",
 ]
-# Experimental EPUB 3.4 output: emit AVIF / JPEG XL images under `--target 3.4`.
-# Pure Rust imazen codecs (zenavif + zenjxl, unified by zencodec); opt-in so the
-# default build stays 3.3.
-epub34 = ["dep:zenavif", "dep:zenjxl", "dep:rgb", "dep:imgref", "dep:almost-enough"]
+# Experimental EPUB 3.4 output: JPEG XL images under `--target 3.4` (AVIF
+# returns when imagoverto writes it). The codecs are imagoverto's and always
+# built; this gates only the 3.4 target, so the default build stays 3.3.
+epub34 = []
 # EPUB validation (`epublift check`): validate an EPUB against the spec using our
 # own pure-Rust epubveri (JVM-free epubcheck alternative). Opt-in so `cargo build`
 # stays lean; included in release binaries. Pure Rust, no C. See docs/validate.md.
@@ -253,13 +236,6 @@ archival-bench = ["zstd-experimental", "dep:brotli"]
 # Additionally add the C reference ceilings (libzstd --ultra + xz/LZMA) to the
 # solid comparison. Dev-only; documents the pure-Rust ratio/memory trade-off.
 ceiling-bench = ["archival-bench", "dep:zstd", "dep:xz2"]
-butteraugli = ["dep:butteraugli"]
-# Dev-only image-codec calibration bench: compare WebP/AVIF/JXL at EQUAL
-# perceptual quality (butteraugli) on a directory of images. Never shipped.
-# NOTE: zenavif's pure-Rust rav1d decoder (0.1.6) panics on Apple Silicon for some
-# AVIF inputs (a loop-restoration SIMD bug). The bench catches those panics and
-# excludes the affected images from the comparison (see src/bin/img_calib.rs).
-img-calib = ["epub34", "dep:butteraugli", "zenjxl?/decode"]
 # Dev-only: the `gen-sample` binary that writes a legacy EPUB 2.0 test book.
 # Behind a feature so `cargo install epublift` installs `epublift` alone.
 gen-sample = []

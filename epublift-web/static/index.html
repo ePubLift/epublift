@@ -567,13 +567,14 @@
           </label>
         </div>
 
-        <!-- image format (shared optimize+restore; AVIF/JPEG XL only on EPUB 3.4) -->
+        <!-- image format (shared optimize+restore; JPEG XL only on EPUB 3.4). An
+             AVIF pill (data-fmt="avif", imgfmt_avif_sub) returns when imagoverto
+             writes AVIF again. -->
         <div data-modes="optimize restore" data-mz="1">
           <p class="opt-h" style="margin-bottom:10px" data-i18n="imgfmt_h">Image format</p>
           <div class="pills pills-3" id="imgfmtpills">
             <div class="pill on" data-fmt="keep"><span data-i18n="imgfmt_keep">Keep original</span><small data-i18n="imgfmt_keep_sub">No re-encode</small></div>
             <div class="pill" data-fmt="webp">WebP<small data-i18n="imgfmt_webp_sub">Standard, smaller</small></div>
-            <div class="pill" data-fmt="avif" data-modes="optimize" data-ver="3.4">AVIF<small data-i18n="imgfmt_avif_sub">Smallest on photos</small></div>
             <div class="pill" data-fmt="jxl" data-modes="optimize" data-ver="3.4">JPEG XL<small data-i18n="imgfmt_jxl_sub">Newest codec</small></div>
           </div>
         </div>

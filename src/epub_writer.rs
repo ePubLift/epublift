@@ -75,7 +75,7 @@ pub(crate) fn fit_image(data: &[u8], media_type: &str, long_side: u32) -> Option
     let img = img.resize(long_side, long_side, image::imageops::FilterType::Lanczos3);
     let mut out = Vec::new();
     if is_jpeg {
-        let quality = crate::images::estimate_jpeg_quality(data).unwrap_or(90);
+        let quality = crate::images::source_jpeg_quality(data).unwrap_or(90);
         let img = match img {
             image::DynamicImage::ImageLuma8(_) | image::DynamicImage::ImageRgb8(_) => img,
             image::DynamicImage::ImageLumaA8(_) | image::DynamicImage::ImageLuma16(_) => {
@@ -476,7 +476,7 @@ mod tests {
         let out = fit_image(&src, "image/jpeg", IMAGE_LONG_SIDE).unwrap();
         assert_eq!(size_of(&out), (1440, 1920));
         assert!(out.len() < src.len());
-        assert_eq!(crate::images::estimate_jpeg_quality(&out), Some(60));
+        assert_eq!(crate::images::source_jpeg_quality(&out), Some(60));
     }
 
     /// What a reader can already show, and what is not a JPEG or PNG, is kept.

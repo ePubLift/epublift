@@ -32,10 +32,6 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(120);
 /// [`REQUEST_TIMEOUT`]; a longer one is refused before OCR starts. The CLI has
 /// no such limit.
 const OCR_MAX_PAGES: usize = 50;
-/// AVIF encoder speed for the experimental 3.4 path. Faster than the CLI default
-/// (4) so an interactive request stays well under [`REQUEST_TIMEOUT`] even on a
-/// photo-heavy book — AVIF (rav1e) is slow at low speeds. Costs a little size.
-const WEB_AVIF_SPEED: u8 = 6;
 /// How long a converted file waits in memory for its one download before it is
 /// evicted. Files live only in RAM and are never written to disk or logged.
 const DOWNLOAD_TTL: Duration = Duration::from_secs(300);
@@ -577,16 +573,17 @@ async fn convert(
     let ascii = field_on(&fields, "ascii");
     let kepub = field_on(&fields, "kepub");
 
-    // Experimental EPUB 3.4: AVIF / JPEG XL images. Defaults to 3.3 / WebP.
+    // Experimental EPUB 3.4: JPEG XL images. Defaults to 3.3 / WebP.
     let target_34 = fields.get("target").map(|s| s.trim()) == Some("3.4");
     let target_version = if target_34 {
         EpubVersion::V3_4
     } else {
         EpubVersion::LATEST
     };
-    // The image-format pill drives everything: keep | webp | avif | jxl (AVIF/JXL
-    // only on 3.4). `webp` is forced explicitly so 3.4 emits WebP rather than its
-    // content-adaptive default.
+    // The image-format pill drives everything: keep | webp | jxl (JXL only on
+    // 3.4). `webp` is forced explicitly so 3.4 emits WebP rather than its
+    // content-adaptive default. AVIF output is paused: an `avif` from a cached
+    // page gets the 3.4 default (JPEG XL for photos, WebP for line-art).
     let image_format = fields
         .get("image_format")
         .map(|s| s.trim())
@@ -594,7 +591,6 @@ async fn convert(
     let keep_images = image_format == "keep";
     let image_policy = match image_format {
         "webp" => Some(epublift::FormatPolicy::Fixed(epublift::ImageFormat::WebP)),
-        "avif" if target_34 => Some(epublift::FormatPolicy::Fixed(epublift::ImageFormat::Avif)),
         "jxl" if target_34 => Some(epublift::FormatPolicy::Fixed(epublift::ImageFormat::Jxl)),
         _ => None,
     };
@@ -627,7 +623,6 @@ async fn convert(
                     ImageStrategy::WebP
                 },
                 image_policy,
-                avif_speed: WEB_AVIF_SPEED,
                 kepub,
                 kepub_webp,
                 // The hosted service only ever emits conformant EPUBs; the
@@ -1276,7 +1271,6 @@ async fn restore(
                     ImageStrategy::WebP
                 },
                 image_policy: None,
-                avif_speed: WEB_AVIF_SPEED,
                 kepub,
                 kepub_webp,
                 packaging: epublift::Packaging::Deflate,

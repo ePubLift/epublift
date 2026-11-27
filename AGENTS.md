@@ -22,8 +22,8 @@ It declines:
   and Google Books.
 - **Any C toolchain.** Dependencies are pure Rust, including TLS (rustls,
   RustCrypto, webpki-roots over the small client in `src/http.rs`) and images
-  (zenwebp, zenavif, zenjxl). Benchmark-only features may link C; they never
-  ship.
+  (imagoverto, over the imazen zen* codecs). Benchmark-only features may link
+  C; they never ship.
 - **Deconvolution, vectorising and ML upscaling of images.** They were tested
   and rejected.
 
@@ -156,7 +156,7 @@ Default: `archival`. Opt-in:
 | Feature | Adds |
 | --- | --- |
 | `metadata` | `meta enrich` |
-| `epub34` | AVIF and JPEG XL under `--target 3.4` |
+| `epub34` | `--target 3.4`, with JPEG XL images (AVIF output is paused) |
 | `validate` | `check` |
 | `pdf` | PDF import from a text layer |
 | `pdf-ocr` | `pdf` plus OCR; models download on first use and are checked by SHA-256 |
@@ -165,8 +165,8 @@ Default: `archival`. Opt-in:
 | `zstd-experimental` | Research packaging, not conformant (`docs/zstandard-research.md`) |
 
 Release binaries ship `epub34,metadata,pdf-ocr,markdown,validate`. The web crate
-uses `epub34,metadata,pdf,markdown,smart-import`. Others (`*-bench`, `img-calib`,
-`gen-sample`) are for development.
+uses `epub34,metadata,pdf,markdown,smart-import`. Others (`*-bench`, `gen-sample`)
+are for development.
 
 ## Layout
 

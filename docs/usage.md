@@ -186,7 +186,7 @@ epublift -i book.epub          # images kept
 epublift -i book.epub --webp   # images re-encoded to WebP where smaller
 ```
 
-`--keep-images` (the old way to ask for the default) still works. `--target 3.4` re-encodes images to its new formats (AVIF/JPEG XL), because that is what asking for 3.4 is for; add `--keep-images` to upgrade to 3.4 without touching them.
+`--keep-images` (the old way to ask for the default) still works. `--target 3.4` re-encodes images to its new formats (JPEG XL for photos, WebP for line-art; AVIF output is paused until its encoder is fixed), because that is what asking for 3.4 is for; add `--keep-images` to upgrade to 3.4 without touching them.
 
 ### A book labelled older than EPUB 2
 

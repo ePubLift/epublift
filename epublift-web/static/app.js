@@ -163,9 +163,9 @@ if (verpills) verpills.querySelectorAll('.pill').forEach(p => {
     verpills.querySelectorAll('.pill').forEach(x => x.classList.toggle('on', x === p));
     updateOptionVisibility();
     // Snap the image format to the new version's default (3.3 → Keep original,
-    // 3.4 → AVIF: asking for 3.4 is asking for its image formats); AVIF/JPEG XL
-    // pills don't exist on 3.3.
-    setImgfmt(ver === '3.4' ? 'avif' : 'keep', false);
+    // 3.4 → JPEG XL: asking for 3.4 is asking for its image formats); the JPEG
+    // XL pill doesn't exist on 3.3.
+    setImgfmt(ver === '3.4' ? 'jxl' : 'keep', false);
     renderKepubDesc(); // filename in the .kepub note follows the version
   });
 });
@@ -176,7 +176,7 @@ function renderKepubDesc() {
   if (kepubDesc) kepubDesc.innerHTML = fill('kepub_desc', { ver });
 }
 
-// Image-format pills (Keep original / WebP / AVIF / JPEG XL).
+// Image-format pills (Keep original / WebP / JPEG XL).
 function setImgfmt(fmt, locked) {
   imgfmt = fmt;
   if (!imgfmtpills) return;
@@ -219,7 +219,7 @@ go.addEventListener('click', async () => {
       fd.append('ascii', ascii.checked ? 'true' : 'false');
       fd.append('kepub', kepub.checked ? 'true' : 'false');
       fd.append('target', ver);
-      // The image-format pill drives everything (keep | webp | avif | jxl);
+      // The image-format pill drives everything (keep | webp | jxl);
       // the backend maps it for both versions.
       fd.append('image_format', imgfmt);
     } else if (mode === 'archive'){
@@ -667,7 +667,6 @@ if (valFixBtn) valFixBtn.addEventListener('click', goToRepair);
 // Human format name for the report header, from the current 3.3/3.4 selection.
 function reportFmtName(){
   if (ver === '3.3') return 'WebP';
-  if (imgfmt === 'avif') return 'AVIF';
   if (imgfmt === 'jxl') return 'JPEG XL';
   return 'WebP';
 }
